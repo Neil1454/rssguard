@@ -13,7 +13,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
-#include <QUrlQuery>
 
 #include <utility>
 
@@ -84,11 +83,12 @@ QBittorrentClient::QBittorrentClient(const TorrentClientConfig& config, QObject*
 void QBittorrentClient::authenticate(const std::function<void(bool, const QString&)>& continuation) {
   QNetworkRequest request(endpoint(QStringLiteral("/api/v2/auth/login")));
   request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
-  request.setRawHeader("Origin", endpoint(QString()).toString(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toUtf8());
-  QUrlQuery form;
-  form.addQueryItem(QStringLiteral("username"), m_config.username);
-  form.addQueryItem(QStringLiteral("password"), m_config.password);
-  QNetworkReply* reply = m_network->post(request, form.query(QUrl::FullyEncoded).toUtf8());
+  const QByteArray origin = endpoint(QString()).toString(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toUtf8();
+  request.setRawHeader("Origin", origin);
+  request.setRawHeader("Referer", origin + '/');
+  const QByteArray form = "username=" + QUrl::toPercentEncoding(m_config.username) +
+                          "&password=" + QUrl::toPercentEncoding(m_config.password);
+  QNetworkReply* reply = m_network->post(request, form);
   connect(reply, &QNetworkReply::finished, this, [this, reply, continuation]() {
     const QByteArray body = reply->readAll();
     const bool ok = reply->error() == QNetworkReply::NoError && body.trimmed() == "Ok.";
@@ -103,6 +103,7 @@ void QBittorrentClient::testConnection() {
   authenticate([this](bool ok, const QString& error) {
     if (!ok) { emit testFinished(false, error); return; }
     QNetworkRequest request(endpoint(QStringLiteral("/api/v2/app/version")));
+    request.setRawHeader("Referer", endpoint(QString()).toString(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toUtf8() + '/');
     if (!m_cookie.isEmpty()) request.setRawHeader("Cookie", m_cookie);
     QNetworkReply* reply = m_network->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -130,6 +131,7 @@ void QBittorrentClient::addTorrents(const QStringList& urls) {
     addField("category", m_config.category);
     addField("tags", m_config.tags.join(QLatin1Char(',')));
     QNetworkRequest request(endpoint(QStringLiteral("/api/v2/torrents/add")));
+    request.setRawHeader("Referer", endpoint(QString()).toString(QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toUtf8() + '/');
     if (!m_cookie.isEmpty()) request.setRawHeader("Cookie", m_cookie);
     QNetworkReply* reply = m_network->post(request, multipart);
     multipart->setParent(reply);
