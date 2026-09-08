@@ -7,10 +7,18 @@
 #include "database/databasequeries.h"
 #include "miscellaneous/iconfactory.h"
 #include "miscellaneous/localization.h"
+#include "miscellaneous/settings.h"
 #include "network-web/webfactory.h"
+#include "torrent/torrentclient.h"
+#include "torrent/torrentclientconfig.h"
+#include "torrent/torrentextractor.h"
 
+#include <QCheckBox>
+#include <QHBoxLayout>
 #include <QItemSelectionModel>
+#include <QMessageBox>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QTreeView>
 #include <QWheelEvent>
 
@@ -32,6 +40,12 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
   m_ui.m_btnMarkAllRead->setIcon(qApp->icons()->fromTheme(QSL("mail-mark-read")));
 
   m_ui.m_treeArticles->setModel(m_model);
+
+  auto* torrentActions = new QWidget(this);
+  m_torrentActionsLayout = new QHBoxLayout(torrentActions);
+  m_torrentActionsLayout->setContentsMargins(0, 0, 0, 0);
+  m_torrentActionsLayout->setSpacing(4);
+  m_ui.formLayout->insertRow(2, torrentActions);
 
   connect(m_model,
           &ArticleListNotificationModel::nextPagePossibleChanged,
@@ -99,6 +113,7 @@ void ArticleListNotification::loadResults(const QHash<Feed*, QList<Message>>& ne
 
   m_ui.m_lblTitle->setText(tr("%n feeds fetched", nullptr, m_ui.m_cmbFeeds->count()));
   m_ui.m_lblTitle->setToolTip(m_ui.m_lblTitle->text());
+  rebuildTorrentActions();
 }
 
 void ArticleListNotification::openArticleInArticleList() {
@@ -123,6 +138,69 @@ void ArticleListNotification::onMessageSelected(const QModelIndex& current, cons
   catch (...) {
     m_ui.m_btnOpenWebBrowser->setEnabled(false);
   }
+
+  rebuildTorrentActions();
+}
+
+void ArticleListNotification::rebuildTorrentActions() {
+  while (QLayoutItem* item = m_torrentActionsLayout->takeAt(0)) {
+    delete item->widget();
+    delete item;
+  }
+
+  bool hasTorrent = false;
+  try {
+    hasTorrent = !TorrentExtractor::extract(selectedMessage()).isEmpty();
+  }
+  catch (...) {}
+
+  const QList<TorrentClientConfig> clients = TorrentClientConfig::load(qApp->settings());
+  for (const TorrentClientConfig& config : clients) {
+    auto* button = new QPushButton(config.name, this);
+    button->setEnabled(hasTorrent);
+    button->setToolTip(hasTorrent ? tr("Send this article's torrent to %1").arg(config.name)
+                                  : tr("No torrent link found in the selected article"));
+    connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
+    m_torrentActionsLayout->addWidget(button);
+  }
+  m_torrentActionsLayout->addStretch();
+}
+
+void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientConfig& config) {
+  TorrentExtractionResult extraction;
+  try {
+    extraction = TorrentExtractor::extract(QList<Message>{selectedMessage()});
+  }
+  catch (...) {
+    return;
+  }
+
+  if (extraction.urls.isEmpty()) {
+    QMessageBox::warning(this, tr("No torrent links found"), tr("No magnet link, .torrent URL, or torrent enclosure was found in this article."));
+    return;
+  }
+
+  stopTimedClosing();
+  TorrentClient* client = TorrentClient::create(config, this);
+  connect(client, &TorrentClient::addFinished, this, [this, client](int added, int failed, const QString& message) {
+    if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
+                                               QStringLiteral("showSuccessNotifications"),
+                                               true).toBool()) {
+      QMessageBox box(QMessageBox::Information, tr("Torrents sent"), message, QMessageBox::Ok, this);
+      auto* dontShowAgain = new QCheckBox(tr("Don't show successful-send confirmations again"), &box);
+      box.setCheckBox(dontShowAgain);
+      box.exec();
+      if (dontShowAgain->isChecked()) {
+        qApp->settings()->setValue(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"), false);
+      }
+    }
+    else if (failed > 0) {
+      QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), message);
+    }
+    client->deleteLater();
+    setupTimedClosing(false);
+  });
+  client->addTorrents(extraction.urls);
 }
 
 void ArticleListNotification::showFeed(int index) {
