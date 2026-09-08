@@ -21,6 +21,10 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Supply package version for fork builds
+        shell: pwsh
+        run: git tag 5.2.6-torrent-build
+
       - name: Build Qt 6 WebEngine package
         shell: pwsh
         run: .\resources\scripts\github-actions\build-windows.ps1 "windows-2022" "OFF" "ON"
