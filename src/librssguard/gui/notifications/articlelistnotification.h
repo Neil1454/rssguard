@@ -11,6 +11,8 @@
 
 class Feed;
 class ArticleListNotificationModel;
+class QHBoxLayout;
+struct TorrentClientConfig;
 
 class ArticleListNotification : public BaseToastNotification {
     Q_OBJECT
@@ -34,9 +36,11 @@ class ArticleListNotification : public BaseToastNotification {
     void onMessageSelected(const QModelIndex& current, const QModelIndex& previous);
     void showFeed(int index);
     void markAllRead();
+    void rebuildTorrentActions();
 
   private:
     void markAsRead(Feed* feed, const QList<Message>& articles);
+    void sendSelectedToTorrentClient(const TorrentClientConfig& config);
 
     Feed* selectedFeed(int index = -1) const;
     Message& selectedMessage();
@@ -45,6 +49,7 @@ class ArticleListNotification : public BaseToastNotification {
     Ui::ArticleListNotification m_ui;
     ArticleListNotificationModel* m_model;
     QHash<Feed*, QList<Message>> m_newMessages;
+    QHBoxLayout* m_torrentActionsLayout = nullptr;
 };
 
 #endif // ARTICLELISTNOTIFICATION_H
