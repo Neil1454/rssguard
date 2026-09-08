@@ -247,9 +247,26 @@ void FloodClient::addTorrents(const QStringList& urls) {
     QNetworkReply* reply = m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [this, reply, count = urls.size()]() {
       const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-      const bool ok = reply->error() == QNetworkReply::NoError && (status == 200 || status == 202 || status == 207);
-      const int accepted = ok ? QJsonDocument::fromJson(reply->readAll()).array().size() : 0;
-      emit addFinished(accepted, count - accepted, ok ? tr("Flood accepted %1 of %2 torrent(s).").arg(accepted).arg(count) : networkFailure(reply));
+      const QByteArray body = reply->readAll();
+      const bool responseOk = reply->error() == QNetworkReply::NoError;
+      int accepted = 0;
+      QString message;
+      if (responseOk && (status == 200 || status == 202)) {
+        accepted = count;
+        message = status == 202 ? tr("Flood queued %1 torrent(s).").arg(count)
+                                : tr("Flood accepted %1 torrent(s).").arg(count);
+      }
+      else if (responseOk && status == 207) {
+        accepted = qMin(count, static_cast<int>(QJsonDocument::fromJson(body).array().size()));
+        message = tr("Flood accepted %1 of %2 torrent(s).").arg(accepted).arg(count);
+      }
+      else if (status == 500) {
+        message = tr("Flood reported an internal server error, but it may still have submitted the torrent. Check Flood before trying again.");
+      }
+      else {
+        message = networkFailure(reply);
+      }
+      emit addFinished(accepted, count - accepted, message);
       reply->deleteLater();
     });
   });
