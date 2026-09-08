@@ -30,6 +30,14 @@ namespace {
     return {};
   }
 
+  QByteArray responseCookieWithPrefix(QNetworkReply* reply, const QByteArray& prefix) {
+    for (const auto& header : reply->rawHeaderPairs()) {
+      if (header.first.compare("Set-Cookie", Qt::CaseInsensitive) == 0 && header.second.startsWith(prefix))
+        return header.second.left(header.second.indexOf(';'));
+    }
+    return {};
+  }
+
   QString xmlEscape(QString text) {
     return text.replace(QLatin1Char('&'), QStringLiteral("&amp;"))
       .replace(QLatin1Char('<'), QStringLiteral("&lt;"))
@@ -91,8 +99,14 @@ void QBittorrentClient::authenticate(const std::function<void(bool, const QStrin
   QNetworkReply* reply = m_network->post(request, form);
   connect(reply, &QNetworkReply::finished, this, [this, reply, continuation]() {
     const QByteArray body = reply->readAll();
-    const bool ok = reply->error() == QNetworkReply::NoError && body.trimmed() == "Ok.";
-    if (ok) m_cookie = responseCookie(reply, "SID");
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool oldApiSuccess = status == 200 && body.trimmed() == "Ok.";
+    const bool newApiSuccess = status == 204;
+    const bool ok = reply->error() == QNetworkReply::NoError && (oldApiSuccess || newApiSuccess);
+    if (ok) {
+      m_cookie = responseCookie(reply, "SID");
+      if (m_cookie.isEmpty()) m_cookie = responseCookieWithPrefix(reply, "QBT_SID_");
+    }
     const QString error = ok ? QString() : (reply->error() == QNetworkReply::NoError ? tr("Authentication failed.") : networkFailure(reply));
     reply->deleteLater();
     continuation(ok, error);
