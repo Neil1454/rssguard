@@ -24,15 +24,21 @@
 #include "qtlinq/qtlinq.h"
 #include "services/abstract/labelsnode.h"
 #include "services/abstract/serviceroot.h"
+#include "torrent/torrentclient.h"
+#include "torrent/torrentclientconfig.h"
+#include "torrent/torrentextractor.h"
 
 #include <QClipboard>
 #include <QFileIconProvider>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QMessageBox>
 #include <QProcess>
 #include <QScrollBar>
 #include <QTimer>
+
+#include <algorithm>
 
 MessagesView::MessagesView(QWidget* parent)
   : BaseTreeView(parent), m_contextMenu(nullptr), m_columnsAdjusted(false), m_processingAnyMouseButton(false),
@@ -687,6 +693,32 @@ void MessagesView::initializeContextMenu() {
   // Rest.
   m_contextMenu->addMenu(menu_ext_tools);
   m_contextMenu->addMenu(menu_labels_add);
+
+  const QList<TorrentClientConfig> torrent_clients = TorrentClientConfig::load(qApp->settings());
+  QMenu* torrent_menu = new QMenu(tr("Send to torrent client"), m_contextMenu);
+  torrent_menu->setIcon(qApp->icons()->fromTheme(QSL("folder-download"), QSL("go-down")));
+  for (const TorrentClientConfig& client : torrent_clients) {
+    QAction* action = torrent_menu->addAction(client.name);
+    action->setToolTip(QStringLiteral("%1 — %2").arg(TorrentClientConfig::typeName(client.type), client.baseUrl));
+    connect(action, &QAction::triggered, this, [this, client, selected_messages]() {
+      sendToTorrentClient(client, selected_messages);
+    });
+  }
+  if (torrent_clients.isEmpty()) {
+    QAction* empty = torrent_menu->addAction(tr("No torrent clients configured"));
+    empty->setEnabled(false);
+  }
+  m_contextMenu->addMenu(torrent_menu);
+
+  const auto default_client = std::find_if(torrent_clients.cbegin(), torrent_clients.cend(), [](const TorrentClientConfig& client) {
+    return client.isDefault;
+  });
+  if (default_client != torrent_clients.cend()) {
+    QAction* send_default = m_contextMenu->addAction(tr("Send to default torrent client (%1)").arg(default_client->name));
+    connect(send_default, &QAction::triggered, this, [this, client = *default_client, selected_messages]() {
+      sendToTorrentClient(client, selected_messages);
+    });
+  }
   m_contextMenu->addActions({qApp->mainForm()->m_ui->m_actionSendMessageViaEmail,
                              qApp->mainForm()->m_ui->m_actionOpenSelectedSourceArticlesExternally,
                              qApp->mainForm()->m_ui->m_actionOpenSelectedMessagesInternally,
@@ -745,6 +777,30 @@ void MessagesView::initializeContextMenu() {
       m_contextMenu->addActions(extra_context_menu);
     }
   }
+}
+
+void MessagesView::sendToTorrentClient(const TorrentClientConfig& config, const QList<Message>& messages) {
+  const TorrentExtractionResult extraction = TorrentExtractor::extract(messages);
+  if (extraction.urls.isEmpty()) {
+    QMessageBox::information(this,
+                             tr("No torrent links found"),
+                             tr("No magnet links, .torrent URLs, or torrent enclosures were found in the selected article(s)."));
+    return;
+  }
+
+  TorrentClient* client = TorrentClient::create(config, this);
+  if (client == nullptr) return;
+  connect(client, &TorrentClient::addFinished, this, [this, client, extraction](int added, int failed, const QString& message) {
+    QString details = message;
+    if (extraction.messagesWithoutTorrent > 0)
+      details += tr("\n%1 selected article(s) contained no usable torrent link.").arg(extraction.messagesWithoutTorrent);
+    if (extraction.duplicatesRemoved > 0)
+      details += tr("\n%1 duplicate link(s) were skipped.").arg(extraction.duplicatesRemoved);
+    if (failed == 0) QMessageBox::information(this, tr("Torrents sent"), details);
+    else QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), details);
+    client->deleteLater();
+  });
+  client->addTorrents(extraction.urls);
 }
 
 void MessagesView::mousePressEvent(QMouseEvent* event) {

@@ -1,0 +1,41 @@
+---
+name: Torrent integration Windows portable
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-portable:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source and submodules
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build Qt 6 WebEngine package
+        shell: pwsh
+        run: .\resources\scripts\github-actions\build-windows.ps1 "windows-2022" "OFF" "ON"
+        env:
+          FEEDLY_CLIENT_ID: ${{ secrets.FEEDLY_CLIENT_ID }}
+          FEEDLY_CLIENT_SECRET: ${{ secrets.FEEDLY_CLIENT_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package portable archive
+        shell: pwsh
+        run: .\resources\scripts\github-actions\package-windows.ps1 "windows-2022" "OFF" "ON"
+
+      - name: Upload portable archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: RSSGuard-Torrent-Test
+          if-no-files-found: error
+          path: .\rssguard-build\rssguard-*-web-qt6-win10.7z

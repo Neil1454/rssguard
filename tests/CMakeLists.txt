@@ -74,6 +74,10 @@ if(ENABLE_TESTING)
   add_rssguard_test(test_databasequeries
     database/test_databasequeries.cpp
   )
+
+  add_rssguard_test(test_torrentextractor
+    torrent/test_torrentextractor.cpp
+  )
 endif()
 
 if(ENABLE_BENCHMARKS)

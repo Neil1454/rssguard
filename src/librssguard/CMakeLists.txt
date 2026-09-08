@@ -189,6 +189,8 @@ set(SOURCES
   gui/settings/settingsmediaplayer.h
   gui/settings/settingsnetwork.cpp
   gui/settings/settingsnetwork.h
+  gui/settings/settingstorrentclients.cpp
+  gui/settings/settingstorrentclients.h
   gui/settings/settingsnotifications.cpp
   gui/settings/settingsnotifications.h
   gui/settings/settingspanel.cpp
@@ -201,6 +203,12 @@ set(SOURCES
   gui/tray/qttrayicon.h
   gui/tray/trayicon.cpp
   gui/tray/trayicon.h
+  torrent/torrentclient.cpp
+  torrent/torrentclient.h
+  torrent/torrentclientconfig.cpp
+  torrent/torrentclientconfig.h
+  torrent/torrentextractor.cpp
+  torrent/torrentextractor.h
   gui/tabbar.cpp
   gui/tabbar.h
   gui/tabcontent.cpp

@@ -14,6 +14,7 @@
 #include <QTimer>
 
 class MessagesProxyModel;
+struct TorrentClientConfig;
 
 class MessagesView : public BaseTreeView {
     Q_OBJECT
@@ -164,6 +165,7 @@ class MessagesView : public BaseTreeView {
     void requestArticleHiding();
     void cancelDelayedArticleMarking();
     void copyDataOfSelectedArticlesImpl(bool show_dialog) const;
+    void sendToTorrentClient(const TorrentClientConfig& config, const QList<Message>& messages);
 
   private:
     QMenu* m_contextMenu;
