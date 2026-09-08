@@ -92,7 +92,10 @@ QNetworkReply* BaseNetworkAccessManager::createRequest(QNetworkAccessManager::Op
 
   // new_request.setMaximumRedirectsAllowed(0);
 
-  new_request.setRawHeader(HTTP_HEADERS_COOKIE, QSL("JSESSIONID= ").toLocal8Bit());
+  // Preserve an explicit authentication cookie supplied by API clients.
+  if (!new_request.hasRawHeader(HTTP_HEADERS_COOKIE)) {
+    new_request.setRawHeader(HTTP_HEADERS_COOKIE, QSL("JSESSIONID= ").toLocal8Bit());
+  }
 
   if (!new_request.hasRawHeader(HTTP_HEADERS_ACCEPT_LANGUAGE)) {
     new_request.setRawHeader(HTTP_HEADERS_ACCEPT_LANGUAGE,

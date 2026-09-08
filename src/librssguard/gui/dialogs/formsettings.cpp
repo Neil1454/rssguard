@@ -16,6 +16,7 @@
 #include "gui/settings/settingsnotifications.h"
 #include "gui/settings/settingsshortcuts.h"
 #include "gui/settings/settingstoolbars.h"
+#include "gui/settings/settingstorrentclients.h"
 #include "miscellaneous/application.h"
 #include "miscellaneous/iconfactory.h"
 #include "miscellaneous/settings.h"
@@ -172,6 +173,7 @@ FormSettings::FormSettings(QWidget& parent)
   addSettingsPanel(new SettingsLocalization(&m_settings, this));
   addSettingsPanel(new SettingsDatabase(&m_settings, this));
   addSettingsPanel(new SettingsNetwork(&m_settings, this));
+  addSettingsPanel(new SettingsTorrentClients(&m_settings, this));
   addSettingsPanel(new SettingsFeedsMessages(&m_settings, this));
   addSettingsPanel(new SettingsNotifications(&m_settings, this));
   addSettingsPanel(new SettingsGui(&m_settings, this));
