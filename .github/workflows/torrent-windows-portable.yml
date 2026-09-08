@@ -3,6 +3,8 @@ name: Torrent integration Windows portable
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["master"]
 
 jobs:
   windows-portable:
