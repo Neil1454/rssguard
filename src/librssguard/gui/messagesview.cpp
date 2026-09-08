@@ -29,6 +29,7 @@
 #include "torrent/torrentextractor.h"
 
 #include <QClipboard>
+#include <QCheckBox>
 #include <QFileIconProvider>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -796,8 +797,20 @@ void MessagesView::sendToTorrentClient(const TorrentClientConfig& config, const 
       details += tr("\n%1 selected article(s) contained no usable torrent link.").arg(extraction.messagesWithoutTorrent);
     if (extraction.duplicatesRemoved > 0)
       details += tr("\n%1 duplicate link(s) were skipped.").arg(extraction.duplicatesRemoved);
-    if (failed == 0) QMessageBox::information(this, tr("Torrents sent"), details);
-    else QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), details);
+    if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
+                                               QStringLiteral("showSuccessNotifications"),
+                                               true).toBool()) {
+      QMessageBox box(QMessageBox::Information, tr("Torrents sent"), details, QMessageBox::Ok, this);
+      auto* dontShowAgain = new QCheckBox(tr("Don't show successful-send confirmations again"), &box);
+      box.setCheckBox(dontShowAgain);
+      box.exec();
+      if (dontShowAgain->isChecked()) {
+        qApp->settings()->setValue(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"), false);
+      }
+    }
+    else if (failed > 0) {
+      QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), details);
+    }
     client->deleteLater();
   });
   client->addTorrents(extraction.urls);
