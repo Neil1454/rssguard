@@ -23,8 +23,9 @@ namespace {
   }
 
   QByteArray responseCookie(QNetworkReply* reply, const QByteArray& name) {
+    const QByteArray cookiePrefix = name + QByteArrayLiteral("=");
     for (const auto& header : reply->rawHeaderPairs()) {
-      if (header.first.compare("Set-Cookie", Qt::CaseInsensitive) == 0 && header.second.startsWith(name + '='))
+      if (header.first.compare("Set-Cookie", Qt::CaseInsensitive) == 0 && header.second.startsWith(cookiePrefix))
         return header.second.left(header.second.indexOf(';'));
     }
     return {};
