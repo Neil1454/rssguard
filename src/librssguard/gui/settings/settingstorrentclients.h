@@ -7,6 +7,7 @@
 #include "torrent/torrentclientconfig.h"
 
 class QLabel;
+class QCheckBox;
 class QListWidget;
 class QPushButton;
 
@@ -33,6 +34,7 @@ class SettingsTorrentClients : public SettingsPanel {
     int selectedIndex() const;
 
     QList<TorrentClientConfig> m_clients;
+    QCheckBox* m_showSuccessNotifications = nullptr;
     QListWidget* m_list = nullptr;
     QLabel* m_description = nullptr;
     QPushButton* m_edit = nullptr;
