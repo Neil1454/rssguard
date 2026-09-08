@@ -4,13 +4,15 @@ The target matching the normal modern RSS Guard portable package is **Qt 6 + Web
 
 ## Recommended: GitHub Actions
 
-1. Push this branch to a GitHub fork of RSS Guard.
-2. In the fork, open **Actions > Torrent integration Windows portable > Run workflow**.
-3. Select `feature/native-torrent-clients` and run it.
-4. Download the `RSSGuard-Torrent-Test` artifact from the completed run.
-5. Extract its `.7z` into a new folder named `RSSGuard-Torrent-Test`. Do not extract over the existing RSS Guard folder.
+1. Open the fork's [Torrent integration Windows portable workflow](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml).
+2. Open the newest successful run for `master`.
+3. Download the `RSSGuard-Torrent-Test` artifact.
+4. Extract the downloaded ZIP, then extract the `.7z` inside it into a new folder.
+5. Run `rssguard.exe`. Do not extract over an existing RSS Guard folder.
 
-The manual workflow uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
+The workflow runs automatically after a push to `master` and can also be started manually. It uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. The workflow creates a temporary local package-version tag because the fork does not carry upstream tags. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
+
+Only the Windows 10/11 x64 Qt 6 WebEngine portable package is required for this fork. No custom installer, Linux package, or macOS package is currently produced.
 
 ## Local Windows build
 
@@ -27,7 +29,7 @@ From **Developer PowerShell for VS 2022**:
 ```powershell
 git clone --recursive https://github.com/<your-account>/rssguard.git RSSGuard-Torrent-Source
 Set-Location RSSGuard-Torrent-Source
-git switch feature/native-torrent-clients
+git switch master
 $env:GITHUB_TOKEN = "<your GitHub token>"
 $env:FEEDLY_CLIENT_ID = ""
 $env:FEEDLY_CLIENT_SECRET = ""

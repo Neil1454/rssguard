@@ -1,6 +1,6 @@
 # Native torrent-client integration
 
-This branch adds manual, native torrent sending to RSS Guard 5.2.6 development source. It is intentionally separated into `src/librssguard/torrent/` with narrow hooks in the settings dialog and article context menu.
+The `master` branch of this fork adds native torrent sending to RSS Guard 5.2.6 development source. It is intentionally separated into `src/librssguard/torrent/` with narrow hooks in settings, article actions, and article notifications.
 
 ## User workflow
 
@@ -9,6 +9,10 @@ This branch adds manual, native torrent sending to RSS Guard 5.2.6 development s
 3. Select one or multiple articles.
 4. Right-click and choose **Send to torrent client > _client name_**. If a default is configured, the direct default-client action is also shown.
 5. RSS Guard reports accepted/failed totals, articles with no usable link, and duplicates skipped.
+
+When a new-article notification contains a usable torrent link, the notification also shows one button per configured client. Clicking a named button sends that notification article directly to the chosen client. Buttons are disabled for notification articles without a usable torrent link.
+
+Successful-send dialogs can be disabled either from the dialog itself or with **Show confirmation after successful torrent sends** in Torrent clients settings. Failures remain visible.
 
 This feature is manual. It does not automatically send newly fetched feed entries.
 
@@ -19,6 +23,7 @@ This feature is manual. It does not automatically send newly fetched feed entrie
 - `torrentclient.*`: common asynchronous interface and separate qBittorrent, Transmission, Flood, and rTorrent adapters.
 - `settingstorrentclients.*`: native settings panel and add/edit/remove/test UI.
 - `MessagesView`: builds the dynamic client menu from saved configurations and passes selected messages to the extractor.
+- `ArticleListNotification`: builds per-client notification buttons and sends the selected notification article.
 
 Adding a new client requires a new `TorrentClient` subclass, one enum/type label, and a factory case. Extraction and UI selection do not need to be rewritten.
 
@@ -43,7 +48,7 @@ The normal article URL is not accepted unless it is recognisably a torrent URL. 
 - Bulk add: multipart `POST /api/v2/torrents/add`, with newline-delimited URLs.
 - Optional save path, category, and tags are sent when configured.
 
-The adapter supplies the required same-origin `Origin` header and retains the returned `SID` cookie.
+The adapter supplies matching `Origin` and `Referer` headers and safely form-encodes credentials. It supports both the traditional HTTP 200/`Ok.`/`SID` login and qBittorrent 5.2's HTTP 204/`QBT_SID_...` login. qBittorrent uses the Web UI username and password; it does not require an API key.
 
 ### Transmission
 
@@ -59,6 +64,7 @@ The adapter supplies the required same-origin `Origin` header and retains the re
 - Bulk add: `POST /api/torrents/add-urls` with a URL array.
 - Supports username/password or an existing Flood JWT auth token. Tokens are sent as an HTTP-only-style `jwt` cookie, never in the URL.
 - Optional destination and tags are supported; added torrents start immediately.
+- HTTP 200 is treated as accepted, HTTP 202 as accepted/queued, and HTTP 207 as partial success. A Flood HTTP 500 warning states that the server may still have submitted the torrent and should be checked before retrying.
 
 ### rTorrent
 
@@ -90,6 +96,7 @@ Non-secret client fields are stored as compact JSON under `TorrentClients/client
 - `src/librssguard/torrent/torrentclientconfig.{h,cpp}`
 - `src/librssguard/torrent/torrentextractor.{h,cpp}`
 - `src/librssguard/gui/settings/settingstorrentclients.{h,cpp}`
+- `docs/source/features/torrent-clients.md`
 - `tests/torrent/test_torrentextractor.cpp`
 - `README-TORRENT-INTEGRATION.md`
 - `BUILD-WINDOWS.md`
@@ -101,6 +108,7 @@ Non-secret client fields are stored as compact JSON under `TorrentClients/client
 - `src/librssguard/CMakeLists.txt`
 - `src/librssguard/gui/dialogs/formsettings.cpp`
 - `src/librssguard/gui/messagesview.{h,cpp}`
+- `src/librssguard/gui/notifications/articlelistnotification.{h,cpp}`
 - `src/librssguard/network-web/basenetworkaccessmanager.cpp` (preserves explicit API cookies)
 - `tests/CMakeLists.txt`
 
@@ -109,16 +117,16 @@ Non-secret client fields are stored as compact JSON under `TorrentClients/client
 - The first version sends magnet links and remotely accessible torrent URLs. It does not download a `.torrent` file into RSS Guard and re-upload its binary body.
 - Generic download endpoints with no torrent MIME enclosure and no recognisable `.torrent`/magnet marker cannot be safely distinguished from article links.
 - rTorrent requires an HTTP(S) XML-RPC gateway; direct SCGI sockets are not supported.
-- Adapter integration needs live testing against the user's actual reverse proxies/client versions before production use.
+- Live behavior still depends on each server/reverse proxy and should be tested before relying on it unattended.
 - Strings are ready for Qt translation extraction but translations have not been supplied.
 
 ## Upstream maintenance
 
-Keep changes on `feature/native-torrent-clients`. For a future update:
+The maintained fork branch is `master`. For a future upstream refresh:
 
 ```bash
 git fetch upstream
-git rebase upstream/master
+git rebase upstream/master master
 ```
 
-Resolve conflicts primarily in the two narrow hooks named above. Run the extraction test and all RSS Guard tests, then regenerate `rssguard-torrent-integration.patch` from the updated branch.
+Resolve conflicts primarily in the narrow UI hooks named above. Run the extraction test, all RSS Guard tests, and the Windows portable workflow. GitHub `master` is the canonical project state.

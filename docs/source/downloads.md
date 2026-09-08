@@ -4,6 +4,8 @@ Downloads & Installation
 ## Downloads
 The official place to download RSS Guard is the [GitHub Releases page](https://github.com/martinrotter/rssguard/releases).
 
+The Neil1454 torrent-integration fork is distributed separately as an unsigned Windows portable test artifact from its [dedicated GitHub Actions workflow](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml). Open the newest successful `master` run, download `RSSGuard-Torrent-Test`, extract the ZIP and then its `.7z`, and run `rssguard.exe`. This custom artifact is not an official upstream RSS Guard release or installer.
+
 If you want the newest testing build, use the [development (beta) build](https://github.com/martinrotter/rssguard/releases/tag/devbuild5). It is produced automatically by the CI pipeline, so new packages usually appear after the build finishes rather than instantly after each source-code change.
 
 RSS Guard is also available in [repositories of many Linux distributions](https://repology.org/project/rssguard/versions), and via [Flathub](https://flathub.org/apps/search?q=rssguard).

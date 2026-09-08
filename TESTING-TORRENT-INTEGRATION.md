@@ -8,9 +8,9 @@
 - Added `test_torrentextractor` for enclosure, magnet, direct `.torrent`, false-positive article URL, bulk selection, and duplicate behavior.
 - Ran `git diff --check` successfully.
 
-## Environment limitation
+## Build verification
 
-The provided Linux work environment has no CMake or Qt development installation, so a compile and QtTest run could not be performed here. The Windows workflow is included to perform the authoritative Qt 6/MSVC build using RSS Guard's own current packaging scripts.
+The dedicated GitHub Actions workflow has successfully compiled and packaged the integration with Qt 6, MSVC, and WebEngine on Windows. Each change to `master` triggers a new authoritative portable build. Live client behavior still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -43,16 +43,19 @@ For each client, test both **Use RSS Guard proxy** enabled and disabled where ro
 
 Client-specific checks:
 
-- qBittorrent: login with Origin/SID; newline bulk add; reverse-proxy subpath.
+- qBittorrent: matching Origin/Referer; special-character credentials; old HTTP 200/`SID` and 5.2 HTTP 204/`QBT_SID_...` login; newline bulk add; reverse-proxy subpath.
 - Transmission: first-call HTTP 409 retry; Basic auth; duplicate response; custom RPC path.
-- Flood: password cookie and token-cookie modes; HTTP 207 partial response.
+- Flood: password cookie and token-cookie modes; HTTP 200 accepted, HTTP 202 queued, HTTP 207 partial, and ambiguous HTTP 500 behavior.
+- Notifications: buttons appear only for configured clients, follow the selected notification article, disable when no torrent link exists, and send to the named client.
+- Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
+- Windows palette: unselected client rows do not display forced dark alternate bands.
 - rTorrent: XML-RPC fault response; HTTP Basic gateway; directory/custom1 commands.
 
 ## Release gate
 
 Do not replace the user's existing RSS Guard portable build until:
 
-1. Qt 6/MSVC compilation and all unit tests pass.
+1. The latest Qt 6/MSVC workflow build and packaging steps pass.
 2. Settings can be added, edited, removed, persisted, and reopened.
 3. At least one real instance of each supported client passes connection and send tests.
 4. Proxy-on and proxy-off behavior is packet/log verified.
