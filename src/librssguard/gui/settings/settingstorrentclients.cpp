@@ -120,7 +120,6 @@ void SettingsTorrentClients::loadUi() {
   m_showSuccessNotifications = new QCheckBox(tr("Show confirmation after successful torrent sends"), this);
   outer->addWidget(m_showSuccessNotifications);
   m_list = new QListWidget(this);
-  m_list->setAlternatingRowColors(true);
   outer->addWidget(m_list, 1);
   auto* buttons = new QHBoxLayout();
   auto* add = new QPushButton(tr("Add"), this);
