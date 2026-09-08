@@ -117,6 +117,8 @@ void SettingsTorrentClients::loadUi() {
   m_description = new QLabel(tr("Configure one or more qBittorrent, Transmission, Flood, or rTorrent servers. Torrent-client requests use RSS Guard's network proxy unless disabled per client."), this);
   m_description->setWordWrap(true);
   outer->addWidget(m_description);
+  m_showSuccessNotifications = new QCheckBox(tr("Show confirmation after successful torrent sends"), this);
+  outer->addWidget(m_showSuccessNotifications);
   m_list = new QListWidget(this);
   m_list->setAlternatingRowColors(true);
   outer->addWidget(m_list, 1);
@@ -143,6 +145,9 @@ void SettingsTorrentClients::loadUi() {
 void SettingsTorrentClients::loadSettings() {
   onBeginLoadSettings();
   m_clients = TorrentClientConfig::load(settings());
+  m_showSuccessNotifications->setChecked(settings()->value(QStringLiteral("TorrentClients"),
+                                                            QStringLiteral("showSuccessNotifications"),
+                                                            true).toBool());
   refreshList();
   onEndLoadSettings();
 }
@@ -150,6 +155,9 @@ void SettingsTorrentClients::loadSettings() {
 void SettingsTorrentClients::saveSettings() {
   onBeginSaveSettings();
   TorrentClientConfig::save(settings(), m_clients);
+  settings()->setValue(QStringLiteral("TorrentClients"),
+                       QStringLiteral("showSuccessNotifications"),
+                       m_showSuccessNotifications->isChecked());
   onEndSaveSettings();
 }
 
