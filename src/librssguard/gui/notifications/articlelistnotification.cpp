@@ -14,6 +14,7 @@
 #include "torrent/torrentextractor.h"
 
 #include <QCheckBox>
+#include <QAbstractItemView>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QMessageBox>
@@ -40,6 +41,8 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
   m_ui.m_btnMarkAllRead->setIcon(qApp->icons()->fromTheme(QSL("mail-mark-read")));
 
   m_ui.m_treeArticles->setModel(m_model);
+  m_ui.m_treeArticles->setSelectionBehavior(QAbstractItemView::SelectionBehavior::SelectRows);
+  m_ui.m_treeArticles->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
 
   auto* torrentActions = new QWidget(this);
   m_torrentActionsLayout = new QHBoxLayout(torrentActions);
@@ -71,6 +74,19 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
           &QItemSelectionModel::currentRowChanged,
           this,
           &ArticleListNotification::onMessageSelected);
+  connect(m_ui.m_treeArticles->selectionModel(),
+          &QItemSelectionModel::selectionChanged,
+          this,
+          [this]() { rebuildTorrentActions(); });
+  connect(m_model, &QAbstractItemModel::modelReset, this, [this]() {
+    if (m_model->rowCount({}) > 0) {
+      const QModelIndex first = m_model->index(0, 0);
+      m_ui.m_treeArticles->selectionModel()->select(first,
+                                                    QItemSelectionModel::SelectionFlag::ClearAndSelect |
+                                                      QItemSelectionModel::SelectionFlag::Rows);
+      m_ui.m_treeArticles->setCurrentIndex(first);
+    }
+  });
 
   setAttribute(Qt::WidgetAttribute::WA_ShowWithoutActivating, true);
   m_ui.m_treeArticles->setAttribute(Qt::WidgetAttribute::WA_NoSystemBackground, true);
@@ -126,6 +142,7 @@ void ArticleListNotification::openArticleInArticleList() {
 }
 
 void ArticleListNotification::onMessageSelected(const QModelIndex& current, const QModelIndex& previous) {
+  Q_UNUSED(current)
   Q_UNUSED(previous)
 
   m_ui.m_btnOpenArticleList->setEnabled(m_ui.m_treeArticles->currentIndex().isValid());
@@ -148,18 +165,15 @@ void ArticleListNotification::rebuildTorrentActions() {
     delete item;
   }
 
-  bool hasTorrent = false;
-  try {
-    hasTorrent = !TorrentExtractor::extract(selectedMessage()).isEmpty();
-  }
-  catch (...) {}
+  const QList<Message> messages = selectedMessages();
+  const bool hasTorrent = !messages.isEmpty() && !TorrentExtractor::extract(messages).isEmpty();
 
   const QList<TorrentClientConfig> clients = TorrentClientConfig::load(qApp->settings());
   for (const TorrentClientConfig& config : clients) {
     auto* button = new QPushButton(config.name, this);
     button->setEnabled(hasTorrent);
-    button->setToolTip(hasTorrent ? tr("Send this article's torrent to %1").arg(config.name)
-                                  : tr("No torrent link found in the selected article"));
+    button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
+                                  : tr("No torrent link found in the selected article(s)"));
     connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
     m_torrentActionsLayout->addWidget(button);
   }
@@ -167,16 +181,12 @@ void ArticleListNotification::rebuildTorrentActions() {
 }
 
 void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientConfig& config) {
-  TorrentExtractionResult extraction;
-  try {
-    extraction = TorrentExtractor::extract(QList<Message>{selectedMessage()});
-  }
-  catch (...) {
-    return;
-  }
+  const TorrentExtractionResult extraction = TorrentExtractor::extract(selectedMessages());
 
   if (extraction.urls.isEmpty()) {
-    QMessageBox::warning(this, tr("No torrent links found"), tr("No magnet link, .torrent URL, or torrent enclosure was found in this article."));
+    QMessageBox::warning(this,
+                         tr("No torrent links found"),
+                         tr("No magnet link, .torrent URL, or torrent enclosure was found in the selected article(s)."));
     return;
   }
 
@@ -307,6 +317,26 @@ Message& ArticleListNotification::selectedMessage() {
   else {
     throw ApplicationException(QSL("message cannot be loaded, wrong index"));
   }
+}
+
+QList<Message> ArticleListNotification::selectedMessages() const {
+  QList<Message> messages;
+  QModelIndexList rows = m_ui.m_treeArticles->selectionModel()->selectedRows();
+
+  if (rows.isEmpty() && m_ui.m_treeArticles->currentIndex().isValid()) {
+    rows.append(m_ui.m_treeArticles->currentIndex());
+  }
+
+  std::sort(rows.begin(), rows.end(), [](const QModelIndex& lhs, const QModelIndex& rhs) {
+    return lhs.row() < rhs.row();
+  });
+
+  messages.reserve(rows.size());
+  for (const QModelIndex& row : std::as_const(rows)) {
+    messages.append(m_model->message(row));
+  }
+
+  return messages;
 }
 
 bool ArticleListNotification::eventFilter(QObject* watched, QEvent* event) {

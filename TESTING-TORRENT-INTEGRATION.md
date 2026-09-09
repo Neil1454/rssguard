@@ -44,9 +44,9 @@ For each client, test both **Use RSS Guard proxy** enabled and disabled where ro
 Client-specific checks:
 
 - qBittorrent: matching Origin/Referer; special-character credentials; old HTTP 200/`SID` and 5.2 HTTP 204/`QBT_SID_...` login; newline bulk add; reverse-proxy subpath.
-- Transmission: first-call HTTP 409 retry; Basic auth; duplicate response; custom RPC path.
+- Transmission: first-call HTTP 409 retry; pre-emptive Basic and challenged Basic/Digest auth; duplicate response; custom RPC path; Transmission 3.00 behind an HTTPS reverse proxy.
 - Flood: password cookie and token-cookie modes; HTTP 200 accepted, HTTP 202 queued, HTTP 207 partial, and ambiguous HTTP 500 behavior.
-- Notifications: buttons appear only for configured clients, follow the selected notification article, disable when no torrent link exists, and send to the named client.
+- Notifications: the first row is selected automatically; rows are visibly selectable; Ctrl/Shift multi-selection works; buttons follow all selected rows, disable when no selected row has a torrent link, and send extracted links to the named client.
 - Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
 - rTorrent: XML-RPC fault response; HTTP Basic gateway; directory/custom1 commands.

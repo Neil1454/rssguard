@@ -16,13 +16,15 @@ Open **Tools > Settings > Torrent clients**, choose **Add**, enter a unique disp
 
 Do not add `/api` to qBittorrent or Flood URLs; RSS Guard appends their API routes. A Transmission browser URL ending in `/transmission/web` normally becomes `/transmission/rpc`. rTorrent's raw SCGI socket is not supported directly.
 
+Transmission supports direct Basic credentials and Basic/Digest authentication challenges from a hosting reverse proxy. Transmission 3.00 uses the same JSON-RPC exchange and does not need an API key.
+
 Optional fields include default save path, category/label, tags, default-client selection, and **Use RSS Guard proxy**. The proxy option inherits **Tools > Settings > Network & web > Network proxy**; disable it for a direct LAN connection.
 
 ## Send articles
 
 - Select one or several article rows, right-click, and choose **Send to torrent client > _client name_**.
 - Use the direct default-client action when a default client is configured.
-- On a new-article notification, select an article and click its named client button.
+- On a new-article notification, the first article is selected automatically. Click a named client button to send it, or use Ctrl/Shift to select several notification rows and send all of their torrent links together.
 
 RSS Guard recognises magnet links, BitTorrent enclosures, and recognisable HTTP(S) `.torrent` URLs. It deduplicates links across a multi-selection and reports articles with no usable torrent link.
 

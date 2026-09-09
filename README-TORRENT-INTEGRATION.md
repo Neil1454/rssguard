@@ -10,7 +10,7 @@ The `master` branch of this fork adds native torrent sending to RSS Guard 5.2.6 
 4. Right-click and choose **Send to torrent client > _client name_**. If a default is configured, the direct default-client action is also shown.
 5. RSS Guard reports accepted/failed totals, articles with no usable link, and duplicates skipped.
 
-When a new-article notification contains a usable torrent link, the notification also shows one button per configured client. Clicking a named button sends that notification article directly to the chosen client. Buttons are disabled for notification articles without a usable torrent link.
+When a new-article notification contains a usable torrent link, the notification also shows one button per configured client. The first article is selected automatically; Ctrl/Shift can select several rows. Clicking a named button sends torrent links from all selected notification articles to that client. Buttons are disabled only when none of the selected articles contains a usable torrent link.
 
 Successful-send dialogs can be disabled either from the dialog itself or with **Show confirmation after successful torrent sends** in Torrent clients settings. Failures remain visible.
 
@@ -51,6 +51,8 @@ The normal article URL is not accepted unless it is recognisably a torrent URL. 
 The adapter supplies matching `Origin` and `Referer` headers and safely form-encodes credentials. It supports both the traditional HTTP 200/`Ok.`/`SID` login and qBittorrent 5.2's HTTP 204/`QBT_SID_...` login. qBittorrent uses the Web UI username and password; it does not require an API key.
 
 ### Transmission
+
+The adapter supports both pre-emptive HTTP Basic authentication and server/reverse-proxy authentication challenges (including Digest authentication), followed by Transmission's normal `X-Transmission-Session-Id` HTTP 409 retry. Transmission 3.00 uses the same JSON-RPC flow and does not require an API key.
 
 - JSON RPC at the exact configured URL (normally `/transmission/rpc`).
 - HTTP Basic authentication when credentials are supplied.

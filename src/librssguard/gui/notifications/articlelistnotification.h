@@ -44,6 +44,7 @@ class ArticleListNotification : public BaseToastNotification {
 
     Feed* selectedFeed(int index = -1) const;
     Message& selectedMessage();
+    QList<Message> selectedMessages() const;
 
   private:
     Ui::ArticleListNotification m_ui;

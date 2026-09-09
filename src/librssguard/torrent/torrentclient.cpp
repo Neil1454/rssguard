@@ -5,6 +5,7 @@
 #include "network-web/basenetworkaccessmanager.h"
 #include "network-web/networkfactory.h"
 
+#include <QAuthenticator>
 #include <QHttpMultiPart>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -158,7 +159,15 @@ void QBittorrentClient::addTorrents(const QStringList& urls) {
   });
 }
 
-TransmissionClient::TransmissionClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+TransmissionClient::TransmissionClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {
+  connect(m_network,
+          &QNetworkAccessManager::authenticationRequired,
+          this,
+          [this](QNetworkReply*, QAuthenticator* authenticator) {
+            authenticator->setUser(m_config.username);
+            authenticator->setPassword(m_config.password);
+          });
+}
 
 void TransmissionClient::rpc(const QJsonObject& object, const std::function<void(QNetworkReply*, const QJsonObject&)>& callback, bool retry) {
   QNetworkRequest request(endpoint(QString()));
