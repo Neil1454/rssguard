@@ -1,7 +1,7 @@
 Torrent clients
 ===============
 
-The Neil1454 Windows fork can send recognised torrent links from RSS articles to qBittorrent, Transmission, Flood/RFlood, rTorrent, or the ruTorrent web interface. Sending is manual; fetching a feed does not automatically add every new item.
+The Neil1454 Windows fork can send recognised torrent links from RSS articles to qBittorrent, Transmission, Flood/RFlood, rTorrent/ruTorrent, and Deluge. Sending is manual; fetching a feed does not automatically add every new item.
 
 ## Configure a client
 
@@ -13,12 +13,33 @@ Open **Tools > Settings > Torrent clients**, choose **Add**, enter a unique disp
 | Transmission | RPC endpoint, for example `https://host/transmission/rpc` | RPC username and password |
 | Flood/RFlood | Flood web root, for example `http://flood.example:3000` | Flood username/password or optional Flood JWT token |
 | rTorrent / ruTorrent | HTTP(S) XML-RPC gateway. For ruTorrent this is usually `https://host/plugins/rpc/rpc.php`, not the web-interface homepage | Gateway/web-interface username and password |
+| Deluge | Deluge Web root, for example `http://deluge.example:8112` | Deluge Web password; a username is not used |
 
 Do not add `/api` to qBittorrent or Flood URLs; RSS Guard appends their API routes. A Transmission browser URL ending in `/transmission/web` normally becomes `/transmission/rpc`. For ruTorrent, use its XML-RPC endpoint, usually the web address followed by `/plugins/rpc/rpc.php`. rTorrent's raw SCGI socket is not supported directly.
 
 Transmission supports direct Basic credentials and Basic/Digest authentication challenges from a hosting reverse proxy. Transmission 3.00 uses the same JSON-RPC exchange and does not need an API key.
 
-Optional fields include default save path, category/label, tags, default-client selection, and **Use RSS Guard proxy**. The proxy option inherits **Tools > Settings > Network & web > Network proxy**; disable it for a direct LAN connection.
+The editor changes its URL example and help text when the client type changes. It disables fields that the selected adapter cannot use, preventing an apparently valid setting from being silently ignored.
+
+| Option | qBittorrent | Transmission | Flood | rTorrent/ruTorrent | Deluge |
+|---|---:|---:|---:|---:|---:|
+| Default save path | Yes | Yes | Yes | Yes | Yes |
+| Category/label | Category | No | No | `d.custom1` label | No |
+| Tags/labels | Tags | Labels on Transmission 4.0+ | Tags | No | No |
+| Username | Yes | Yes | Yes, unless using token | Gateway dependent | No |
+| Password | Yes | Yes | Yes, unless using token | Gateway dependent | Deluge Web password |
+
+The save path is a path on the remote torrent server, not necessarily a folder on the RSS Guard computer. **Use RSS Guard proxy** inherits **Tools > Settings > Network & web > Network proxy**; disable it for a direct LAN connection.
+
+## Version compatibility
+
+RSS Guard detects the version or protocol level during **Test connection** wherever the upstream API exposes it. Compatibility is selected automatically; there is no manual version switch.
+
+- qBittorrent supports both the traditional HTTP 200/`SID` login and the HTTP 204/prefixed-cookie login used by newer releases. Successful 2xx add responses, including hosted HTTP 202 responses, count as accepted.
+- Transmission uses its legacy JSON RPC exchange because Transmission 3.00 supports it and current Transmission retains compatibility. RSS Guard reads `rpc-version` before adding. It sends labels only with RPC 17/Transmission 4.0 or newer; Transmission 3.00 sends the torrent without labels.
+- Flood compatibility is response-driven: HTTP 200 and 202 are accepted and HTTP 207 is partial success.
+- rTorrent reports its backend version through `system.client_version`; ruTorrent is only the web gateway. The XML-RPC endpoint, not the ruTorrent homepage, must be entered.
+- Deluge Web reports the connected daemon version and available methods. RSS Guard logs in at `/json`, connects the configured daemon when needed, and supports URL and magnet adds.
 
 ## Send articles
 
@@ -44,5 +65,16 @@ Flood HTTP 202 means the request was queued successfully even when Flood returns
 - qBittorrent add responses in the successful HTTP 2xx range are accepted; HTTP 202 is reported as queued rather than failed.
 - A save path is interpreted by the remote torrent client, so it must exist and be allowed on that server, not merely on the RSS Guard computer.
 - Download a fresh portable artifact after a code change; an older extracted executable is not updated automatically.
+
+## Other clients considered
+
+Deluge was added because it is a widely used, established torrent client with an official authenticated Web JSON-RPC API. aria2 and generic download managers were not added to this release because their broader download APIs do not provide the same torrent-client semantics. Additional adapters should be added separately, with an official API and testable success response, instead of presenting an unverified generic option.
+
+## Protocol references
+
+- [qBittorrent WebUI API](https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-%28qBittorrent-4.1%29)
+- [Transmission RPC specification](https://github.com/transmission/transmission/blob/main/docs/rpc-spec.md)
+- [Flood torrent API route](https://github.com/jesec/flood/blob/master/server/routes/api/torrents.ts)
+- [Deluge Web JSON-RPC guide](https://deluge.readthedocs.io/en/latest/devguide/how-to/curl-jsonrpc.html)
 
 Passwords and Flood tokens are stored through RSS Guard's encrypted-settings convention. TLS certificate verification remains enabled for HTTPS connections.

@@ -49,8 +49,11 @@ Client-specific checks:
 - Notifications: the first row is selected automatically; rows are visibly selectable; Ctrl/Shift multi-selection works; buttons follow all selected rows, disable when no selected row has a torrent link, and send extracted links to the named client.
 - Persistent notifications: when enabled, new-article notifications ignore the timeout and right-click dismissal but still close from their close button; ordinary notifications retain normal timing.
 - Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
+- Client editor: changing the confirmation checkbox enables Apply; each client type changes the URL example and greys unsupported fields.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
 - rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/rpc/rpc.php`; incorrect homepage URL guidance; directory/custom1 commands.
+- Deluge: Web password login, automatic configured-daemon connection, version/status test, magnet/URL add, remote download location, and invalid-password error.
+- Transmission versions: RPC 16/Transmission 3.00 adds without labels; RPC 17+ adds configured labels.
 
 ## Release gate
 

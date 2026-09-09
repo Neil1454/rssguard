@@ -2,6 +2,10 @@
 
 ## 2026-09-09 — Notifications and compatibility corrections
 
+- Fixed the successful-send confirmation checkbox so changing it marks Settings dirty and enables Apply.
+- Made the client editor type-aware with per-client URL examples, field help, and disabled unsupported options.
+- Added Deluge Web support with password/session authentication, daemon connection and version detection, URL/magnet sending, and remote download paths.
+- Added automatic Transmission RPC detection and omitted torrent-add labels on Transmission 3.00, where that option is unsupported.
 - Added named torrent-client buttons to new-article notifications, automatic first-row selection, and Ctrl/Shift multi-selection for sending one or several notification articles.
 - Added challenge-based HTTP authentication for hosted Transmission/reverse-proxy installations while retaining pre-emptive Basic authentication and the Transmission session-ID retry.
 - Corrected qBittorrent false failures when a hosted instance returns HTTP 202 after successfully queuing a torrent; all successful HTTP 2xx add responses are now accepted.

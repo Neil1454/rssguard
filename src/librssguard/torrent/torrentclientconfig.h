@@ -14,7 +14,8 @@ enum class TorrentClientType {
   QBittorrent = 0,
   Transmission = 1,
   Flood = 2,
-  RTorrent = 3
+  RTorrent = 3,
+  Deluge = 4
 };
 
 struct RSSGUARD_DLLSPEC TorrentClientConfig {

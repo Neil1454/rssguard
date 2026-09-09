@@ -83,6 +83,7 @@ TorrentClient* TorrentClient::create(const TorrentClientConfig& config, QObject*
     case TorrentClientType::Transmission: return new TransmissionClient(config, parent);
     case TorrentClientType::Flood: return new FloodClient(config, parent);
     case TorrentClientType::RTorrent: return new RTorrentClient(config, parent);
+    case TorrentClientType::Deluge: return new DelugeClient(config, parent);
   }
   return nullptr;
 }
@@ -195,16 +196,34 @@ void TransmissionClient::rpc(const QJsonObject& object, const std::function<void
 void TransmissionClient::testConnection() {
   rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("session-get")}}, [this](QNetworkReply* reply, const QJsonObject& response) {
     const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("result")).toString() == QStringLiteral("success");
-    const QString version = response.value(QStringLiteral("arguments")).toObject().value(QStringLiteral("version")).toString();
-    emit testFinished(ok, ok ? tr("Connected successfully to Transmission %1.").arg(version) : networkFailure(reply));
+    const QJsonObject arguments = response.value(QStringLiteral("arguments")).toObject();
+    const QString version = arguments.value(QStringLiteral("version")).toString();
+    m_rpcVersion = arguments.value(QStringLiteral("rpc-version")).toInt();
+    emit testFinished(ok,
+                      ok ? tr("Connected successfully to Transmission %1 (RPC %2).")
+                             .arg(version, QString::number(m_rpcVersion))
+                         : networkFailure(reply));
   });
 }
 
 void TransmissionClient::addTorrents(const QStringList& urls) {
-  m_pending.clear();
-  for (const QString& url : urls) m_pending.enqueue(url);
-  m_added = m_failed = 0;
-  addNext();
+  rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("session-get")}},
+      [this, urls](QNetworkReply* reply, const QJsonObject& response) {
+        const bool ok = reply->error() == QNetworkReply::NoError &&
+                        response.value(QStringLiteral("result")).toString() == QStringLiteral("success");
+        if (!ok) {
+          emit addFinished(0, urls.size(), networkFailure(reply));
+          return;
+        }
+        m_rpcVersion = response.value(QStringLiteral("arguments"))
+                         .toObject()
+                         .value(QStringLiteral("rpc-version"))
+                         .toInt();
+        m_pending.clear();
+        for (const QString& url : urls) m_pending.enqueue(url);
+        m_added = m_failed = 0;
+        addNext();
+      });
 }
 
 void TransmissionClient::addNext() {
@@ -214,7 +233,9 @@ void TransmissionClient::addNext() {
   }
   QJsonObject arguments{{QStringLiteral("filename"), m_pending.dequeue()}};
   if (!m_config.savePath.isEmpty()) arguments.insert(QStringLiteral("download-dir"), m_config.savePath);
-  if (!m_config.tags.isEmpty()) arguments.insert(QStringLiteral("labels"), QJsonArray::fromStringList(m_config.tags));
+  // torrent-add labels were introduced by Transmission RPC 17 (Transmission 4.0).
+  if (m_rpcVersion >= 17 && !m_config.tags.isEmpty())
+    arguments.insert(QStringLiteral("labels"), QJsonArray::fromStringList(m_config.tags));
   rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("torrent-add")}, {QStringLiteral("arguments"), arguments}},
       [this](QNetworkReply* reply, const QJsonObject& response) {
         if (reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("result")).toString() == QStringLiteral("success")) ++m_added;
@@ -365,4 +386,132 @@ void RTorrentClient::addNext() {
     else ++m_failed;
     addNext();
   });
+}
+
+DelugeClient::DelugeClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+
+void DelugeClient::rpc(const QString& method,
+                       const QJsonArray& params,
+                       const std::function<void(QNetworkReply*, const QJsonObject&)>& callback) {
+  QNetworkRequest request(endpoint(QStringLiteral("/json")));
+  setJson(request);
+  if (!m_cookie.isEmpty()) request.setRawHeader("Cookie", m_cookie);
+  const QJsonObject payload{{QStringLiteral("method"), method},
+                            {QStringLiteral("params"), params},
+                            {QStringLiteral("id"), ++m_requestId}};
+  QNetworkReply* reply = m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+  connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+    const QJsonObject response = QJsonDocument::fromJson(reply->readAll()).object();
+    callback(reply, response);
+    reply->deleteLater();
+  });
+}
+
+void DelugeClient::authenticate(const std::function<void(bool, const QString&)>& continuation) {
+  rpc(QStringLiteral("auth.login"), QJsonArray{m_config.password}, [this, continuation](QNetworkReply* reply,
+                                                                                       const QJsonObject& response) {
+    const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+                    response.value(QStringLiteral("result")).toBool();
+    if (ok) m_cookie = responseCookie(reply, "_session_id");
+    const QString error = ok ? QString()
+                             : (reply->error() == QNetworkReply::NoError
+                                  ? tr("Deluge Web password was rejected.")
+                                  : networkFailure(reply));
+    continuation(ok, error);
+  });
+}
+
+void DelugeClient::prepare(const std::function<void(bool, const QString&)>& continuation) {
+  authenticate([this, continuation](bool ok, const QString& error) {
+    if (!ok) {
+      continuation(false, error);
+      return;
+    }
+    rpc(QStringLiteral("web.connected"), {}, [this, continuation](QNetworkReply* reply, const QJsonObject& response) {
+      if (reply->error() != QNetworkReply::NoError || !response.value(QStringLiteral("error")).isNull()) {
+        continuation(false, networkFailure(reply));
+        return;
+      }
+      if (response.value(QStringLiteral("result")).toBool()) {
+        continuation(true, QString());
+        return;
+      }
+      rpc(QStringLiteral("web.get_hosts"), {}, [this, continuation](QNetworkReply* hostsReply,
+                                                                    const QJsonObject& hostsResponse) {
+        const QJsonArray hosts = hostsResponse.value(QStringLiteral("result")).toArray();
+        if (hostsReply->error() != QNetworkReply::NoError || hosts.isEmpty() || hosts.first().toArray().isEmpty()) {
+          continuation(false, tr("Deluge Web is logged in, but no Deluge daemon is configured."));
+          return;
+        }
+        const QString hostId = hosts.first().toArray().first().toString();
+        rpc(QStringLiteral("web.connect"), QJsonArray{hostId}, [this, continuation](QNetworkReply* connectReply,
+                                                                                   const QJsonObject& connectResponse) {
+          const bool connected = connectReply->error() == QNetworkReply::NoError &&
+                                 connectResponse.value(QStringLiteral("error")).isNull() &&
+                                 connectResponse.value(QStringLiteral("result")).isArray();
+          continuation(connected, connected ? QString() : tr("Deluge Web could not connect to its configured daemon."));
+        });
+      });
+    });
+  });
+}
+
+void DelugeClient::testConnection() {
+  prepare([this](bool ok, const QString& error) {
+    if (!ok) {
+      emit testFinished(false, error);
+      return;
+    }
+    rpc(QStringLiteral("web.get_hosts"), {}, [this](QNetworkReply* reply, const QJsonObject& response) {
+      const QJsonArray hosts = response.value(QStringLiteral("result")).toArray();
+      if (reply->error() != QNetworkReply::NoError || hosts.isEmpty() || hosts.first().toArray().isEmpty()) {
+        emit testFinished(false, tr("Connected to Deluge Web, but no daemon information was returned."));
+        return;
+      }
+      const QString hostId = hosts.first().toArray().first().toString();
+      rpc(QStringLiteral("web.get_host_status"), QJsonArray{hostId}, [this](QNetworkReply* statusReply,
+                                                                           const QJsonObject& statusResponse) {
+        const QJsonArray status = statusResponse.value(QStringLiteral("result")).toArray();
+        const bool success = statusReply->error() == QNetworkReply::NoError && status.size() >= 3;
+        emit testFinished(success,
+                          success ? tr("Connected successfully to Deluge %1 (%2).")
+                                      .arg(status.at(2).toString(), status.at(1).toString())
+                                  : networkFailure(statusReply));
+      });
+    });
+  });
+}
+
+void DelugeClient::addTorrents(const QStringList& urls) {
+  prepare([this, urls](bool ok, const QString& error) {
+    if (!ok) {
+      emit addFinished(0, urls.size(), error);
+      return;
+    }
+    m_pending.clear();
+    for (const QString& url : urls) m_pending.enqueue(url);
+    m_added = m_failed = 0;
+    addNext();
+  });
+}
+
+void DelugeClient::addNext() {
+  if (m_pending.isEmpty()) {
+    emit addFinished(m_added, m_failed, tr("Deluge accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed));
+    return;
+  }
+
+  const QString url = m_pending.dequeue();
+  QJsonObject options;
+  if (!m_config.savePath.isEmpty()) options.insert(QStringLiteral("download_location"), m_config.savePath);
+  const bool magnet = url.startsWith(QStringLiteral("magnet:"), Qt::CaseInsensitive);
+  rpc(magnet ? QStringLiteral("core.add_torrent_magnet") : QStringLiteral("core.add_torrent_url"),
+      QJsonArray{url, options},
+      [this](QNetworkReply* reply, const QJsonObject& response) {
+        const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+                        !response.value(QStringLiteral("result")).isNull();
+        if (ok) ++m_added;
+        else ++m_failed;
+        addNext();
+      });
 }

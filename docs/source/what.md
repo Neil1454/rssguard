@@ -4,6 +4,6 @@ RSS Guard is an [open-source](https://en.wikipedia.org/wiki/Open_source), [cross
 
 RSS Guard is meant to be simple and quite fast while also offering some features for power users.
 
-The Neil1454 Windows fork additionally provides manual native sending of recognised RSS torrent links to configured qBittorrent, Transmission, Flood/RFlood, and rTorrent instances. See [Torrent clients](features/torrent-clients.md).
+The Neil1454 Windows fork additionally provides manual native sending of recognised RSS torrent links to configured qBittorrent, Transmission, Flood/RFlood, rTorrent/ruTorrent, and Deluge instances. See [Torrent clients](features/torrent-clients.md).
 
 RSS Guard is developed on top of the [Qt library](https://www.qt.io/).

@@ -37,6 +37,7 @@ QString TorrentClientConfig::typeName(TorrentClientType type) {
     case TorrentClientType::Transmission: return QStringLiteral("Transmission");
     case TorrentClientType::Flood: return QStringLiteral("Flood");
     case TorrentClientType::RTorrent: return QStringLiteral("rTorrent / ruTorrent");
+    case TorrentClientType::Deluge: return QStringLiteral("Deluge");
   }
   return QStringLiteral("Unknown");
 }

@@ -22,7 +22,7 @@ This feature is manual. It does not automatically send newly fetched feed entrie
 
 - `torrentclientconfig.*`: typed client configuration, validation, persistence, and encrypted secret fields.
 - `torrentextractor.*`: client-independent discovery and bulk deduplication.
-- `torrentclient.*`: common asynchronous interface and separate qBittorrent, Transmission, Flood, and rTorrent adapters.
+- `torrentclient.*`: common asynchronous interface and separate qBittorrent, Transmission, Flood, rTorrent/ruTorrent, and Deluge adapters.
 - `settingstorrentclients.*`: native settings panel and add/edit/remove/test UI.
 - `MessagesView`: builds the dynamic client menu from saved configurations and passes selected messages to the extractor.
 - `ArticleListNotification`: builds per-client notification buttons and sends the selected notification article.
@@ -61,7 +61,7 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - HTTP Basic authentication when credentials are supplied.
 - Correctly retries once after HTTP 409 using `X-Transmission-Session-Id`.
 - Connection test uses `session-get`; sending uses one asynchronous `torrent-add` call per URL.
-- Optional download directory and labels are supported.
+- Optional download directory is supported. The RPC version is detected automatically; labels are sent only to Transmission 4.0/RPC 17 or newer so Transmission 3.00 remains compatible.
 
 ### Flood
 
@@ -80,6 +80,14 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - Optional directory and category (`d.custom1`) commands are supported.
 
 rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/rpc/rpc.php`, not the homepage. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
+
+### Deluge
+
+- Deluge Web JSON-RPC at `/json`, using the Web UI password and session cookie.
+- Automatically connects the first configured daemon when Deluge Web is not already connected.
+- Connection testing reports the daemon version and status.
+- Magnet links and remote torrent URLs are added with the official core methods.
+- Optional remote download location is supported; username, category, and tags are disabled because this adapter does not use them.
 
 ## Proxy and TLS behavior
 

@@ -16,6 +16,7 @@ class BaseNetworkAccessManager;
 class QNetworkReply;
 class QNetworkRequest;
 class QUrl;
+class QJsonArray;
 
 class RSSGUARD_DLLSPEC TorrentClient : public QObject {
     Q_OBJECT
@@ -66,6 +67,7 @@ class TransmissionClient final : public TorrentClient {
     void rpc(const QJsonObject& request, const std::function<void(QNetworkReply*, const QJsonObject&)>& callback, bool retry = true);
     void addNext();
     QString m_sessionId;
+    int m_rpcVersion = 0;
     QQueue<QString> m_pending;
     int m_added = 0;
     int m_failed = 0;
@@ -95,6 +97,28 @@ class RTorrentClient final : public TorrentClient {
     void call(const QString& method, const QStringList& values, const std::function<void(QNetworkReply*, const QByteArray&)>& callback);
     void addNext();
     QQueue<QString> m_pending;
+    int m_added = 0;
+    int m_failed = 0;
+};
+
+class DelugeClient final : public TorrentClient {
+    Q_OBJECT
+  public:
+    explicit DelugeClient(const TorrentClientConfig& config, QObject* parent = nullptr);
+    void testConnection() override;
+    void addTorrents(const QStringList& urls) override;
+
+  private:
+    void rpc(const QString& method,
+             const QJsonArray& params,
+             const std::function<void(QNetworkReply*, const QJsonObject&)>& callback);
+    void authenticate(const std::function<void(bool, const QString&)>& continuation);
+    void prepare(const std::function<void(bool, const QString&)>& continuation);
+    void addNext();
+
+    QByteArray m_cookie;
+    QQueue<QString> m_pending;
+    int m_requestId = 0;
     int m_added = 0;
     int m_failed = 0;
 };
