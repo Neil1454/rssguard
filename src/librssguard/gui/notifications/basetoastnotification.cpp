@@ -76,6 +76,11 @@ void BaseToastNotification::stopTimedClosing() {
 }
 
 void BaseToastNotification::setupTimedClosing(bool want_shorter_timeout) {
+  if (staysOpenUntilDismissed()) {
+    stopTimedClosing();
+    return;
+  }
+
   if (m_timerId < 0) {
     auto timeout_ms = qApp->settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt() * 1000;
     m_timerId = startTimer(want_shorter_timeout ? int(timeout_ms / 2) : timeout_ms);
@@ -95,7 +100,8 @@ bool BaseToastNotification::eventFilter(QObject* watched, QEvent* event) {
   }
 
   if (event->type() == QEvent::Type::MouseButtonPress || event->type() == QEvent::Type::MouseButtonRelease) {
-    if (dynamic_cast<QMouseEvent*>(event)->button() == Qt::MouseButton::RightButton) {
+    if (!staysOpenUntilDismissed() &&
+        dynamic_cast<QMouseEvent*>(event)->button() == Qt::MouseButton::RightButton) {
       event->accept();
       QCoreApplication::processEvents();
       m_timerClosingClick.start();
@@ -104,6 +110,10 @@ bool BaseToastNotification::eventFilter(QObject* watched, QEvent* event) {
   }
 
   return QDialog::eventFilter(watched, event);
+}
+
+bool BaseToastNotification::staysOpenUntilDismissed() const {
+  return false;
 }
 
 void BaseToastNotification::closeEvent(QCloseEvent* event) {

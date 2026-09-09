@@ -12,6 +12,8 @@ The `master` branch of this fork adds native torrent sending to RSS Guard 5.2.6 
 
 When a new-article notification contains a usable torrent link, the notification also shows one button per configured client. The first article is selected automatically; Ctrl/Shift can select several rows. Clicking a named button sends torrent links from all selected notification articles to that client. Buttons are disabled only when none of the selected articles contains a usable torrent link.
 
+**Keep new-article notifications open until dismissed** in Notification settings disables both the article notification timer and right-click dismissal. The notification remains available for torrent selection until its close button is used.
+
 Successful-send dialogs can be disabled either from the dialog itself or with **Show confirmation after successful torrent sends** in Torrent clients settings. Failures remain visible.
 
 This feature is manual. It does not automatically send newly fetched feed entries.

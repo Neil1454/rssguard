@@ -25,6 +25,7 @@ Optional fields include default save path, category/label, tags, default-client 
 - Select one or several article rows, right-click, and choose **Send to torrent client > _client name_**.
 - Use the direct default-client action when a default client is configured.
 - On a new-article notification, the first article is selected automatically. Click a named client button to send it, or use Ctrl/Shift to select several notification rows and send all of their torrent links together.
+- To prevent a notification disappearing while choosing a torrent client, enable **Tools > Settings > Notifications > Keep new-article notifications open until dismissed**. Its timer and right-click dismissal are then disabled; close it with its close button.
 
 RSS Guard recognises magnet links, BitTorrent enclosures, and recognisable HTTP(S) `.torrent` URLs. It deduplicates links across a multi-selection and reports articles with no usable torrent link.
 

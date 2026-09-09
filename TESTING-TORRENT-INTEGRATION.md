@@ -47,6 +47,7 @@ Client-specific checks:
 - Transmission: first-call HTTP 409 retry; pre-emptive Basic and challenged Basic/Digest auth; duplicate response; custom RPC path; Transmission 3.00 behind an HTTPS reverse proxy.
 - Flood: password cookie and token-cookie modes; HTTP 200 accepted, HTTP 202 queued, HTTP 207 partial, and ambiguous HTTP 500 behavior.
 - Notifications: the first row is selected automatically; rows are visibly selectable; Ctrl/Shift multi-selection works; buttons follow all selected rows, disable when no selected row has a torrent link, and send extracted links to the named client.
+- Persistent notifications: when enabled, new-article notifications ignore the timeout and right-click dismissal but still close from their close button; ordinary notifications retain normal timing.
 - Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
 - rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/rpc/rpc.php`; incorrect homepage URL guidance; directory/custom1 commands.

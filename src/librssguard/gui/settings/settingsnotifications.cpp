@@ -12,6 +12,7 @@
 #include "miscellaneous/settingskeys.h"
 
 #include <QDir>
+#include <QCheckBox>
 #include <QScreen>
 
 SettingsNotifications::SettingsNotifications(Settings* settings, QWidget* parent)
@@ -26,6 +27,11 @@ SettingsNotifications::~SettingsNotifications() {
 void SettingsNotifications::loadUi() {
   m_ui = new Ui::SettingsNotifications();
   m_ui->setupUi(this);
+
+  m_keepArticleNotificationsOpen = new QCheckBox(tr("Keep new-article notifications open until dismissed"), this);
+  m_keepArticleNotificationsOpen
+    ->setToolTip(tr("Disables the timeout and right-click dismissal for new-article notifications. Use the close button to dismiss them."));
+  m_ui->formLayout_3->insertRow(5, m_keepArticleNotificationsOpen);
 
   m_ui->m_lblInfo
     ->setHelpText(tr("There are some built-in notification sounds. Just start typing \":\" and they will show up."),
@@ -47,6 +53,10 @@ void SettingsNotifications::loadUi() {
 
   connect(m_ui->m_sbDuration,
           QOverload<int>::of(&QSpinBox::valueChanged),
+          this,
+          &SettingsNotifications::dirtifySettings);
+  connect(m_keepArticleNotificationsOpen,
+          &QCheckBox::toggled,
           this,
           &SettingsNotifications::dirtifySettings);
   connect(m_ui->m_sbScreen, QOverload<int>::of(&QSpinBox::valueChanged), this, &SettingsNotifications::dirtifySettings);
@@ -101,6 +111,8 @@ void SettingsNotifications::loadSettings() {
   }
 
   m_ui->m_sbDuration->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt());
+  m_keepArticleNotificationsOpen
+    ->setChecked(settings()->value(GROUP(GUI), SETTING(GUI::KeepArticleNotificationsOpen)).toBool());
   m_ui->m_sbScreen->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsScreen)).toInt());
   m_ui->m_sbWidth->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsWidth)).toInt());
   m_ui->m_sbMargin->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsMargin)).toInt());
@@ -124,6 +136,9 @@ void SettingsNotifications::saveSettings() {
 
   settings()->setValue(GROUP(GUI), GUI::UseToastNotifications, m_ui->m_rbCustomNotifications->isChecked());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsDuration, m_ui->m_sbDuration->value());
+  settings()->setValue(GROUP(GUI),
+                       GUI::KeepArticleNotificationsOpen,
+                       m_keepArticleNotificationsOpen->isChecked());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsScreen, m_ui->m_sbScreen->value());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsWidth, m_ui->m_sbWidth->value());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsMargin, m_ui->m_sbMargin->value());

@@ -159,6 +159,10 @@ void ArticleListNotification::onMessageSelected(const QModelIndex& current, cons
   rebuildTorrentActions();
 }
 
+bool ArticleListNotification::staysOpenUntilDismissed() const {
+  return qApp->settings()->value(GROUP(GUI), SETTING(GUI::KeepArticleNotificationsOpen)).toBool();
+}
+
 void ArticleListNotification::rebuildTorrentActions() {
   while (QLayoutItem* item = m_torrentActionsLayout->takeAt(0)) {
     delete item->widget();

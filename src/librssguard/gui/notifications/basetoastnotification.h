@@ -30,6 +30,7 @@ class BaseToastNotification : public QDialog {
     void setupTimedClosing(bool want_shorter_timeout);
     void setupCloseButton(QAbstractButton* btn);
     void stopTimedClosing();
+    virtual bool staysOpenUntilDismissed() const;
 
   signals:
     void closeRequested(BaseToastNotification* notif, bool free_from_memory);

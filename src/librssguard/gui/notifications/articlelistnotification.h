@@ -42,6 +42,10 @@ class ArticleListNotification : public BaseToastNotification {
     void markAsRead(Feed* feed, const QList<Message>& articles);
     void sendSelectedToTorrentClient(const TorrentClientConfig& config);
 
+  protected:
+    bool staysOpenUntilDismissed() const override;
+
+  private:
     Feed* selectedFeed(int index = -1) const;
     Message& selectedMessage();
     QList<Message> selectedMessages() const;

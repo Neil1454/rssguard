@@ -6,6 +6,7 @@
 - Added challenge-based HTTP authentication for hosted Transmission/reverse-proxy installations while retaining pre-emptive Basic authentication and the Transmission session-ID retry.
 - Corrected qBittorrent false failures when a hosted instance returns HTTP 202 after successfully queuing a torrent; all successful HTTP 2xx add responses are now accepted.
 - Added explicit ruTorrent support through its XML-RPC endpoint, Basic/Digest authentication challenges, clearer client naming, and guidance when the web-interface homepage is entered instead of the RPC endpoint.
+- Added an option to keep new-article notifications open until explicitly dismissed, disabling their timeout and accidental right-click dismissal while retaining the close button.
 - Added a setting to show or suppress successful-send confirmations, plus a one-click opt-out in the success dialog. Failure messages remain enabled.
 - Removed forced alternating row colours from the client list to prevent dark navy/purple bands with affected Windows palettes.
 - Added qBittorrent 5.2 authentication compatibility: HTTP 204 login responses and `QBT_SID_...` session cookies, while retaining older HTTP 200/`Ok.`/`SID` support.

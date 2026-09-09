@@ -8,6 +8,7 @@
 #include "ui_settingsnotifications.h"
 
 class Settings;
+class QCheckBox;
 
 class SettingsNotifications : public SettingsPanel {
     Q_OBJECT
@@ -27,6 +28,7 @@ class SettingsNotifications : public SettingsPanel {
 
   private:
     Ui::SettingsNotifications* m_ui;
+    QCheckBox* m_keepArticleNotificationsOpen = nullptr;
 };
 
 inline QString SettingsNotifications::title() const {

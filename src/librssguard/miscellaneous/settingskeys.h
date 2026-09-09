@@ -316,6 +316,9 @@ namespace GUI {
   KEY ToastNotificationsDuration;
   VALUE(int) ToastNotificationsDurationDef;
 
+  KEY KeepArticleNotificationsOpen;
+  VALUE(bool) KeepArticleNotificationsOpenDef;
+
   KEY ToastNotificationsScreen;
   VALUE(int) ToastNotificationsScreenDef;
 

@@ -398,6 +398,9 @@ GUI::ToastNotificationsPositionDef = int(ToastNotificationsManager::Notification
 DKEY GUI::ToastNotificationsDuration = QSL("toast_notifications_duration");
 DVALUE(int) GUI::ToastNotificationsDurationDef = NOTIFICATIONS_TIMEOUT;
 
+DKEY GUI::KeepArticleNotificationsOpen = QSL("keep_article_notifications_open");
+DVALUE(bool) GUI::KeepArticleNotificationsOpenDef = false;
+
 DKEY GUI::ToastNotificationsScreen = QSL("toast_notifications_screen");
 DVALUE(int) GUI::ToastNotificationsScreenDef = -1;
 
