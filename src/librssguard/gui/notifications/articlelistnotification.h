@@ -11,7 +11,7 @@
 
 class Feed;
 class ArticleListNotificationModel;
-class QHBoxLayout;
+class QGridLayout;
 struct TorrentClientConfig;
 
 class ArticleListNotification : public BaseToastNotification {
@@ -54,7 +54,7 @@ class ArticleListNotification : public BaseToastNotification {
     Ui::ArticleListNotification m_ui;
     ArticleListNotificationModel* m_model;
     QHash<Feed*, QList<Message>> m_newMessages;
-    QHBoxLayout* m_torrentActionsLayout = nullptr;
+    QGridLayout* m_torrentActionsLayout = nullptr;
 };
 
 #endif // ARTICLELISTNOTIFICATION_H

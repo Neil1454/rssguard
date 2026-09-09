@@ -2,6 +2,7 @@
 
 ## 2026-09-09 — Notifications and compatibility corrections
 
+- Replaced the cramped single-row notification client buttons with a larger two-column grid so configured names remain readable and easier to click.
 - Fixed the successful-send confirmation checkbox so changing it marks Settings dirty and enables Apply.
 - Made the client editor type-aware with per-client URL examples, field help, and disabled unsupported options.
 - Added Deluge Web support with password/session authentication, daemon connection and version detection, URL/magnet sending, and remote download paths.

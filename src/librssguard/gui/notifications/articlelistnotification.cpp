@@ -15,11 +15,12 @@
 
 #include <QCheckBox>
 #include <QAbstractItemView>
-#include <QHBoxLayout>
+#include <QGridLayout>
 #include <QItemSelectionModel>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QTreeView>
 #include <QWheelEvent>
 
@@ -45,9 +46,12 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
   m_ui.m_treeArticles->setSelectionMode(QAbstractItemView::SelectionMode::ExtendedSelection);
 
   auto* torrentActions = new QWidget(this);
-  m_torrentActionsLayout = new QHBoxLayout(torrentActions);
+  m_torrentActionsLayout = new QGridLayout(torrentActions);
   m_torrentActionsLayout->setContentsMargins(0, 0, 0, 0);
-  m_torrentActionsLayout->setSpacing(4);
+  m_torrentActionsLayout->setHorizontalSpacing(6);
+  m_torrentActionsLayout->setVerticalSpacing(4);
+  m_torrentActionsLayout->setColumnStretch(0, 1);
+  m_torrentActionsLayout->setColumnStretch(1, 1);
   m_ui.formLayout->insertRow(2, torrentActions);
 
   connect(m_model,
@@ -173,15 +177,18 @@ void ArticleListNotification::rebuildTorrentActions() {
   const bool hasTorrent = !messages.isEmpty() && !TorrentExtractor::extract(messages).urls.isEmpty();
 
   const QList<TorrentClientConfig> clients = TorrentClientConfig::load(qApp->settings());
+  int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     auto* button = new QPushButton(config.name, this);
+    button->setMinimumHeight(qMax(32, button->sizeHint().height()));
+    button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     button->setEnabled(hasTorrent);
     button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
                                   : tr("No torrent link found in the selected article(s)"));
     connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
-    m_torrentActionsLayout->addWidget(button);
+    m_torrentActionsLayout->addWidget(button, buttonIndex / 2, buttonIndex % 2);
+    ++buttonIndex;
   }
-  m_torrentActionsLayout->addStretch();
 }
 
 void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientConfig& config) {
