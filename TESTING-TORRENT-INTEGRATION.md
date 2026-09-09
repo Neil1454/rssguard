@@ -49,7 +49,7 @@ Client-specific checks:
 - Notifications: the first row is selected automatically; rows are visibly selectable; Ctrl/Shift multi-selection works; buttons follow all selected rows, disable when no selected row has a torrent link, and send extracted links to the named client.
 - Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
-- rTorrent: XML-RPC fault response; HTTP Basic gateway; directory/custom1 commands.
+- rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/rpc/rpc.php`; incorrect homepage URL guidance; directory/custom1 commands.
 
 ## Release gate
 

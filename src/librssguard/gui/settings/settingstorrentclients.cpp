@@ -114,7 +114,7 @@ void SettingsTorrentClients::loadUi() {
   titleFont.setPointSize(titleFont.pointSize() + 3);
   titleLabel->setFont(titleFont);
   outer->addWidget(titleLabel);
-  m_description = new QLabel(tr("Configure one or more qBittorrent, Transmission, Flood, or rTorrent servers. Torrent-client requests use RSS Guard's network proxy unless disabled per client."), this);
+  m_description = new QLabel(tr("Configure one or more qBittorrent, Transmission, Flood, rTorrent, or ruTorrent servers. For ruTorrent, enter its XML-RPC endpoint, usually ending in /plugins/rpc/rpc.php. Torrent-client requests use RSS Guard's network proxy unless disabled per client."), this);
   m_description->setWordWrap(true);
   outer->addWidget(m_description);
   m_showSuccessNotifications = new QCheckBox(tr("Show confirmation after successful torrent sends"), this);

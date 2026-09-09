@@ -36,7 +36,7 @@ QString TorrentClientConfig::typeName(TorrentClientType type) {
     case TorrentClientType::QBittorrent: return QStringLiteral("qBittorrent");
     case TorrentClientType::Transmission: return QStringLiteral("Transmission");
     case TorrentClientType::Flood: return QStringLiteral("Flood");
-    case TorrentClientType::RTorrent: return QStringLiteral("rTorrent");
+    case TorrentClientType::RTorrent: return QStringLiteral("rTorrent / ruTorrent");
   }
   return QStringLiteral("Unknown");
 }

@@ -297,7 +297,15 @@ void FloodClient::addTorrents(const QStringList& urls) {
   });
 }
 
-RTorrentClient::RTorrentClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+RTorrentClient::RTorrentClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {
+  connect(m_network,
+          &QNetworkAccessManager::authenticationRequired,
+          this,
+          [this](QNetworkReply*, QAuthenticator* authenticator) {
+            authenticator->setUser(m_config.username);
+            authenticator->setPassword(m_config.password);
+          });
+}
 
 QByteArray RTorrentClient::methodCall(const QString& method, const QStringList& values) const {
   QString xml = QStringLiteral("<?xml version=\"1.0\"?><methodCall><methodName>%1</methodName><params>").arg(xmlEscape(method));
@@ -323,7 +331,17 @@ void RTorrentClient::testConnection() {
     static const QRegularExpression valueExpression(QStringLiteral("<string>([^<]+)</string>"));
     const QString version = valueExpression.match(QString::fromUtf8(body)).captured(1);
     const bool ok = reply->error() == QNetworkReply::NoError && !body.contains("<fault>") && !version.isEmpty();
-    emit testFinished(ok, ok ? tr("Connected successfully to rTorrent %1.").arg(version) : networkFailure(reply));
+    QString message;
+    if (ok) {
+      message = tr("Connected successfully to rTorrent %1.").arg(version);
+    }
+    else if (reply->error() == QNetworkReply::ContentOperationNotPermittedError) {
+      message = tr("This URL does not accept XML-RPC requests. For ruTorrent, use its XML-RPC endpoint, usually the ruTorrent address followed by /plugins/rpc/rpc.php.");
+    }
+    else {
+      message = networkFailure(reply);
+    }
+    emit testFinished(ok, message);
   });
 }
 

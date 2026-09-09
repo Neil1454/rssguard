@@ -69,7 +69,7 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - Optional destination and tags are supported; added torrents start immediately.
 - HTTP 200 is treated as accepted, HTTP 202 as accepted/queued, and HTTP 207 as partial success. A Flood HTTP 500 warning states that the server may still have submitted the torrent and should be checked before retrying.
 
-### rTorrent
+### rTorrent / ruTorrent
 
 - XML-RPC over HTTP(S) at the exact configured gateway URL.
 - HTTP Basic authentication when supplied.
@@ -77,7 +77,7 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - Sending calls `load.start` asynchronously for each URL, with the required empty target argument.
 - Optional directory and category (`d.custom1`) commands are supported.
 
-rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. RSS Guard does not expose raw SCGI to the internet.
+rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/rpc/rpc.php`, not the homepage. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
 
 ## Proxy and TLS behavior
 

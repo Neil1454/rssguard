@@ -1,7 +1,7 @@
 Torrent clients
 ===============
 
-The Neil1454 Windows fork can send recognised torrent links from RSS articles to qBittorrent, Transmission, Flood/RFlood, or rTorrent. Sending is manual; fetching a feed does not automatically add every new item.
+The Neil1454 Windows fork can send recognised torrent links from RSS articles to qBittorrent, Transmission, Flood/RFlood, rTorrent, or the ruTorrent web interface. Sending is manual; fetching a feed does not automatically add every new item.
 
 ## Configure a client
 
@@ -12,9 +12,9 @@ Open **Tools > Settings > Torrent clients**, choose **Add**, enter a unique disp
 | qBittorrent | Web UI root, for example `http://qbittorrent.example:8081` | Web UI username and password; no API key/token |
 | Transmission | RPC endpoint, for example `https://host/transmission/rpc` | RPC username and password |
 | Flood/RFlood | Flood web root, for example `http://flood.example:3000` | Flood username/password or optional Flood JWT token |
-| rTorrent | HTTP(S) XML-RPC gateway URL | Gateway Basic-auth credentials when required |
+| rTorrent / ruTorrent | HTTP(S) XML-RPC gateway. For ruTorrent this is usually `https://host/plugins/rpc/rpc.php`, not the web-interface homepage | Gateway/web-interface username and password |
 
-Do not add `/api` to qBittorrent or Flood URLs; RSS Guard appends their API routes. A Transmission browser URL ending in `/transmission/web` normally becomes `/transmission/rpc`. rTorrent's raw SCGI socket is not supported directly.
+Do not add `/api` to qBittorrent or Flood URLs; RSS Guard appends their API routes. A Transmission browser URL ending in `/transmission/web` normally becomes `/transmission/rpc`. For ruTorrent, use its XML-RPC endpoint, usually the web address followed by `/plugins/rpc/rpc.php`. rTorrent's raw SCGI socket is not supported directly.
 
 Transmission supports direct Basic credentials and Basic/Digest authentication challenges from a hosting reverse proxy. Transmission 3.00 uses the same JSON-RPC exchange and does not need an API key.
 
