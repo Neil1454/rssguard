@@ -8,6 +8,7 @@
 #include "miscellaneous/iconfactory.h"
 #include "miscellaneous/localization.h"
 #include "miscellaneous/settings.h"
+#include "miscellaneous/settingskeys.h"
 #include "network-web/webfactory.h"
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
