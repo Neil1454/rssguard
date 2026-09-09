@@ -4,6 +4,7 @@
 
 - Added named torrent-client buttons to new-article notifications, automatic first-row selection, and Ctrl/Shift multi-selection for sending one or several notification articles.
 - Added challenge-based HTTP authentication for hosted Transmission/reverse-proxy installations while retaining pre-emptive Basic authentication and the Transmission session-ID retry.
+- Corrected qBittorrent false failures when a hosted instance returns HTTP 202 after successfully queuing a torrent; all successful HTTP 2xx add responses are now accepted.
 - Added a setting to show or suppress successful-send confirmations, plus a one-click opt-out in the success dialog. Failure messages remain enabled.
 - Removed forced alternating row colours from the client list to prevent dark navy/purple bands with affected Windows palettes.
 - Added qBittorrent 5.2 authentication compatibility: HTTP 204 login responses and `QBT_SID_...` session cookies, while retaining older HTTP 200/`Ok.`/`SID` support.

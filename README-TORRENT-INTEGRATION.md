@@ -47,6 +47,7 @@ The normal article URL is not accepted unless it is recognisably a torrent URL. 
 - Connection test: `GET /api/v2/app/version`.
 - Bulk add: multipart `POST /api/v2/torrents/add`, with newline-delimited URLs.
 - Optional save path, category, and tags are sent when configured.
+- Any successful HTTP 2xx add response is treated as accepted; HTTP 202 is reported as queued because some hosted proxies return it after successfully submitting the torrent.
 
 The adapter supplies matching `Origin` and `Referer` headers and safely form-encodes credentials. It supports both the traditional HTTP 200/`Ok.`/`SID` login and qBittorrent 5.2's HTTP 204/`QBT_SID_...` login. qBittorrent uses the Web UI username and password; it does not require an API key.
 

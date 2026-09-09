@@ -152,8 +152,10 @@ void QBittorrentClient::addTorrents(const QStringList& urls) {
     multipart->setParent(reply);
     connect(reply, &QNetworkReply::finished, this, [this, reply, count = urls.size()]() {
       const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-      const bool ok = reply->error() == QNetworkReply::NoError && status == 200;
-      emit addFinished(ok ? count : 0, ok ? 0 : count, ok ? tr("Sent %1 torrent(s) to qBittorrent.").arg(count) : networkFailure(reply));
+      const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300;
+      const QString successMessage = status == 202 ? tr("qBittorrent queued %1 torrent(s).").arg(count)
+                                                   : tr("Sent %1 torrent(s) to qBittorrent.").arg(count);
+      emit addFinished(ok ? count : 0, ok ? 0 : count, ok ? successMessage : networkFailure(reply));
       reply->deleteLater();
     });
   });

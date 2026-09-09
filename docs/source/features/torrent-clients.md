@@ -40,6 +40,7 @@ Flood HTTP 202 means the request was queued successfully even when Flood returns
 - Confirm the selected client type and credentials.
 - For LAN clients, disable **Use RSS Guard proxy** unless the proxy can reach the LAN address.
 - qBittorrent 5.2 uses an HTTP 204 login response and a newer session-cookie name; current fork builds support both this and older versions.
+- qBittorrent add responses in the successful HTTP 2xx range are accepted; HTTP 202 is reported as queued rather than failed.
 - A save path is interpreted by the remote torrent client, so it must exist and be allowed on that server, not merely on the RSS Guard computer.
 - Download a fresh portable artifact after a code change; an older extracted executable is not updated automatically.
 
