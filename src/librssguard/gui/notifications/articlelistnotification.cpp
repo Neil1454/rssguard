@@ -166,7 +166,7 @@ void ArticleListNotification::rebuildTorrentActions() {
   }
 
   const QList<Message> messages = selectedMessages();
-  const bool hasTorrent = !messages.isEmpty() && !TorrentExtractor::extract(messages).isEmpty();
+  const bool hasTorrent = !messages.isEmpty() && !TorrentExtractor::extract(messages).urls.isEmpty();
 
   const QList<TorrentClientConfig> clients = TorrentClientConfig::load(qApp->settings());
   for (const TorrentClientConfig& config : clients) {
