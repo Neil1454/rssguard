@@ -656,7 +656,8 @@ void PorlaClient::submitTorrent(const QString& source, const QByteArray& torrent
   if (!m_config.category.isEmpty()) params.insert(QStringLiteral("preset"), m_config.category);
   rpc(QStringLiteral("torrents.add"), params, [this](QNetworkReply* reply, const QJsonObject& response) {
     const QJsonValue result = response.value(QStringLiteral("result"));
-    const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+    const bool noRpcError = !response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull();
+    const bool ok = reply->error() == QNetworkReply::NoError && noRpcError &&
                     !result.isUndefined() && !result.isNull();
     ok ? ++m_added : ++m_failed;
     addNext();
