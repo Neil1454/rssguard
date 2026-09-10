@@ -134,6 +134,13 @@ void ToastNotificationsManager::showNotification(Notification::Event event,
   processNotification(notif);
 }
 
+void ToastNotificationsManager::showArticleListPreview(bool includeTorrentButtons) {
+  auto* preview = new ArticleListNotification(qApp->mainFormWidget());
+  hookNotification(preview);
+  preview->loadPreview(includeTorrentButtons);
+  processNotification(preview);
+}
+
 void ToastNotificationsManager::closeNotification(BaseToastNotification* notif, bool free_from_memory) {
   auto notif_idx = m_activeNotifications.indexOf(notif);
 

@@ -27,6 +27,8 @@ class SettingsTorrentClients : public SettingsPanel {
     void editClient();
     void removeClient();
     void testClient();
+    void testAllClients();
+    void testNextClient();
     void updateButtons();
 
   private:
@@ -40,6 +42,10 @@ class SettingsTorrentClients : public SettingsPanel {
     QPushButton* m_edit = nullptr;
     QPushButton* m_remove = nullptr;
     QPushButton* m_test = nullptr;
+    QPushButton* m_testAll = nullptr;
+    QList<TorrentClientConfig> m_testAllQueue;
+    QStringList m_testAllResults;
+    int m_testAllFailures = 0;
 };
 
 #endif // SETTINGSTORRENTCLIENTS_H

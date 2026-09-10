@@ -14,6 +14,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QUrlQuery>
 
 #include <utility>
 
@@ -84,6 +85,8 @@ TorrentClient* TorrentClient::create(const TorrentClientConfig& config, QObject*
     case TorrentClientType::Flood: return new FloodClient(config, parent);
     case TorrentClientType::RTorrent: return new RTorrentClient(config, parent);
     case TorrentClientType::Deluge: return new DelugeClient(config, parent);
+    case TorrentClientType::RQBit: return new RQBitClient(config, parent);
+    case TorrentClientType::Porla: return new PorlaClient(config, parent);
   }
   return nullptr;
 }
@@ -357,7 +360,7 @@ void RTorrentClient::testConnection() {
       message = tr("Connected successfully to rTorrent %1.").arg(version);
     }
     else if (reply->error() == QNetworkReply::ContentOperationNotPermittedError) {
-      message = tr("This URL does not accept XML-RPC requests. For ruTorrent, use its XML-RPC endpoint, usually the ruTorrent address followed by /plugins/rpc/rpc.php.");
+      message = tr("This URL does not accept XML-RPC requests. For ruTorrent, use its XML-RPC endpoint, usually the ruTorrent address followed by /plugins/httprpc/action.php. Some installations expose /RPC2 instead.");
     }
     else {
       message = networkFailure(reply);
@@ -410,7 +413,8 @@ void DelugeClient::rpc(const QString& method,
 void DelugeClient::authenticate(const std::function<void(bool, const QString&)>& continuation) {
   rpc(QStringLiteral("auth.login"), QJsonArray{m_config.password}, [this, continuation](QNetworkReply* reply,
                                                                                        const QJsonObject& response) {
-    const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+    const bool noRpcError = !response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull();
+    const bool ok = reply->error() == QNetworkReply::NoError && noRpcError &&
                     response.value(QStringLiteral("result")).toBool();
     if (ok) m_cookie = responseCookie(reply, "_session_id");
     const QString error = ok ? QString()
@@ -514,4 +518,147 @@ void DelugeClient::addNext() {
         else ++m_failed;
         addNext();
       });
+}
+
+RQBitClient::RQBitClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {
+  connect(m_network,
+          &QNetworkAccessManager::authenticationRequired,
+          this,
+          [this](QNetworkReply*, QAuthenticator* authenticator) {
+            authenticator->setUser(m_config.username);
+            authenticator->setPassword(m_config.password);
+          });
+}
+
+void RQBitClient::testConnection() {
+  QNetworkRequest request(endpoint(QString()));
+  applyBasicAuthentication(request);
+  QNetworkReply* reply = m_network->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    const QJsonObject response = QJsonDocument::fromJson(reply->readAll()).object();
+    const bool ok = reply->error() == QNetworkReply::NoError &&
+                    response.value(QStringLiteral("server")).toString().compare(QStringLiteral("rqbit"), Qt::CaseInsensitive) == 0;
+    const QString version = response.value(QStringLiteral("version")).toString();
+    emit testFinished(ok,
+                      ok ? (version.isEmpty() ? tr("Connected successfully to rQBit.")
+                                              : tr("Connected successfully to rQBit %1.").arg(version))
+                         : networkFailure(reply));
+    reply->deleteLater();
+  });
+}
+
+void RQBitClient::addTorrents(const QStringList& urls) {
+  m_pending.clear();
+  for (const QString& url : urls) m_pending.enqueue(url);
+  m_added = m_failed = 0;
+  addNext();
+}
+
+void RQBitClient::addNext() {
+  if (m_pending.isEmpty()) {
+    emit addFinished(m_added, m_failed, tr("rQBit accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed));
+    return;
+  }
+  QUrl url = endpoint(QStringLiteral("/torrents"));
+  if (!m_config.savePath.isEmpty()) {
+    QUrlQuery query(url);
+    query.addQueryItem(QStringLiteral("output_folder"), m_config.savePath);
+    url.setQuery(query);
+  }
+  QNetworkRequest request(url);
+  request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("text/plain; charset=utf-8"));
+  applyBasicAuthentication(request);
+  QNetworkReply* reply = m_network->post(request, m_pending.dequeue().toUtf8());
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300;
+    ok ? ++m_added : ++m_failed;
+    reply->deleteLater();
+    addNext();
+  });
+}
+
+PorlaClient::PorlaClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+
+void PorlaClient::rpc(const QString& method,
+                      const QJsonObject& params,
+                      const std::function<void(QNetworkReply*, const QJsonObject&)>& callback) {
+  QNetworkRequest request(endpoint(QStringLiteral("/api/v1/jsonrpc")));
+  setJson(request);
+  if (!m_config.token.trimmed().isEmpty())
+    request.setRawHeader("Authorization", "Bearer " + m_config.token.trimmed().toUtf8());
+  const QJsonObject payload{{QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+                            {QStringLiteral("method"), method},
+                            {QStringLiteral("params"), params},
+                            {QStringLiteral("id"), ++m_requestId}};
+  QNetworkReply* reply = m_network->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+  connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+    const QJsonObject response = QJsonDocument::fromJson(reply->readAll()).object();
+    callback(reply, response);
+    reply->deleteLater();
+  });
+}
+
+void PorlaClient::testConnection() {
+  rpc(QStringLiteral("sys.versions"), {}, [this](QNetworkReply* reply, const QJsonObject& response) {
+    const QJsonValue result = response.value(QStringLiteral("result"));
+    const bool noRpcError = !response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull();
+    const bool ok = reply->error() == QNetworkReply::NoError && noRpcError &&
+                    !result.isUndefined() && !result.isNull();
+    QString version;
+    if (result.isObject()) {
+      const QJsonObject versions = result.toObject();
+      version = versions.value(QStringLiteral("porla")).toString();
+      if (version.isEmpty()) version = versions.value(QStringLiteral("version")).toString();
+    }
+    emit testFinished(ok,
+                      ok ? (version.isEmpty() ? tr("Connected successfully to Porla.")
+                                              : tr("Connected successfully to Porla %1.").arg(version))
+                         : networkFailure(reply));
+  });
+}
+
+void PorlaClient::addTorrents(const QStringList& urls) {
+  m_pending.clear();
+  for (const QString& url : urls) m_pending.enqueue(url);
+  m_added = m_failed = 0;
+  addNext();
+}
+
+void PorlaClient::addNext() {
+  if (m_pending.isEmpty()) {
+    emit addFinished(m_added, m_failed, tr("Porla accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed));
+    return;
+  }
+  const QString source = m_pending.dequeue();
+  if (source.startsWith(QStringLiteral("magnet:"), Qt::CaseInsensitive)) {
+    submitTorrent(source);
+    return;
+  }
+  QNetworkReply* reply = m_network->get(QNetworkRequest(QUrl(source)));
+  connect(reply, &QNetworkReply::finished, this, [this, reply, source]() {
+    const QByteArray data = reply->readAll();
+    const bool ok = reply->error() == QNetworkReply::NoError && !data.isEmpty() && data.size() <= 20 * 1024 * 1024;
+    reply->deleteLater();
+    if (ok) submitTorrent(source, data);
+    else {
+      ++m_failed;
+      addNext();
+    }
+  });
+}
+
+void PorlaClient::submitTorrent(const QString& source, const QByteArray& torrentData) {
+  QJsonObject params;
+  if (torrentData.isEmpty()) params.insert(QStringLiteral("magnet_uri"), source);
+  else params.insert(QStringLiteral("ti"), QString::fromLatin1(torrentData.toBase64()));
+  if (!m_config.savePath.isEmpty()) params.insert(QStringLiteral("save_path"), m_config.savePath);
+  if (!m_config.category.isEmpty()) params.insert(QStringLiteral("preset"), m_config.category);
+  rpc(QStringLiteral("torrents.add"), params, [this](QNetworkReply* reply, const QJsonObject& response) {
+    const QJsonValue result = response.value(QStringLiteral("result"));
+    const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+                    !result.isUndefined() && !result.isNull();
+    ok ? ++m_added : ++m_failed;
+    addNext();
+  });
 }

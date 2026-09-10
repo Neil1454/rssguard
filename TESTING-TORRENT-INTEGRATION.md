@@ -51,9 +51,14 @@ Client-specific checks:
 - Persistent notifications: when enabled, new-article notifications ignore the timeout and right-click dismissal but still close from their close button; ordinary notifications retain normal timing.
 - Confirmations: success suppression persists and can be restored in settings; failures are never suppressed.
 - Client editor: changing the confirmation checkbox enables Apply; each client type changes the URL example and greys unsupported fields.
+- Client state/order: disabling a client preserves it but removes its menu and notification button; priorities reorder both locations with 1 first.
+- Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
+- Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
-- rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/rpc/rpc.php`; incorrect homepage URL guidance; directory/custom1 commands.
+- rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/httprpc/action.php` and `/RPC2`; incorrect homepage URL guidance; directory/custom1 commands.
 - Deluge: Web password login, automatic configured-daemon connection, version/status test, magnet/URL add, remote download location, and invalid-password error.
+- rQBit: server/version detection, optional Basic authentication, magnet/URL add, output folder, and rejected credentials.
+- Porla: required JWT authentication, `sys.versions`, magnet add, remote `.torrent` download/base64 submission, save path, preset, and invalid-token response.
 - Transmission versions: RPC 16/Transmission 3.00 adds without labels; RPC 17+ adds configured labels.
 
 ## Release gate

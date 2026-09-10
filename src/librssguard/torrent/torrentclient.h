@@ -123,4 +123,38 @@ class DelugeClient final : public TorrentClient {
     int m_failed = 0;
 };
 
+class RQBitClient final : public TorrentClient {
+    Q_OBJECT
+  public:
+    explicit RQBitClient(const TorrentClientConfig& config, QObject* parent = nullptr);
+    void testConnection() override;
+    void addTorrents(const QStringList& urls) override;
+
+  private:
+    void addNext();
+    QQueue<QString> m_pending;
+    int m_added = 0;
+    int m_failed = 0;
+};
+
+class PorlaClient final : public TorrentClient {
+    Q_OBJECT
+  public:
+    explicit PorlaClient(const TorrentClientConfig& config, QObject* parent = nullptr);
+    void testConnection() override;
+    void addTorrents(const QStringList& urls) override;
+
+  private:
+    void rpc(const QString& method,
+             const QJsonObject& params,
+             const std::function<void(QNetworkReply*, const QJsonObject&)>& callback);
+    void addNext();
+    void submitTorrent(const QString& source, const QByteArray& torrentData = {});
+
+    QQueue<QString> m_pending;
+    int m_requestId = 0;
+    int m_added = 0;
+    int m_failed = 0;
+};
+
 #endif // TORRENTCLIENT_H

@@ -21,6 +21,7 @@ class ArticleListNotification : public BaseToastNotification {
     explicit ArticleListNotification(QWidget* parent = nullptr);
 
     void loadResults(const QHash<Feed*, QList<Message>>& new_messages);
+    void loadPreview(bool includeTorrentButtons);
 
   signals:
     void openingArticleInArticleListRequested(Feed* feed, const Message& msg);
@@ -55,6 +56,8 @@ class ArticleListNotification : public BaseToastNotification {
     ArticleListNotificationModel* m_model;
     QHash<Feed*, QList<Message>> m_newMessages;
     QGridLayout* m_torrentActionsLayout = nullptr;
+    bool m_preview = false;
+    bool m_previewTorrentButtons = false;
 };
 
 #endif // ARTICLELISTNOTIFICATION_H

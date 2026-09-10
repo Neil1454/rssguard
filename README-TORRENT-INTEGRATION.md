@@ -18,11 +18,13 @@ Successful-send dialogs can be disabled either from the dialog itself or with **
 
 This feature is manual. It does not automatically send newly fetched feed entries.
 
+Clients can be retained but disabled, assigned a numbered display priority, and checked together with **Test all enabled**. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the torrent-client buttons.
+
 ## Architecture
 
 - `torrentclientconfig.*`: typed client configuration, validation, persistence, and encrypted secret fields.
 - `torrentextractor.*`: client-independent discovery and bulk deduplication.
-- `torrentclient.*`: common asynchronous interface and separate qBittorrent, Transmission, Flood, rTorrent/ruTorrent, and Deluge adapters.
+- `torrentclient.*`: common asynchronous interface and separate qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit, and Porla adapters.
 - `settingstorrentclients.*`: native settings panel and add/edit/remove/test UI.
 - `MessagesView`: builds the dynamic client menu from saved configurations and passes selected messages to the extractor.
 - `ArticleListNotification`: builds per-client notification buttons and sends the selected notification article.
@@ -79,7 +81,7 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - Sending calls `load.start` asynchronously for each URL, with the required empty target argument.
 - Optional directory and category (`d.custom1`) commands are supported.
 
-rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/rpc/rpc.php`, not the homepage. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
+rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/httprpc/action.php`, not the homepage; `/RPC2` is another common gateway. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
 
 ### Deluge
 
@@ -88,6 +90,18 @@ rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefo
 - Connection testing reports the daemon version and status.
 - Magnet links and remote torrent URLs are added with the official core methods.
 - Optional remote download location is supported; username, category, and tags are disabled because this adapter does not use them.
+
+### rQBit
+
+- Uses rQBit's HTTP API root (normally port 3030) and detects the server through `GET /`.
+- Sends magnet or HTTP torrent URLs as text to `POST /torrents`.
+- Supports optional HTTP Basic authentication and `output_folder`.
+
+### Porla
+
+- Uses bearer-JWT JSON-RPC at `/api/v1/jsonrpc` and tests with `sys.versions`.
+- Sends magnets with `torrents.add`; downloads HTTP torrent files and submits their base64 data as `ti`.
+- Supports save paths and existing Porla presets. Generate the required token with `porla auth:token`.
 
 ## Proxy and TLS behavior
 
@@ -100,7 +114,7 @@ TLS verification remains enabled. SSL errors are reported and are not ignored. C
 
 ## Configuration storage
 
-Non-secret client fields are stored as compact JSON under `TorrentClients/clients` in RSS Guard's existing settings file. Passwords and Flood tokens are stored separately under `TorrentClientSecrets/<uuid>/...` using RSS Guard's existing `Settings::setPassword()` encryption convention. Removing/saving the list removes orphaned secrets.
+Non-secret client fields are stored as compact JSON under `TorrentClients/clients` in RSS Guard's existing settings file. Passwords, Flood tokens, and Porla JWTs are stored separately under `TorrentClientSecrets/<uuid>/...` using RSS Guard's existing `Settings::setPassword()` encryption convention. Removing/saving the list removes orphaned secrets.
 
 ## New files
 

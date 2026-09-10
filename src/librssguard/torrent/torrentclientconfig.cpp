@@ -10,6 +10,9 @@
 #include <QUuid>
 #include <QUrl>
 
+#include <algorithm>
+#include <limits>
+
 namespace {
   const QString ConfigGroup = QStringLiteral("TorrentClients");
   const QString ConfigKey = QStringLiteral("clients");
@@ -28,6 +31,11 @@ bool TorrentClientConfig::isValid(QString* error) const {
     return false;
   }
 
+  if (type == TorrentClientType::Porla && token.trimmed().isEmpty()) {
+    if (error != nullptr) *error = QObject::tr("Porla requires a JWT token. Generate one on the server with: porla auth:token");
+    return false;
+  }
+
   return true;
 }
 
@@ -38,8 +46,21 @@ QString TorrentClientConfig::typeName(TorrentClientType type) {
     case TorrentClientType::Flood: return QStringLiteral("Flood");
     case TorrentClientType::RTorrent: return QStringLiteral("rTorrent / ruTorrent");
     case TorrentClientType::Deluge: return QStringLiteral("Deluge");
+    case TorrentClientType::RQBit: return QStringLiteral("rQBit");
+    case TorrentClientType::Porla: return QStringLiteral("Porla");
   }
   return QStringLiteral("Unknown");
+}
+
+QList<TorrentClientConfig> TorrentClientConfig::enabledInPriorityOrder(const QList<TorrentClientConfig>& clients) {
+  QList<TorrentClientConfig> enabled;
+  for (const TorrentClientConfig& client : clients) if (client.enabled) enabled.append(client);
+  std::stable_sort(enabled.begin(), enabled.end(), [](const TorrentClientConfig& left, const TorrentClientConfig& right) {
+    const int leftPriority = left.priority > 0 ? left.priority : std::numeric_limits<int>::max();
+    const int rightPriority = right.priority > 0 ? right.priority : std::numeric_limits<int>::max();
+    return leftPriority < rightPriority;
+  });
+  return enabled;
 }
 
 QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
@@ -47,6 +68,7 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
   const QByteArray data = settings->value(ConfigGroup, ConfigKey).toByteArray();
   const QJsonArray array = QJsonDocument::fromJson(data).array();
 
+  int legacyPriority = 0;
   for (const QJsonValue& value : array) {
     const QJsonObject object = value.toObject();
     TorrentClientConfig client;
@@ -55,6 +77,8 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.type = static_cast<TorrentClientType>(object.value(QStringLiteral("type")).toInt());
     client.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
     client.username = object.value(QStringLiteral("username")).toString();
+    client.enabled = object.value(QStringLiteral("enabled")).toBool(true);
+    client.priority = object.value(QStringLiteral("priority")).toInt(++legacyPriority);
     client.useRssGuardProxy = object.value(QStringLiteral("useRssGuardProxy")).toBool(true);
     client.isDefault = object.value(QStringLiteral("isDefault")).toBool(false);
     client.savePath = object.value(QStringLiteral("savePath")).toString();
@@ -84,6 +108,8 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("type"), static_cast<int>(client.type));
     object.insert(QStringLiteral("baseUrl"), client.baseUrl.trimmed());
     object.insert(QStringLiteral("username"), client.username);
+    object.insert(QStringLiteral("enabled"), client.enabled);
+    object.insert(QStringLiteral("priority"), client.priority);
     object.insert(QStringLiteral("useRssGuardProxy"), client.useRssGuardProxy);
     object.insert(QStringLiteral("isDefault"), client.isDefault);
     object.insert(QStringLiteral("savePath"), client.savePath);

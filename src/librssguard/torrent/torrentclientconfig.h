@@ -15,7 +15,9 @@ enum class TorrentClientType {
   Transmission = 1,
   Flood = 2,
   RTorrent = 3,
-  Deluge = 4
+  Deluge = 4,
+  RQBit = 5,
+  Porla = 6
 };
 
 struct RSSGUARD_DLLSPEC TorrentClientConfig {
@@ -26,6 +28,8 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString username;
   QString password;
   QString token;
+  bool enabled = true;
+  int priority = 0;
   bool useRssGuardProxy = true;
   bool isDefault = false;
   QString savePath;
@@ -34,6 +38,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
 
   bool isValid(QString* error = nullptr) const;
   static QString typeName(TorrentClientType type);
+  static QList<TorrentClientConfig> enabledInPriorityOrder(const QList<TorrentClientConfig>& clients);
   static QList<TorrentClientConfig> load(Settings* settings);
   static void save(Settings* settings, const QList<TorrentClientConfig>& clients);
 };

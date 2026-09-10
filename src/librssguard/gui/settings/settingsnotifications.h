@@ -29,6 +29,7 @@ class SettingsNotifications : public SettingsPanel {
   private:
     Ui::SettingsNotifications* m_ui;
     QCheckBox* m_keepArticleNotificationsOpen = nullptr;
+    QCheckBox* m_previewTorrentButtons = nullptr;
 };
 
 inline QString SettingsNotifications::title() const {

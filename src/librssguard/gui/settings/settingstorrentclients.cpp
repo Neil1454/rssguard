@@ -19,6 +19,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QUrl>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -34,7 +35,7 @@ namespace {
         m_form = new QFormLayout();
         m_name = new QLineEdit(initial.name, this);
         m_type = new QComboBox(this);
-        for (int i = 0; i < 5; ++i) m_type->addItem(TorrentClientConfig::typeName(static_cast<TorrentClientType>(i)), i);
+        for (int i = 0; i < 7; ++i) m_type->addItem(TorrentClientConfig::typeName(static_cast<TorrentClientType>(i)), i);
         m_type->setCurrentIndex(static_cast<int>(initial.type));
         m_url = new QLineEdit(initial.baseUrl, this);
         m_username = new QLineEdit(initial.username, this);
@@ -42,6 +43,12 @@ namespace {
         m_password->setEchoMode(QLineEdit::Password);
         m_token = new QLineEdit(initial.token, this);
         m_token->setEchoMode(QLineEdit::Password);
+        m_enabled = new QCheckBox(tr("Enabled"), this);
+        m_enabled->setChecked(initial.enabled);
+        m_priority = new QSpinBox(this);
+        m_priority->setRange(1, 999);
+        m_priority->setValue(qMax(1, initial.priority));
+        m_priority->setToolTip(tr("Position of this client in notification buttons and menus. Priority 1 appears first."));
         m_proxy = new QCheckBox(tr("Use RSS Guard proxy"), this);
         m_proxy->setChecked(initial.useRssGuardProxy);
         m_default = new QCheckBox(tr("Default torrent client"), this);
@@ -54,7 +61,9 @@ namespace {
         m_form->addRow(tr("Server/base URL:"), m_url);
         m_form->addRow(tr("Username:"), m_username);
         m_form->addRow(tr("Password:"), m_password);
-        m_form->addRow(tr("Flood token (optional):"), m_token);
+        m_form->addRow(tr("API token (optional):"), m_token);
+        m_form->addRow(QString(), m_enabled);
+        m_form->addRow(tr("Button priority:"), m_priority);
         m_form->addRow(QString(), m_proxy);
         m_form->addRow(QString(), m_default);
         m_form->addRow(tr("Default save path (optional):"), m_path);
@@ -63,7 +72,7 @@ namespace {
         m_url->setToolTip(tr("Enter the web or RPC address for the selected client. The example changes with Client type."));
         m_username->setToolTip(tr("Login username. Disabled when the selected client does not use one."));
         m_password->setToolTip(tr("Password used by the client's Web UI or RPC service."));
-        m_token->setToolTip(tr("Flood only: an existing JWT token can be used instead of username and password."));
+        m_token->setToolTip(tr("Authentication token used by clients that support token login."));
         m_path->setToolTip(tr("A directory on the torrent server, not necessarily a folder on this computer."));
         m_category->setToolTip(tr("qBittorrent category, or rTorrent custom label. Disabled for clients that do not support it here."));
         m_tags->setToolTip(tr("Comma-separated qBittorrent/Flood tags or Transmission labels. Disabled for unsupported clients."));
@@ -95,6 +104,8 @@ namespace {
         result.username = m_username->text();
         result.password = m_password->text();
         result.token = m_token->text();
+        result.enabled = m_enabled->isChecked();
+        result.priority = m_priority->value();
         result.useRssGuardProxy = m_proxy->isChecked();
         result.isDefault = m_default->isChecked();
         result.savePath = m_path->text().trimmed();
@@ -114,32 +125,47 @@ namespace {
             break;
           case TorrentClientType::Flood: urlExample = QStringLiteral("http://server.example:3000"); break;
           case TorrentClientType::RTorrent:
-            urlExample = QStringLiteral("https://server.example/plugins/rpc/rpc.php");
+            urlExample = QStringLiteral("https://server.example/plugins/httprpc/action.php");
             break;
           case TorrentClientType::Deluge: urlExample = QStringLiteral("http://server.example:8112"); break;
+          case TorrentClientType::RQBit: urlExample = QStringLiteral("http://server.example:3030"); break;
+          case TorrentClientType::Porla: urlExample = QStringLiteral("http://server.example:1337"); break;
         }
         m_url->setPlaceholderText(urlExample);
         m_url->setToolTip(tr("Expected address for %1. Example: %2")
                             .arg(TorrentClientConfig::typeName(type), urlExample));
 
-        const bool usesFloodToken = type == TorrentClientType::Flood;
-        const bool floodTokenEntered = usesFloodToken && !m_token->text().trimmed().isEmpty();
-        const bool usesUsername = type != TorrentClientType::Deluge && !floodTokenEntered;
-        const bool usesCategory = type == TorrentClientType::QBittorrent || type == TorrentClientType::RTorrent;
+        const bool usesToken = type == TorrentClientType::Flood || type == TorrentClientType::Porla;
+        const bool tokenEntered = usesToken && !m_token->text().trimmed().isEmpty();
+        const bool usesUsername = type != TorrentClientType::Deluge && type != TorrentClientType::Porla && !tokenEntered;
+        const bool usesPassword = type != TorrentClientType::Porla && !tokenEntered;
+        const bool usesCategory = type == TorrentClientType::QBittorrent || type == TorrentClientType::RTorrent ||
+                                  type == TorrentClientType::Porla;
         const bool usesTags = type == TorrentClientType::QBittorrent || type == TorrentClientType::Transmission ||
                               type == TorrentClientType::Flood;
         m_username->setEnabled(usesUsername);
-        m_password->setEnabled(!floodTokenEntered);
-        m_token->setEnabled(usesFloodToken);
+        m_password->setEnabled(usesPassword);
+        m_token->setEnabled(usesToken);
         m_category->setEnabled(usesCategory);
         m_tags->setEnabled(usesTags);
         m_form->labelForField(m_username)->setEnabled(usesUsername);
-        m_form->labelForField(m_token)->setEnabled(usesFloodToken);
+        m_form->labelForField(m_password)->setEnabled(usesPassword);
+        m_form->labelForField(m_token)->setEnabled(usesToken);
         m_form->labelForField(m_category)->setEnabled(usesCategory);
         m_form->labelForField(m_tags)->setEnabled(usesTags);
-        m_username->setPlaceholderText(usesUsername ? tr("Web UI or RPC username") : tr("Not used by Deluge Web"));
+        m_username->setPlaceholderText(usesUsername ? tr("Web UI or RPC username") : tr("Not used by this client"));
         m_password->setPlaceholderText(type == TorrentClientType::Deluge ? tr("Deluge Web password")
-                                                                         : tr("Web UI or RPC password"));
+                                                                         : (usesPassword ? tr("Web UI or RPC password")
+                                                                                         : tr("Not used by this client")));
+        m_token->setPlaceholderText(type == TorrentClientType::Porla ? tr("Required JWT from: porla auth:token")
+                                                                     : tr("Existing Flood JWT token"));
+        m_token->setToolTip(type == TorrentClientType::Porla
+                              ? tr("Required Porla bearer JWT generated on the Porla server with 'porla auth:token'.")
+                              : tr("Flood only: an existing JWT token can be used instead of username and password."));
+        m_category->setPlaceholderText(type == TorrentClientType::Porla ? tr("Example preset: tv") : tr("Example: tv"));
+        m_category->setToolTip(type == TorrentClientType::Porla
+                                ? tr("Porla preset name. The preset must already exist on the Porla server.")
+                                : tr("qBittorrent category, or rTorrent custom label. Disabled for clients that do not support it here."));
       }
 
     private:
@@ -147,7 +173,8 @@ namespace {
       QLineEdit *m_name, *m_url, *m_username, *m_password, *m_token, *m_path, *m_category, *m_tags;
       QFormLayout* m_form;
       QComboBox* m_type;
-      QCheckBox *m_proxy, *m_default;
+      QCheckBox *m_enabled, *m_proxy, *m_default;
+      QSpinBox* m_priority;
   };
 }
 
@@ -165,7 +192,7 @@ void SettingsTorrentClients::loadUi() {
   titleFont.setPointSize(titleFont.pointSize() + 3);
   titleLabel->setFont(titleFont);
   outer->addWidget(titleLabel);
-  m_description = new QLabel(tr("Configure qBittorrent, Transmission, Flood, rTorrent/ruTorrent, or Deluge servers. The Add dialog shows client-specific URL examples and enables only supported options. Torrent-client requests use RSS Guard's network proxy unless disabled per client."), this);
+  m_description = new QLabel(tr("Configure qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit, or Porla servers. The Add dialog shows client-specific URL examples and enables only supported options. Torrent-client requests use RSS Guard's network proxy unless disabled per client."), this);
   m_description->setWordWrap(true);
   outer->addWidget(m_description);
   m_showSuccessNotifications = new QCheckBox(tr("Show confirmation after successful torrent sends"), this);
@@ -178,11 +205,13 @@ void SettingsTorrentClients::loadUi() {
   m_edit = new QPushButton(tr("Edit"), this);
   m_remove = new QPushButton(tr("Remove"), this);
   m_test = new QPushButton(tr("Test connection"), this);
+  m_testAll = new QPushButton(tr("Test all enabled"), this);
   buttons->addWidget(add);
   buttons->addWidget(m_edit);
   buttons->addWidget(m_remove);
   buttons->addStretch();
   buttons->addWidget(m_test);
+  buttons->addWidget(m_testAll);
   outer->addLayout(buttons);
   connect(add, &QPushButton::clicked, this, &SettingsTorrentClients::addClient);
   connect(m_showSuccessNotifications,
@@ -192,6 +221,7 @@ void SettingsTorrentClients::loadUi() {
   connect(m_edit, &QPushButton::clicked, this, &SettingsTorrentClients::editClient);
   connect(m_remove, &QPushButton::clicked, this, &SettingsTorrentClients::removeClient);
   connect(m_test, &QPushButton::clicked, this, &SettingsTorrentClients::testClient);
+  connect(m_testAll, &QPushButton::clicked, this, &SettingsTorrentClients::testAllClients);
   connect(m_list, &QListWidget::itemDoubleClicked, this, [this]() { editClient(); });
   connect(m_list, &QListWidget::currentRowChanged, this, &SettingsTorrentClients::updateButtons);
   SettingsPanel::loadUi();
@@ -222,6 +252,8 @@ void SettingsTorrentClients::refreshList(int selected) {
   m_list->clear();
   for (const TorrentClientConfig& client : std::as_const(m_clients)) {
     QString text = QStringLiteral("%1 — %2 — %3").arg(client.name, TorrentClientConfig::typeName(client.type), client.baseUrl);
+    text = QStringLiteral("%1. %2").arg(client.priority).arg(text);
+    if (!client.enabled) text += tr(" (disabled)");
     if (client.isDefault) text += tr(" (default)");
     auto* item = new QListWidgetItem(text, m_list);
     item->setToolTip(client.useRssGuardProxy ? tr("Uses RSS Guard proxy") : tr("Direct connection; proxy disabled"));
@@ -233,12 +265,15 @@ void SettingsTorrentClients::refreshList(int selected) {
 void SettingsTorrentClients::addClient() {
   TorrentClientConfig initial;
   initial.useRssGuardProxy = true;
+  initial.priority = m_clients.size() + 1;
   TorrentClientEditor editor(initial, this);
   if (editor.exec() != QDialog::Accepted) return;
   TorrentClientConfig client = editor.value();
   if (client.isDefault) for (TorrentClientConfig& other : m_clients) other.isDefault = false;
-  m_clients.append(client);
-  refreshList(m_clients.size() - 1);
+  const int target = qBound(0, client.priority - 1, static_cast<int>(m_clients.size()));
+  m_clients.insert(target, client);
+  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
+  refreshList(target);
   dirtifySettings();
 }
 
@@ -249,8 +284,11 @@ void SettingsTorrentClients::editClient() {
   if (editor.exec() != QDialog::Accepted) return;
   TorrentClientConfig client = editor.value();
   if (client.isDefault) for (int i = 0; i < m_clients.size(); ++i) if (i != row) m_clients[i].isDefault = false;
-  m_clients[row] = client;
-  refreshList(row);
+  m_clients.removeAt(row);
+  const int target = qBound(0, client.priority - 1, static_cast<int>(m_clients.size()));
+  m_clients.insert(target, client);
+  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
+  refreshList(target);
   dirtifySettings();
 }
 
@@ -259,6 +297,7 @@ void SettingsTorrentClients::removeClient() {
   if (row < 0) return;
   if (QMessageBox::question(this, tr("Remove torrent client"), tr("Remove “%1”?").arg(m_clients.at(row).name)) != QMessageBox::Yes) return;
   m_clients.removeAt(row);
+  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
   refreshList(qMin(row, static_cast<int>(m_clients.size()) - 1));
   dirtifySettings();
 }
@@ -277,9 +316,50 @@ void SettingsTorrentClients::testClient() {
   client->testConnection();
 }
 
+void SettingsTorrentClients::testAllClients() {
+  m_testAllQueue.clear();
+  m_testAllResults.clear();
+  for (const TorrentClientConfig& client : std::as_const(m_clients)) if (client.enabled) m_testAllQueue.append(client);
+  if (m_testAllQueue.isEmpty()) {
+    QMessageBox::information(this, tr("Test torrent clients"), tr("There are no enabled torrent clients to test."));
+    return;
+  }
+  m_test->setEnabled(false);
+  m_testAll->setEnabled(false);
+  testNextClient();
+}
+
+void SettingsTorrentClients::testNextClient() {
+  if (m_testAllQueue.isEmpty()) {
+    QMessageBox result(this);
+    result.setWindowTitle(tr("Torrent client test results"));
+    result.setIcon(m_testAllFailures == 0 ? QMessageBox::Information : QMessageBox::Warning);
+    result.setText(tr("Tested %1 enabled client(s): %2 passed, %3 failed.")
+                     .arg(m_testAllResults.size()).arg(m_testAllResults.size() - m_testAllFailures).arg(m_testAllFailures));
+    result.setInformativeText(m_testAllResults.join(QStringLiteral("<br>")));
+    result.exec();
+    m_testAllFailures = 0;
+    m_testAll->setEnabled(true);
+    updateButtons();
+    return;
+  }
+  const TorrentClientConfig config = m_testAllQueue.takeFirst();
+  TorrentClient* client = TorrentClient::create(config, this);
+  connect(client, &TorrentClient::testFinished, this, [this, client, config](bool success, const QString& message) {
+    if (!success) ++m_testAllFailures;
+    m_testAllResults.append(QStringLiteral("%1 <b>%2</b> — %3")
+                              .arg(success ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"),
+                                   config.name.toHtmlEscaped(), message.toHtmlEscaped()));
+    client->deleteLater();
+    testNextClient();
+  });
+  client->testConnection();
+}
+
 void SettingsTorrentClients::updateButtons() {
   const bool selected = selectedIndex() >= 0;
   m_edit->setEnabled(selected);
   m_remove->setEnabled(selected);
   m_test->setEnabled(selected);
+  if (m_testAll != nullptr && m_testAllQueue.isEmpty()) m_testAll->setEnabled(true);
 }

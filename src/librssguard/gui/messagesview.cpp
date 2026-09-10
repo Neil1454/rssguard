@@ -695,7 +695,8 @@ void MessagesView::initializeContextMenu() {
   m_contextMenu->addMenu(menu_ext_tools);
   m_contextMenu->addMenu(menu_labels_add);
 
-  const QList<TorrentClientConfig> torrent_clients = TorrentClientConfig::load(qApp->settings());
+  const QList<TorrentClientConfig> torrent_clients =
+    TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
   QMenu* torrent_menu = new QMenu(tr("Send to torrent client"), m_contextMenu);
   torrent_menu->setIcon(qApp->icons()->fromTheme(QSL("folder-download"), QSL("go-down")));
   for (const TorrentClientConfig& client : torrent_clients) {

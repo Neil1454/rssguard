@@ -2,6 +2,13 @@
 
 ## 2026-09-09 — Notifications and compatibility corrections
 
+- Added rQBit HTTP API support with optional Basic authentication and output-folder selection.
+- Added Porla bearer-JWT JSON-RPC support for magnets and downloaded `.torrent` files, including save paths and presets.
+- Corrected ruTorrent guidance to use `plugins/httprpc/action.php`, with `/RPC2` documented as an alternative.
+- Added per-client enable/disable and numbered button priority; disabled clients stay configured but disappear from send actions.
+- Added **Test all enabled** with a combined pass/fail result for every active client.
+- Replaced the generic notification test with the real new-article layout and an option to include the live torrent-button arrangement.
+
 - Replaced the cramped single-row notification client buttons with a larger two-column grid so configured names remain readable and easier to click.
 - Fixed the successful-send confirmation checkbox so changing it marks Settings dirty and enables Apply.
 - Made the client editor type-aware with per-client URL examples, field help, and disabled unsupported options.

@@ -164,6 +164,30 @@ void ArticleListNotification::onMessageSelected(const QModelIndex& current, cons
   rebuildTorrentActions();
 }
 
+void ArticleListNotification::loadPreview(bool includeTorrentButtons) {
+  m_preview = true;
+  m_previewTorrentButtons = includeTorrentButtons;
+  setupTimedClosing(false);
+  m_ui.m_cmbFeeds->clear();
+  m_ui.m_cmbFeeds->addItem(tr("Example RSS feed"));
+  m_ui.m_lblTitle->setText(tr("1 feed fetched"));
+  Message example;
+  example.m_title = tr("Example new article with a torrent link");
+  example.m_url = QStringLiteral("magnet:?xt=urn:btih:0000000000000000000000000000000000000000");
+  m_model->setArticles({example});
+  if (m_model->rowCount({}) > 0) {
+    const QModelIndex first = m_model->index(0, 0);
+    m_ui.m_treeArticles->selectionModel()->select(first,
+                                                  QItemSelectionModel::SelectionFlag::ClearAndSelect |
+                                                    QItemSelectionModel::SelectionFlag::Rows);
+    m_ui.m_treeArticles->setCurrentIndex(first);
+  }
+  m_ui.m_btnOpenArticleList->setEnabled(false);
+  m_ui.m_btnOpenWebBrowser->setEnabled(false);
+  m_ui.m_btnMarkAllRead->setEnabled(false);
+  rebuildTorrentActions();
+}
+
 bool ArticleListNotification::staysOpenUntilDismissed() const {
   return qApp->settings()->value(GROUP(GUI), SETTING(GUI::KeepArticleNotificationsOpen)).toBool();
 }
@@ -177,16 +201,19 @@ void ArticleListNotification::rebuildTorrentActions() {
   const QList<Message> messages = selectedMessages();
   const bool hasTorrent = !messages.isEmpty() && !TorrentExtractor::extract(messages).urls.isEmpty();
 
-  const QList<TorrentClientConfig> clients = TorrentClientConfig::load(qApp->settings());
+  const QList<TorrentClientConfig> clients =
+    TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
+  if (m_preview && !m_previewTorrentButtons) return;
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     auto* button = new QPushButton(config.name, this);
     button->setMinimumHeight(qMax(32, button->sizeHint().height()));
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    button->setEnabled(hasTorrent);
+    button->setEnabled(m_preview || hasTorrent);
     button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
                                   : tr("No torrent link found in the selected article(s)"));
-    connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
+    if (m_preview) button->setToolTip(tr("Preview: %1 (priority %2)").arg(config.name).arg(config.priority));
+    else connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
     m_torrentActionsLayout->addWidget(button, buttonIndex / 2, buttonIndex % 2);
     ++buttonIndex;
   }
@@ -227,6 +254,7 @@ void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientCon
 
 void ArticleListNotification::showFeed(int index) {
   Q_UNUSED(index)
+  if (m_preview) return;
   m_model->setArticles(m_newMessages.value(selectedFeed()));
   onMessageSelected({}, {});
 }

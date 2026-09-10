@@ -41,6 +41,7 @@ class ToastNotificationsManager : public QObject {
     void setPosition(NotificationPosition position);
 
     void resetNotifications(bool reload_existing_notifications);
+    void showArticleListPreview(bool includeTorrentButtons);
 
   public slots:
     void clear();

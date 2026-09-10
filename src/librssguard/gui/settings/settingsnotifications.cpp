@@ -32,6 +32,9 @@ void SettingsNotifications::loadUi() {
   m_keepArticleNotificationsOpen
     ->setToolTip(tr("Disables the timeout and right-click dismissal for new-article notifications. Use the close button to dismiss them."));
   m_ui->formLayout_3->insertRow(5, m_keepArticleNotificationsOpen);
+  m_previewTorrentButtons = new QCheckBox(tr("Include torrent-client buttons in notification preview"), this);
+  m_previewTorrentButtons->setToolTip(tr("The test notification uses the real new-article layout and shows enabled clients in priority order."));
+  m_ui->formLayout_3->insertRow(6, m_previewTorrentButtons);
 
   m_ui->m_lblInfo
     ->setHelpText(tr("There are some built-in notification sounds. Just start typing \":\" and they will show up."),
@@ -59,6 +62,7 @@ void SettingsNotifications::loadUi() {
           &QCheckBox::toggled,
           this,
           &SettingsNotifications::dirtifySettings);
+  connect(m_previewTorrentButtons, &QCheckBox::toggled, this, &SettingsNotifications::dirtifySettings);
   connect(m_ui->m_sbScreen, QOverload<int>::of(&QSpinBox::valueChanged), this, &SettingsNotifications::dirtifySettings);
   connect(m_ui->m_sbMargin, QOverload<int>::of(&QSpinBox::valueChanged), this, &SettingsNotifications::dirtifySettings);
   connect(m_ui->m_sbWidth, QOverload<int>::of(&QSpinBox::valueChanged), this, &SettingsNotifications::dirtifySettings);
@@ -113,6 +117,8 @@ void SettingsNotifications::loadSettings() {
   m_ui->m_sbDuration->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt());
   m_keepArticleNotificationsOpen
     ->setChecked(settings()->value(GROUP(GUI), SETTING(GUI::KeepArticleNotificationsOpen)).toBool());
+  m_previewTorrentButtons->setChecked(settings()->value(QStringLiteral("NotificationsPreview"),
+                                                         QStringLiteral("includeTorrentButtons"), true).toBool());
   m_ui->m_sbScreen->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsScreen)).toInt());
   m_ui->m_sbWidth->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsWidth)).toInt());
   m_ui->m_sbMargin->setValue(settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsMargin)).toInt());
@@ -139,6 +145,9 @@ void SettingsNotifications::saveSettings() {
   settings()->setValue(GROUP(GUI),
                        GUI::KeepArticleNotificationsOpen,
                        m_keepArticleNotificationsOpen->isChecked());
+  settings()->setValue(QStringLiteral("NotificationsPreview"),
+                       QStringLiteral("includeTorrentButtons"),
+                       m_previewTorrentButtons->isChecked());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsScreen, m_ui->m_sbScreen->value());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsWidth, m_ui->m_sbWidth->value());
   settings()->setValue(GROUP(GUI), GUI::ToastNotificationsMargin, m_ui->m_sbMargin->value());
@@ -154,11 +163,7 @@ void SettingsNotifications::saveSettings() {
   if (toasts != nullptr && m_ui->m_rbCustomNotifications->isChecked() &&
       m_ui->m_checkEnableNotifications->isChecked()) {
     toasts->resetNotifications(true);
-    toasts->showNotification(Notification::Event::GeneralEvent,
-                             GuiMessage(tr("How do I look?"),
-                                        tr("Just testing new notifications settings. "
-                                           "That's all."),
-                                        QSystemTrayIcon::MessageIcon::Warning));
+    toasts->showArticleListPreview(m_previewTorrentButtons->isChecked());
   }
 
   onEndSaveSettings();
