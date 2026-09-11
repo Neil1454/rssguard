@@ -77,6 +77,7 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.type = static_cast<TorrentClientType>(object.value(QStringLiteral("type")).toInt());
     client.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
     client.username = object.value(QStringLiteral("username")).toString();
+    client.buttonColor = object.value(QStringLiteral("buttonColor")).toString();
     client.enabled = object.value(QStringLiteral("enabled")).toBool(true);
     client.priority = object.value(QStringLiteral("priority")).toInt(++legacyPriority);
     client.useRssGuardProxy = object.value(QStringLiteral("useRssGuardProxy")).toBool(true);
@@ -108,6 +109,7 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("type"), static_cast<int>(client.type));
     object.insert(QStringLiteral("baseUrl"), client.baseUrl.trimmed());
     object.insert(QStringLiteral("username"), client.username);
+    object.insert(QStringLiteral("buttonColor"), client.buttonColor);
     object.insert(QStringLiteral("enabled"), client.enabled);
     object.insert(QStringLiteral("priority"), client.priority);
     object.insert(QStringLiteral("useRssGuardProxy"), client.useRssGuardProxy);

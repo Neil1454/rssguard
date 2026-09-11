@@ -18,7 +18,7 @@ Successful-send dialogs can be disabled either from the dialog itself or with **
 
 This feature is manual. It does not automatically send newly fetched feed entries.
 
-Clients can be retained but disabled, assigned a numbered display priority, and checked together with **Test all enabled**. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the torrent-client buttons.
+Clients can be retained but disabled, assigned a numbered display priority and notification-button colour, and checked together with **Test all enabled**. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
 
 ## Architecture
 

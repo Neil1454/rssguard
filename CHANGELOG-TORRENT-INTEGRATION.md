@@ -8,6 +8,8 @@
 - Added per-client enable/disable and numbered button priority; disabled clients stay configured but disappear from send actions.
 - Added **Test all enabled** with a combined pass/fail result for every active client.
 - Replaced the generic notification test with the real new-article layout and an option to include the live torrent-button arrangement.
+- Moved disabled clients to the bottom of settings, removed their priority number, and displayed them with disabled text colouring.
+- Added a common-colour selector per client and applied the chosen colour with readable contrasting text to notification buttons and previews.
 
 - Replaced the cramped single-row notification client buttons with a larger two-column grid so configured names remain readable and easier to click.
 - Fixed the successful-send confirmation checkbox so changing it marks Settings dirty and enables Apply.

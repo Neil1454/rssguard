@@ -32,6 +32,7 @@ class SettingsTorrentClients : public SettingsPanel {
     void updateButtons();
 
   private:
+    void normalizeClientOrder();
     void refreshList(int selected = -1);
     int selectedIndex() const;
 

@@ -15,6 +15,7 @@
 #include "torrent/torrentextractor.h"
 
 #include <QCheckBox>
+#include <QColor>
 #include <QAbstractItemView>
 #include <QGridLayout>
 #include <QItemSelectionModel>
@@ -209,6 +210,12 @@ void ArticleListNotification::rebuildTorrentActions() {
     auto* button = new QPushButton(config.name, this);
     button->setMinimumHeight(qMax(32, button->sizeHint().height()));
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    const QColor buttonColor(config.buttonColor);
+    if (buttonColor.isValid()) {
+      const QString textColor = buttonColor.lightness() < 145 ? QStringLiteral("#ffffff") : QStringLiteral("#111111");
+      button->setStyleSheet(QStringLiteral("QPushButton { background-color: %1; color: %2; border: 1px solid %1; padding: 4px 8px; } QPushButton:disabled { background-color: #b0b0b0; color: #666666; border-color: #999999; }")
+                              .arg(buttonColor.name(), textColor));
+    }
     button->setEnabled(m_preview || hasTorrent);
     button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
                                   : tr("No torrent link found in the selected article(s)"));

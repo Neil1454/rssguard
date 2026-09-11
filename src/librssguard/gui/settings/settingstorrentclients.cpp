@@ -8,6 +8,7 @@
 #include "torrent/torrentclient.h"
 
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -19,6 +20,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QPixmap>
 #include <QSpinBox>
 #include <QUrl>
 #include <QUuid>
@@ -49,6 +51,25 @@ namespace {
         m_priority->setRange(1, 999);
         m_priority->setValue(qMax(1, initial.priority));
         m_priority->setToolTip(tr("Position of this client in notification buttons and menus. Priority 1 appears first."));
+        m_color = new QComboBox(this);
+        const QList<QPair<QString, QString>> colors{
+          {tr("Default system colour"), QString()}, {tr("Blue"), QStringLiteral("#1976d2")},
+          {tr("Green"), QStringLiteral("#2e7d32")}, {tr("Red"), QStringLiteral("#c62828")},
+          {tr("Orange"), QStringLiteral("#ef6c00")}, {tr("Purple"), QStringLiteral("#6a1b9a")},
+          {tr("Teal"), QStringLiteral("#00796b")}, {tr("Grey"), QStringLiteral("#616161")},
+          {tr("Yellow"), QStringLiteral("#f9a825")}, {tr("Pink"), QStringLiteral("#ad1457")}
+        };
+        for (const auto& color : colors) {
+          if (color.second.isEmpty()) m_color->addItem(color.first, color.second);
+          else {
+            QPixmap swatch(18, 18);
+            swatch.fill(QColor(color.second));
+            m_color->addItem(QIcon(swatch), color.first, color.second);
+          }
+        }
+        const int selectedColor = m_color->findData(initial.buttonColor);
+        m_color->setCurrentIndex(selectedColor >= 0 ? selectedColor : 0);
+        m_color->setToolTip(tr("Colour used for this client's button on new-article notifications."));
         m_proxy = new QCheckBox(tr("Use RSS Guard proxy"), this);
         m_proxy->setChecked(initial.useRssGuardProxy);
         m_default = new QCheckBox(tr("Default torrent client"), this);
@@ -64,6 +85,7 @@ namespace {
         m_form->addRow(tr("API token (optional):"), m_token);
         m_form->addRow(QString(), m_enabled);
         m_form->addRow(tr("Button priority:"), m_priority);
+        m_form->addRow(tr("Notification button colour:"), m_color);
         m_form->addRow(QString(), m_proxy);
         m_form->addRow(QString(), m_default);
         m_form->addRow(tr("Default save path (optional):"), m_path);
@@ -81,6 +103,12 @@ namespace {
         m_tags->setPlaceholderText(tr("Example: rss, automatic"));
         connect(m_type, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { updateClientFields(); });
         connect(m_token, &QLineEdit::textChanged, this, [this]() { updateClientFields(); });
+        connect(m_enabled, &QCheckBox::toggled, this, [this](bool enabled) {
+          m_priority->setEnabled(enabled);
+          m_form->labelForField(m_priority)->setEnabled(enabled);
+        });
+        m_priority->setEnabled(initial.enabled);
+        m_form->labelForField(m_priority)->setEnabled(initial.enabled);
         updateClientFields();
         outer->addLayout(m_form);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -104,6 +132,7 @@ namespace {
         result.username = m_username->text();
         result.password = m_password->text();
         result.token = m_token->text();
+        result.buttonColor = m_color->currentData().toString();
         result.enabled = m_enabled->isChecked();
         result.priority = m_priority->value();
         result.useRssGuardProxy = m_proxy->isChecked();
@@ -172,7 +201,7 @@ namespace {
       TorrentClientConfig m_config;
       QLineEdit *m_name, *m_url, *m_username, *m_password, *m_token, *m_path, *m_category, *m_tags;
       QFormLayout* m_form;
-      QComboBox* m_type;
+      QComboBox *m_type, *m_color;
       QCheckBox *m_enabled, *m_proxy, *m_default;
       QSpinBox* m_priority;
   };
@@ -230,6 +259,7 @@ void SettingsTorrentClients::loadUi() {
 void SettingsTorrentClients::loadSettings() {
   onBeginLoadSettings();
   m_clients = TorrentClientConfig::load(settings());
+  normalizeClientOrder();
   m_showSuccessNotifications->setChecked(settings()->value(QStringLiteral("TorrentClients"),
                                                             QStringLiteral("showSuccessNotifications"),
                                                             true).toBool());
@@ -239,6 +269,7 @@ void SettingsTorrentClients::loadSettings() {
 
 void SettingsTorrentClients::saveSettings() {
   onBeginSaveSettings();
+  normalizeClientOrder();
   TorrentClientConfig::save(settings(), m_clients);
   settings()->setValue(QStringLiteral("TorrentClients"),
                        QStringLiteral("showSuccessNotifications"),
@@ -248,14 +279,29 @@ void SettingsTorrentClients::saveSettings() {
 
 int SettingsTorrentClients::selectedIndex() const { return m_list == nullptr ? -1 : m_list->currentRow(); }
 
+void SettingsTorrentClients::normalizeClientOrder() {
+  const QList<TorrentClientConfig> enabled = TorrentClientConfig::enabledInPriorityOrder(m_clients);
+  QList<TorrentClientConfig> normalized = enabled;
+  for (const TorrentClientConfig& client : std::as_const(m_clients)) if (!client.enabled) normalized.append(client);
+  int priority = 1;
+  for (TorrentClientConfig& client : normalized) client.priority = client.enabled ? priority++ : 0;
+  m_clients = normalized;
+}
+
 void SettingsTorrentClients::refreshList(int selected) {
   m_list->clear();
   for (const TorrentClientConfig& client : std::as_const(m_clients)) {
     QString text = QStringLiteral("%1 — %2 — %3").arg(client.name, TorrentClientConfig::typeName(client.type), client.baseUrl);
-    text = QStringLiteral("%1. %2").arg(client.priority).arg(text);
-    if (!client.enabled) text += tr(" (disabled)");
+    if (client.enabled) text = QStringLiteral("%1. %2").arg(client.priority).arg(text);
+    else text += tr(" (disabled)");
     if (client.isDefault) text += tr(" (default)");
     auto* item = new QListWidgetItem(text, m_list);
+    if (!client.enabled) item->setForeground(palette().color(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Text));
+    if (!client.buttonColor.isEmpty()) {
+      QPixmap swatch(14, 14);
+      swatch.fill(QColor(client.buttonColor));
+      item->setIcon(QIcon(swatch));
+    }
     item->setToolTip(client.useRssGuardProxy ? tr("Uses RSS Guard proxy") : tr("Direct connection; proxy disabled"));
   }
   if (!m_clients.isEmpty()) m_list->setCurrentRow(qBound(0, selected < 0 ? 0 : selected, static_cast<int>(m_clients.size()) - 1));
@@ -265,14 +311,16 @@ void SettingsTorrentClients::refreshList(int selected) {
 void SettingsTorrentClients::addClient() {
   TorrentClientConfig initial;
   initial.useRssGuardProxy = true;
-  initial.priority = m_clients.size() + 1;
+  initial.priority = TorrentClientConfig::enabledInPriorityOrder(m_clients).size() + 1;
   TorrentClientEditor editor(initial, this);
   if (editor.exec() != QDialog::Accepted) return;
   TorrentClientConfig client = editor.value();
   if (client.isDefault) for (TorrentClientConfig& other : m_clients) other.isDefault = false;
-  const int target = qBound(0, client.priority - 1, static_cast<int>(m_clients.size()));
+  const int target = client.enabled
+                       ? qBound(0, client.priority - 1, TorrentClientConfig::enabledInPriorityOrder(m_clients).size())
+                       : m_clients.size();
   m_clients.insert(target, client);
-  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
+  normalizeClientOrder();
   refreshList(target);
   dirtifySettings();
 }
@@ -285,9 +333,12 @@ void SettingsTorrentClients::editClient() {
   TorrentClientConfig client = editor.value();
   if (client.isDefault) for (int i = 0; i < m_clients.size(); ++i) if (i != row) m_clients[i].isDefault = false;
   m_clients.removeAt(row);
-  const int target = qBound(0, client.priority - 1, static_cast<int>(m_clients.size()));
+  normalizeClientOrder();
+  const int target = client.enabled
+                       ? qBound(0, client.priority - 1, TorrentClientConfig::enabledInPriorityOrder(m_clients).size())
+                       : m_clients.size();
   m_clients.insert(target, client);
-  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
+  normalizeClientOrder();
   refreshList(target);
   dirtifySettings();
 }
@@ -297,7 +348,7 @@ void SettingsTorrentClients::removeClient() {
   if (row < 0) return;
   if (QMessageBox::question(this, tr("Remove torrent client"), tr("Remove “%1”?").arg(m_clients.at(row).name)) != QMessageBox::Yes) return;
   m_clients.removeAt(row);
-  for (int i = 0; i < m_clients.size(); ++i) m_clients[i].priority = i + 1;
+  normalizeClientOrder();
   refreshList(qMin(row, static_cast<int>(m_clients.size()) - 1));
   dirtifySettings();
 }

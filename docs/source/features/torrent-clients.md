@@ -7,7 +7,7 @@ The Neil1454 Windows fork can send recognised torrent links from RSS articles to
 
 Open **Tools > Settings > Torrent clients**, choose **Add**, enter a unique display name, select the client type, and use **Test connection**.
 
-Each client can be enabled or disabled without deleting its settings. Disabled clients are omitted from notification buttons and send menus. **Button priority** controls their order: priority 1 appears first. **Test all enabled** checks every active client in one pass and reports each result.
+Each client can be enabled or disabled without deleting its settings. Enabled clients are numbered first; disabled clients are greyed, unnumbered, and kept at the bottom of the settings list. Disabled clients are omitted from notification buttons and send menus. **Button priority** controls the enabled order: priority 1 appears first. **Notification button colour** provides a selection of common colours, plus the normal system colour. **Test all enabled** checks every active client in one pass and reports each result.
 
 | Client | Server/base URL | Authentication |
 |---|---|---|
@@ -53,7 +53,7 @@ RSS Guard detects the version or protocol level during **Test connection** where
 - Select one or several article rows, right-click, and choose **Send to torrent client > _client name_**.
 - Use the direct default-client action when a default client is configured.
 - On a new-article notification, the first article is selected automatically. Torrent clients are shown as a two-column grid of full-width named buttons so longer instance names remain readable. Click one to send, or use Ctrl/Shift to select several notification rows and send all of their torrent links together.
-- Buttons include enabled clients only and follow their configured priority order.
+- Buttons include enabled clients only, follow their configured priority order, and use each client's selected colour with automatically contrasting text.
 - To prevent a notification disappearing while choosing a torrent client, enable **Tools > Settings > Notifications > Keep new-article notifications open until dismissed**. Its timer and right-click dismissal are then disabled; close it with its close button.
 - Applying Notification settings displays the real new-article notification layout at the configured width, opacity, screen and position. Enable **Include torrent-client buttons in notification preview** to inspect the current two-column button layout before a live feed arrives.
 

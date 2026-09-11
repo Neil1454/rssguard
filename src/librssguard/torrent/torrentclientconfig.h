@@ -28,6 +28,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString username;
   QString password;
   QString token;
+  QString buttonColor;
   bool enabled = true;
   int priority = 0;
   bool useRssGuardProxy = true;
