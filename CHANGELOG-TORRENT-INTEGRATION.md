@@ -1,5 +1,17 @@
 # Torrent integration changelog
 
+## Torrent automation development build
+
+- Added a separate **Torrent automation** settings section with General, Clients and limits, RSS rules, Safe cleanup and Activity pages.
+- Added optional event-driven processing of newly fetched torrent RSS entries; the existing manual send controls remain available.
+- Added priority, least-busy, most-free-space, round-robin, weighted and balanced routing strategies.
+- Added per-client participation, weight, active-download limit, managed-torrent limit, minimum free space, estimated capacity and cleanup permission.
+- Added persistent duplicate protection, allocation records, decision history, bounded retry and automation notifications.
+- Added live status adapters for qBittorrent, Transmission, Deluge and Porla. Other adapters use connection health and optional estimated capacity.
+- Added the `rssguard-auto` ownership marker for supported clients.
+- Added opt-in guarded cleanup for marked qBittorrent and Transmission torrents, with completion, ratio, age, inactivity, confirmation, data-deletion and per-run limits.
+- Automation and cleanup are disabled by default; dry-run mode is enabled by default.
+
 ## 2026-09-09 — Notifications and compatibility corrections
 
 - Added rQBit HTTP API support with optional Basic authentication and output-folder selection.
