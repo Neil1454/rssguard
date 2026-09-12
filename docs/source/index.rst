@@ -28,6 +28,7 @@ RSS Guard Documentation!
    features/queries
    features/skins
    features/torrent-clients
+   features/torrent-automation
    features/userdata
 
 .. toctree::
