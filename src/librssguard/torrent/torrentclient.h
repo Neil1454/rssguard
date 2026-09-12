@@ -6,11 +6,38 @@
 #include "torrent/torrentclientconfig.h"
 
 #include <QByteArray>
+#include <QDateTime>
 #include <QJsonObject>
 #include <QObject>
 #include <QQueue>
 
 #include <functional>
+
+struct RSSGUARD_DLLSPEC TorrentRemoteItem {
+  QString hash;
+  QString name;
+  qint64 sizeBytes = 0;
+  double progress = 0.0;
+  double ratio = 0.0;
+  QDateTime added;
+  QDateTime completed;
+  QDateTime lastActivity;
+  bool downloading = false;
+  bool seeding = false;
+  bool managedByAutomation = false;
+};
+
+struct RSSGUARD_DLLSPEC TorrentClientStatus {
+  bool reachable = false;
+  bool liveSpace = false;
+  qint64 freeBytes = -1;
+  qint64 totalBytes = -1;
+  int activeDownloads = 0;
+  int queuedDownloads = 0;
+  int seeding = 0;
+  QList<TorrentRemoteItem> torrents;
+  QString detail;
+};
 
 class BaseNetworkAccessManager;
 class QNetworkReply;
@@ -28,12 +55,16 @@ class RSSGUARD_DLLSPEC TorrentClient : public QObject {
     const TorrentClientConfig& config() const;
     virtual void testConnection() = 0;
     virtual void addTorrents(const QStringList& urls) = 0;
+    virtual void fetchStatus();
+    virtual void removeTorrent(const QString& hash, bool deleteData);
 
     static TorrentClient* create(const TorrentClientConfig& config, QObject* parent = nullptr);
 
   signals:
     void testFinished(bool success, const QString& message);
     void addFinished(int added, int failed, const QString& message);
+    void statusFinished(const TorrentClientStatus& status);
+    void removeFinished(bool success, const QString& message);
 
   protected:
     QUrl endpoint(const QString& path) const;
@@ -50,6 +81,8 @@ class QBittorrentClient final : public TorrentClient {
     explicit QBittorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
 
   private:
     void authenticate(const std::function<void(bool, const QString&)>& continuation);
@@ -62,6 +95,8 @@ class TransmissionClient final : public TorrentClient {
     explicit TransmissionClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
 
   private:
     void rpc(const QJsonObject& request, const std::function<void(QNetworkReply*, const QJsonObject&)>& callback, bool retry = true);
@@ -107,6 +142,8 @@ class DelugeClient final : public TorrentClient {
     explicit DelugeClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
 
   private:
     void rpc(const QString& method,
@@ -143,6 +180,8 @@ class PorlaClient final : public TorrentClient {
     explicit PorlaClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
 
   private:
     void rpc(const QString& method,
