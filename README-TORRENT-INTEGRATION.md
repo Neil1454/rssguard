@@ -20,6 +20,20 @@ This feature is manual. It does not automatically send newly fetched feed entrie
 
 Clients can be retained but disabled, assigned a numbered display priority and notification-button colour, and checked together with **Test all enabled**. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
 
+## Torrent automation
+
+**Tools > Settings > Torrent automation** adds an optional automation engine without changing the manual send workflow. It is disabled by default and starts in dry-run mode.
+
+- Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, weighted, or balanced policy.
+- Applies per-client active-download, managed-count, free-space, weight and fallback-capacity settings.
+- Supports ordered RSS rules with feed, text, exclusion, title-pattern and client-pool matching.
+- Persists processed-link protection, allocation records, retries and a visible activity history.
+- Queries live workload information from qBittorrent, Transmission, Deluge and Porla, with live disk-space checks where their API exposes it.
+- Marks supported submissions with `rssguard-auto` so cleanup cannot select unrelated torrents.
+- Provides opt-in cleanup with minimum seeding age, ratio, inactivity, confirmation and per-run removal limits. Deleting downloaded data is separately disabled by default.
+
+Safe marked cleanup is initially limited to qBittorrent and Transmission. Other adapters remain routing-only for deletion until they can prove ownership of a torrent without unsafe remote filesystem commands.
+
 ## Architecture
 
 - `torrentclientconfig.*`: typed client configuration, validation, persistence, and encrypted secret fields.
