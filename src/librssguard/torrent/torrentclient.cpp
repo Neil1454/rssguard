@@ -58,6 +58,22 @@ TorrentClient::~TorrentClient() = default;
 
 const TorrentClientConfig& TorrentClient::config() const { return m_config; }
 
+void TorrentClient::fetchStatus() {
+  connect(this, &TorrentClient::testFinished, this, [this](bool success, const QString& message) {
+    TorrentClientStatus status;
+    status.reachable = success;
+    status.detail = success ? tr("Connection available; workload and disk space are estimated for this adapter.") : message;
+    emit statusFinished(status);
+  });
+  testConnection();
+}
+
+void TorrentClient::removeTorrent(const QString& hash, bool deleteData) {
+  Q_UNUSED(hash)
+  Q_UNUSED(deleteData)
+  emit removeFinished(false, tr("Safe remote removal is not supported by this client adapter."));
+}
+
 QUrl TorrentClient::endpoint(const QString& path) const {
   QString base = m_config.baseUrl.trimmed();
   while (base.endsWith(QLatin1Char('/'))) base.chop(1);
@@ -165,6 +181,80 @@ void QBittorrentClient::addTorrents(const QStringList& urls) {
   });
 }
 
+void QBittorrentClient::fetchStatus() {
+  authenticate([this](bool ok, const QString& error) {
+    if (!ok) {
+      TorrentClientStatus status;
+      status.detail = error;
+      emit statusFinished(status);
+      return;
+    }
+    QNetworkRequest request(endpoint(QStringLiteral("/api/v2/sync/maindata")));
+    if (!m_cookie.isEmpty()) request.setRawHeader("Cookie", m_cookie);
+    QNetworkReply* reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+      TorrentClientStatus status;
+      const QJsonObject response = QJsonDocument::fromJson(reply->readAll()).object();
+      status.reachable = reply->error() == QNetworkReply::NoError && !response.isEmpty();
+      if (!status.reachable) {
+        status.detail = networkFailure(reply);
+      }
+      else {
+        const QJsonObject server = response.value(QStringLiteral("server_state")).toObject();
+        if (server.contains(QStringLiteral("free_space_on_disk"))) {
+          status.freeBytes = server.value(QStringLiteral("free_space_on_disk")).toVariant().toLongLong();
+          status.liveSpace = status.freeBytes >= 0;
+        }
+        const QJsonObject torrents = response.value(QStringLiteral("torrents")).toObject();
+        for (auto it = torrents.constBegin(); it != torrents.constEnd(); ++it) {
+          const QJsonObject object = it.value().toObject();
+          TorrentRemoteItem item;
+          item.hash = it.key();
+          item.name = object.value(QStringLiteral("name")).toString();
+          item.sizeBytes = object.value(QStringLiteral("size")).toVariant().toLongLong();
+          item.progress = object.value(QStringLiteral("progress")).toDouble();
+          item.ratio = object.value(QStringLiteral("ratio")).toDouble();
+          item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("added_on")).toVariant().toLongLong());
+          item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("completion_on")).toVariant().toLongLong());
+          item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("last_activity")).toVariant().toLongLong());
+          const QString state = object.value(QStringLiteral("state")).toString();
+          item.managedByAutomation = object.value(QStringLiteral("tags")).toString()
+                                               .split(QLatin1Char(','), Qt::SkipEmptyParts)
+                                               .contains(QStringLiteral("rssguard-auto"));
+          item.downloading = state.contains(QStringLiteral("downloading"), Qt::CaseInsensitive) ||
+                             state == QStringLiteral("metaDL") || state == QStringLiteral("stalledDL");
+          item.seeding = state.contains(QStringLiteral("upload"), Qt::CaseInsensitive) || state == QStringLiteral("stalledUP");
+          status.activeDownloads += item.downloading ? 1 : 0;
+          status.queuedDownloads += state.contains(QStringLiteral("queued"), Qt::CaseInsensitive) ? 1 : 0;
+          status.seeding += item.seeding ? 1 : 0;
+          status.torrents.append(item);
+        }
+        status.detail = tr("Live qBittorrent status");
+      }
+      reply->deleteLater();
+      emit statusFinished(status);
+    });
+  });
+}
+
+void QBittorrentClient::removeTorrent(const QString& hash, bool deleteData) {
+  authenticate([this, hash, deleteData](bool ok, const QString& error) {
+    if (!ok) { emit removeFinished(false, error); return; }
+    QNetworkRequest request(endpoint(QStringLiteral("/api/v2/torrents/delete")));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
+    if (!m_cookie.isEmpty()) request.setRawHeader("Cookie", m_cookie);
+    const QByteArray data = "hashes=" + QUrl::toPercentEncoding(hash) +
+                            "&deleteFiles=" + QByteArray(deleteData ? "true" : "false");
+    QNetworkReply* reply = m_network->post(request, data);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+      const int code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      const bool ok = reply->error() == QNetworkReply::NoError && code >= 200 && code < 300;
+      emit removeFinished(ok, ok ? tr("Torrent removed from qBittorrent.") : networkFailure(reply));
+      reply->deleteLater();
+    });
+  });
+}
+
 TransmissionClient::TransmissionClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {
   connect(m_network,
           &QNetworkAccessManager::authenticationRequired,
@@ -244,6 +334,74 @@ void TransmissionClient::addNext() {
         if (reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("result")).toString() == QStringLiteral("success")) ++m_added;
         else ++m_failed;
         addNext();
+      });
+}
+
+void TransmissionClient::fetchStatus() {
+  const QJsonArray fields{QStringLiteral("hashString"), QStringLiteral("name"), QStringLiteral("totalSize"),
+                          QStringLiteral("percentDone"), QStringLiteral("uploadRatio"), QStringLiteral("addedDate"),
+                          QStringLiteral("doneDate"), QStringLiteral("activityDate"), QStringLiteral("status"),
+                          QStringLiteral("labels")};
+  rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("torrent-get")},
+                  {QStringLiteral("arguments"), QJsonObject{{QStringLiteral("fields"), fields}}}},
+      [this](QNetworkReply* reply, const QJsonObject& response) {
+        TorrentClientStatus status;
+        status.reachable = reply->error() == QNetworkReply::NoError &&
+                           response.value(QStringLiteral("result")).toString() == QStringLiteral("success");
+        if (!status.reachable) {
+          status.detail = networkFailure(reply);
+          emit statusFinished(status);
+          return;
+        }
+        for (const QJsonValue& value : response.value(QStringLiteral("arguments")).toObject()
+                                                .value(QStringLiteral("torrents")).toArray()) {
+          const QJsonObject object = value.toObject();
+          TorrentRemoteItem item;
+          item.hash = object.value(QStringLiteral("hashString")).toString();
+          item.name = object.value(QStringLiteral("name")).toString();
+          item.sizeBytes = object.value(QStringLiteral("totalSize")).toVariant().toLongLong();
+          item.progress = object.value(QStringLiteral("percentDone")).toDouble();
+          item.ratio = object.value(QStringLiteral("uploadRatio")).toDouble();
+          item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("addedDate")).toVariant().toLongLong());
+          item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("doneDate")).toVariant().toLongLong());
+          item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("activityDate")).toVariant().toLongLong());
+          const int state = object.value(QStringLiteral("status")).toInt();
+          for (const QJsonValue& label : object.value(QStringLiteral("labels")).toArray())
+            if (label.toString() == QStringLiteral("rssguard-auto")) item.managedByAutomation = true;
+          item.downloading = state == 4;
+          item.seeding = state == 6;
+          status.activeDownloads += item.downloading ? 1 : 0;
+          status.queuedDownloads += state == 3 ? 1 : 0;
+          status.seeding += item.seeding ? 1 : 0;
+          status.torrents.append(item);
+        }
+        const QString path = m_config.savePath.isEmpty() ? QStringLiteral(".") : m_config.savePath;
+        rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("free-space")},
+                        {QStringLiteral("arguments"), QJsonObject{{QStringLiteral("path"), path}}}},
+            [this, status](QNetworkReply* spaceReply, const QJsonObject& spaceResponse) mutable {
+              if (spaceReply->error() == QNetworkReply::NoError &&
+                  spaceResponse.value(QStringLiteral("result")).toString() == QStringLiteral("success")) {
+                const QJsonObject args = spaceResponse.value(QStringLiteral("arguments")).toObject();
+                status.freeBytes = args.value(QStringLiteral("size-bytes")).toVariant().toLongLong();
+                status.totalBytes = args.value(QStringLiteral("total_size")).toVariant().toLongLong();
+                if (status.totalBytes <= 0) status.totalBytes = args.value(QStringLiteral("total-size")).toVariant().toLongLong();
+                status.liveSpace = status.freeBytes >= 0;
+              }
+              status.detail = tr("Live Transmission status");
+              emit statusFinished(status);
+            });
+      });
+}
+
+void TransmissionClient::removeTorrent(const QString& hash, bool deleteData) {
+  const QJsonObject arguments{{QStringLiteral("ids"), QJsonArray{hash}},
+                              {QStringLiteral("delete-local-data"), deleteData}};
+  rpc(QJsonObject{{QStringLiteral("method"), QStringLiteral("torrent-remove")},
+                  {QStringLiteral("arguments"), arguments}},
+      [this](QNetworkReply* reply, const QJsonObject& response) {
+        const bool ok = reply->error() == QNetworkReply::NoError &&
+                        response.value(QStringLiteral("result")).toString() == QStringLiteral("success");
+        emit removeFinished(ok, ok ? tr("Torrent removed from Transmission.") : networkFailure(reply));
       });
 }
 
@@ -520,6 +678,73 @@ void DelugeClient::addNext() {
       });
 }
 
+void DelugeClient::fetchStatus() {
+  prepare([this](bool ok, const QString& error) {
+    if (!ok) {
+      TorrentClientStatus status;
+      status.detail = error;
+      emit statusFinished(status);
+      return;
+    }
+    const QJsonArray keys{QStringLiteral("name"), QStringLiteral("total_size"), QStringLiteral("progress"),
+                          QStringLiteral("ratio"), QStringLiteral("time_added"), QStringLiteral("completed_time"),
+                          QStringLiteral("last_seen_complete"), QStringLiteral("state")};
+    rpc(QStringLiteral("core.get_torrents_status"), QJsonArray{QJsonObject(), keys},
+        [this](QNetworkReply* reply, const QJsonObject& response) {
+          TorrentClientStatus status;
+          status.reachable = reply->error() == QNetworkReply::NoError &&
+                             (!response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull());
+          if (!status.reachable) {
+            status.detail = networkFailure(reply);
+            emit statusFinished(status);
+            return;
+          }
+          const QJsonObject torrents = response.value(QStringLiteral("result")).toObject();
+          for (auto it = torrents.constBegin(); it != torrents.constEnd(); ++it) {
+            const QJsonObject object = it.value().toObject();
+            TorrentRemoteItem item;
+            item.hash = it.key();
+            item.name = object.value(QStringLiteral("name")).toString();
+            item.sizeBytes = object.value(QStringLiteral("total_size")).toVariant().toLongLong();
+            item.progress = object.value(QStringLiteral("progress")).toDouble() / 100.0;
+            item.ratio = object.value(QStringLiteral("ratio")).toDouble();
+            item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("time_added")).toVariant().toLongLong());
+            item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("completed_time")).toVariant().toLongLong());
+            item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("last_seen_complete")).toVariant().toLongLong());
+            const QString state = object.value(QStringLiteral("state")).toString();
+            item.downloading = state.compare(QStringLiteral("Downloading"), Qt::CaseInsensitive) == 0;
+            item.seeding = state.compare(QStringLiteral("Seeding"), Qt::CaseInsensitive) == 0;
+            status.activeDownloads += item.downloading ? 1 : 0;
+            status.queuedDownloads += state.contains(QStringLiteral("Queued"), Qt::CaseInsensitive) ? 1 : 0;
+            status.seeding += item.seeding ? 1 : 0;
+            status.torrents.append(item);
+          }
+          rpc(QStringLiteral("core.get_free_space"), QJsonArray{m_config.savePath},
+              [this, status](QNetworkReply* spaceReply, const QJsonObject& spaceResponse) mutable {
+                if (spaceReply->error() == QNetworkReply::NoError &&
+                    (!spaceResponse.contains(QStringLiteral("error")) || spaceResponse.value(QStringLiteral("error")).isNull())) {
+                  status.freeBytes = spaceResponse.value(QStringLiteral("result")).toVariant().toLongLong();
+                  status.liveSpace = status.freeBytes >= 0;
+                }
+                status.detail = tr("Live Deluge status");
+                emit statusFinished(status);
+              });
+        });
+  });
+}
+
+void DelugeClient::removeTorrent(const QString& hash, bool deleteData) {
+  prepare([this, hash, deleteData](bool ok, const QString& error) {
+    if (!ok) { emit removeFinished(false, error); return; }
+    rpc(QStringLiteral("core.remove_torrent"), QJsonArray{hash, deleteData},
+        [this](QNetworkReply* reply, const QJsonObject& response) {
+          const bool ok = reply->error() == QNetworkReply::NoError && response.value(QStringLiteral("error")).isNull() &&
+                          response.value(QStringLiteral("result")).toBool();
+          emit removeFinished(ok, ok ? tr("Torrent removed from Deluge.") : networkFailure(reply));
+        });
+  });
+}
+
 RQBitClient::RQBitClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {
   connect(m_network,
           &QNetworkAccessManager::authenticationRequired,
@@ -662,4 +887,61 @@ void PorlaClient::submitTorrent(const QString& source, const QByteArray& torrent
     ok ? ++m_added : ++m_failed;
     addNext();
   });
+}
+
+void PorlaClient::fetchStatus() {
+  rpc(QStringLiteral("torrents.list"), QJsonObject{{QStringLiteral("page"), 0}, {QStringLiteral("page_size"), 10000}},
+      [this](QNetworkReply* reply, const QJsonObject& response) {
+        TorrentClientStatus status;
+        status.reachable = reply->error() == QNetworkReply::NoError &&
+                           (!response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull());
+        if (!status.reachable) {
+          status.detail = networkFailure(reply);
+          emit statusFinished(status);
+          return;
+        }
+        const QJsonArray torrents = response.value(QStringLiteral("result")).toObject()
+                                            .value(QStringLiteral("torrents")).toArray();
+        for (const QJsonValue& value : torrents) {
+          const QJsonObject object = value.toObject();
+          TorrentRemoteItem item;
+          const QJsonValue hash = object.value(QStringLiteral("info_hash"));
+          item.hash = hash.isString() ? hash.toString() : QString::fromUtf8(QJsonDocument(hash.toArray()).toJson(QJsonDocument::Compact));
+          item.name = object.value(QStringLiteral("name")).toString();
+          item.sizeBytes = object.value(QStringLiteral("size")).toVariant().toLongLong();
+          item.progress = object.value(QStringLiteral("progress")).toDouble();
+          item.ratio = object.value(QStringLiteral("ratio")).toDouble();
+          item.downloading = item.progress < 1.0 && object.value(QStringLiteral("download_rate")).toDouble() > 0;
+          item.seeding = item.progress >= 1.0;
+          status.activeDownloads += item.downloading ? 1 : 0;
+          status.seeding += item.seeding ? 1 : 0;
+          status.torrents.append(item);
+        }
+        const QString path = m_config.savePath.isEmpty() ? QStringLiteral(".") : m_config.savePath;
+        rpc(QStringLiteral("fs.space"), QJsonObject{{QStringLiteral("path"), path}},
+            [this, status](QNetworkReply* spaceReply, const QJsonObject& spaceResponse) mutable {
+              const QJsonObject space = spaceResponse.value(QStringLiteral("result")).toObject();
+              if (spaceReply->error() == QNetworkReply::NoError &&
+                  (!spaceResponse.contains(QStringLiteral("error")) || spaceResponse.value(QStringLiteral("error")).isNull())) {
+                status.freeBytes = space.value(QStringLiteral("available")).toVariant().toLongLong();
+                status.totalBytes = space.value(QStringLiteral("capacity")).toVariant().toLongLong();
+                status.liveSpace = status.freeBytes >= 0;
+              }
+              status.detail = tr("Live Porla status");
+              emit statusFinished(status);
+            });
+      });
+}
+
+void PorlaClient::removeTorrent(const QString& hash, bool deleteData) {
+  QJsonValue hashValue = hash;
+  const QJsonDocument parsed = QJsonDocument::fromJson(hash.toUtf8());
+  if (parsed.isArray()) hashValue = parsed.array();
+  rpc(QStringLiteral("torrents.remove"),
+      QJsonObject{{QStringLiteral("info_hashes"), QJsonArray{hashValue}}, {QStringLiteral("remove_data"), deleteData}},
+      [this](QNetworkReply* reply, const QJsonObject& response) {
+        const bool ok = reply->error() == QNetworkReply::NoError &&
+                        (!response.contains(QStringLiteral("error")) || response.value(QStringLiteral("error")).isNull());
+        emit removeFinished(ok, ok ? tr("Torrent removed from Porla.") : networkFailure(reply));
+      });
 }
