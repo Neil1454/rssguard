@@ -191,6 +191,8 @@ set(SOURCES
   gui/settings/settingsnetwork.h
   gui/settings/settingstorrentclients.cpp
   gui/settings/settingstorrentclients.h
+  gui/settings/settingstorrentautomation.cpp
+  gui/settings/settingstorrentautomation.h
   gui/settings/settingsnotifications.cpp
   gui/settings/settingsnotifications.h
   gui/settings/settingspanel.cpp
@@ -207,6 +209,10 @@ set(SOURCES
   torrent/torrentclient.h
   torrent/torrentclientconfig.cpp
   torrent/torrentclientconfig.h
+  torrent/torrentautomationconfig.cpp
+  torrent/torrentautomationconfig.h
+  torrent/torrentautomationengine.cpp
+  torrent/torrentautomationengine.h
   torrent/torrentextractor.cpp
   torrent/torrentextractor.h
   gui/tabbar.cpp
