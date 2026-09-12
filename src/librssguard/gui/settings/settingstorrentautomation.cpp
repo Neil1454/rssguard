@@ -339,6 +339,7 @@ void SettingsTorrentAutomation::refreshActivity() {
 
 void SettingsTorrentAutomation::updateCleanupControls() {
   const bool enabled = m_cleanup->isChecked();
-  for (QWidget* widget : {static_cast<QWidget*>(m_deleteData), m_confirmCleanup, m_seedHours, m_ratio,
-                          m_inactiveHours, m_maxRemovals, m_cleanupStopGb}) widget->setEnabled(enabled);
+  const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_seedHours, m_ratio,
+                                            m_inactiveHours, m_maxRemovals, m_cleanupStopGb};
+  for (QWidget* widget : cleanup_widgets) widget->setEnabled(enabled);
 }
