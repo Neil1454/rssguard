@@ -21,6 +21,7 @@
 #include "miscellaneous/settingskeys.h"
 #include "qtlinq/qtlinq.h"
 #include "services/abstract/feed.h"
+#include "torrent/torrentautomationengine.h"
 
 #if defined(Q_OS_WIN)
 #include "miscellaneous/windowstaskbar.h"
@@ -363,6 +364,10 @@ void GuiNotificationCoordinator::onFeedUpdatesProgress(const Feed* feed, int cur
 }
 
 void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults& results) {
+  // Automation is independent of whether desktop notifications are enabled or a feed is quiet.
+  // Its own master switch, rules and dry-run guard are applied inside the engine.
+  TorrentAutomationEngine::processNewArticles(results.updatedFeeds(), m_application);
+
   const bool some_unquiet_feed = qlinq::from(results.updatedFeeds().keys()).any([](Feed* feed) {
     return !feed->isQuiet();
   });
