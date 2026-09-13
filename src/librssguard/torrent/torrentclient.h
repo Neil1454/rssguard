@@ -120,6 +120,10 @@ class FloodClient final : public TorrentClient {
     explicit FloodClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void authenticate(const std::function<void(bool, const QString&)>& continuation);
@@ -132,6 +136,10 @@ class RTorrentClient final : public TorrentClient {
     explicit RTorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     QByteArray methodCall(const QString& method, const QStringList& values = {}) const;
@@ -174,6 +182,10 @@ class RQBitClient final : public TorrentClient {
     explicit RQBitClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
+    void fetchStatus() override;
+    void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void addNext();
