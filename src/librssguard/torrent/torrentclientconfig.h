@@ -31,6 +31,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString token;
   QString buttonColor;
   bool colorNotificationButtons = true;
+  bool colorContextMenus = true;
   bool colorSettingsLists = true;
   bool enabled = true;
   int priority = 0;
