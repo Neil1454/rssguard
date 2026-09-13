@@ -13,6 +13,7 @@
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
 #include "torrent/torrentextractor.h"
+#include "torrent/torrentsendhistory.h"
 
 #include <QCheckBox>
 #include <QColor>
@@ -106,6 +107,13 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
           QOverload<int>::of(&QComboBox::currentIndexChanged),
           this,
           &ArticleListNotification::showFeed);
+  connect(TorrentSendHistory::instance(qApp),
+          &TorrentSendHistory::historyChanged,
+          this,
+          [this](const QList<int>& messageIds, const QString&) {
+            for (int messageId : messageIds) m_model->setMessageProcessed(messageId);
+            rebuildTorrentActions();
+          });
 }
 
 void ArticleListNotification::loadResults(const QHash<Feed*, QList<Message>>& new_messages) {
@@ -204,12 +212,13 @@ void ArticleListNotification::rebuildTorrentActions() {
 
   const QList<TorrentClientConfig> clients =
     TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
+  TorrentSendHistory* history = TorrentSendHistory::instance(qApp);
   if (m_preview && !m_previewTorrentButtons) return;
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     bool alreadySent = !messages.isEmpty();
     for (const Message& message : messages) {
-      if (!m_sentClientsByMessage.value(message.m_id).contains(config.id)) {
+      if (!history->wasSent(message.m_id, config.id)) {
         alreadySent = false;
         break;
       }
@@ -278,10 +287,8 @@ void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientCon
   TorrentClient* client = TorrentClient::create(config, this);
   connect(client, &TorrentClient::addFinished, this, [this, client, processedMessageIds, config](int added, int failed, const QString& message) {
     if (added > 0 && failed == 0) {
-      for (int messageId : processedMessageIds) {
-        m_sentClientsByMessage[messageId].insert(config.id);
-        m_model->setMessageProcessed(messageId);
-      }
+      TorrentSendHistory::instance(qApp)->markSent(processedMessageIds, config.id);
+      for (int messageId : processedMessageIds) m_model->setMessageProcessed(messageId);
     }
     if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
                                                QStringLiteral("showSuccessNotifications"),
@@ -308,6 +315,8 @@ void ArticleListNotification::showFeed(int index) {
   Q_UNUSED(index)
   if (m_preview) return;
   m_model->setArticles(m_newMessages.value(selectedFeed()));
+  for (const Message& message : m_newMessages.value(selectedFeed()))
+    if (TorrentSendHistory::instance(qApp)->wasSentToAnyClient(message.m_id)) m_model->setMessageProcessed(message.m_id);
   onMessageSelected({}, {});
 }
 

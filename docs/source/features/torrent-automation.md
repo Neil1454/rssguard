@@ -16,9 +16,13 @@ Rules are checked from top to bottom and can match selected feeds, required/excl
 
 **Test selected client** and **Test all clients** perform non-destructive capability discovery. The saved result shows connection/authentication, live workload, free-space, torrent-list and safe-removal availability. A test never adds or deletes a torrent, and running it again replaces the previous result.
 
+Tests retry one transient status failure. When the API reports an exact total storage capacity, the test fills **Capacity GB** automatically. Existing manual capacity remains unchanged when the API reports only free space or no filesystem information. rTorrent and rQBit normally require manual capacity because their portable APIs do not expose filesystem totals. A safe-removal tick means the authenticated adapter and listing/removal API are available; the non-destructive test deliberately does not delete a torrent to prove it.
+
+Each client row displays the configured name and its underlying client type. **Run dry test now** uses live client status and the most recently fetched eligible RSS items to produce short **DRY RUN** routing and cleanup decisions in Activity. It never adds or removes a torrent. Refresh feeds first if no recent items are available.
+
 Every control, table heading and capability indicator has mouse-over help. Client colours can be shown independently on notification buttons, article context menus and settings/automation lists. Notification actions have clear pressed/in-progress states, and successfully processed rows receive a green completion band.
 
-Within an article notification, every successful client destination receives its own green tick. Other destination buttons remain available, and the per-client ticks are retained while switching between articles and feeds in that notification.
+Every successful client destination receives its own persistent green tick. The notification buttons and the main article **Send to torrent client** menu use the same saved history, including sends initiated by automation, so both locations remain synchronized.
 
 The runtime ledger records processed links, routing activity and managed allocations so restarting RSS Guard does not resend the same URL. Failed placement is held and retried with a bounded retry count.
 
@@ -26,8 +30,16 @@ The runtime ledger records processed links, routing activity and managed allocat
 
 Cleanup is disabled by default and dry-run mode never removes anything. Automatic removal considers only completed torrents carrying the `rssguard-auto` marker. Existing and manually added torrents are not eligible.
 
-Cleanup requires all configured seeding-age, ratio and inactivity conditions. It also has a per-run removal limit and can require confirmation for every removal. **Delete downloaded data** is a separate destructive option.
+The seeding-age, ratio, inactivity, per-run removal limit and target-free-space controls can each be enabled or disabled. Every enabled eligibility condition must pass; disabled conditions are ignored. Disabling the chosen per-run limit still leaves an internal hard maximum of 25 removals. **Delete downloaded data** is a separate destructive option.
+
+Potentially dangerous changes display warnings when selected. Keep **Ask before every removal** and **Dry run** enabled while validating a configuration. Deleting downloaded data always requires confirmation, as does cleanup with every eligibility filter disabled. Unknown torrent sizes reserve 10 GB by default (configurable); an exact `xl` value in a magnet link takes precedence.
 
 The cleanup checkbox for a client remains disabled until a capability test confirms listing and safe-removal support. Actual cleanup still requires a completed torrent to carry RSS Guard's automation marker, so an adapter that cannot prove ownership remains effectively routing-only.
 
 Automation runs only while RSS Guard is running and Windows is awake.
+
+## Theme and proxy checks
+
+RSS Guard already includes minimal-light and minimal-dark skins. The fork adds a button at the top-right of the main window to switch between them immediately. Full skin selection remains available under **Tools > Settings > User interface**.
+
+Under **Tools > Settings > Network & web > Network proxy**, **Test proxy connection** uses the values currently displayed to make a timed public-IP request. The result identifies success, elapsed time and the public IP, or provides the connection error. Proxy passwords are never displayed.

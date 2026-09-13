@@ -12,6 +12,7 @@
 class StatusBar;
 class TrayIconMenu;
 class QWidgetAction;
+class QToolButton;
 
 class RSSGUARD_DLLSPEC FormMain : public QMainWindow {
     Q_OBJECT
@@ -97,9 +98,12 @@ class RSSGUARD_DLLSPEC FormMain : public QMainWindow {
   private:
     void createConnections();
     void setupIcons();
+    void updateThemeToggle();
+    void toggleLightDarkTheme();
 
     QScopedPointer<Ui::FormMain> m_ui;
     QWidgetAction* m_actionToolbarMainMenu;
+    QToolButton* m_themeToggle = nullptr;
     StatusBar* m_statusBar;
     bool m_feedUpdatesStopRequested = false;
 };

@@ -2,6 +2,16 @@
 
 ## Torrent automation development build
 
+- Build 53 synchronizes persistent green per-client send ticks between article notifications, the main article context menu and automatic sends.
+- Capability tests retry one transient status failure, explain API limitations precisely, and fill **Capacity GB** only when a server reports an exact total capacity.
+- Client rows now show the configured name plus the underlying client type in secondary text.
+- Added independent enable switches for the cleanup age, ratio, inactivity, per-run limit and target-free-space controls. Disabled removal limits retain an internal hard cap of 25 per run.
+- Added **Run dry test now** to simulate routing and cleanup against the most recently fetched eligible items without sending or deleting anything.
+- Added warnings when users enable cleanup, downloaded-data deletion, unattended removal, high removal counts, or disable cleanup safeguards. Downloaded-data deletion and cleanup with no eligibility filters now always require confirmation.
+- Added a configurable 10 GB default reservation for torrents whose links do not declare their size; magnet `xl` values are used when present.
+- Added **Test proxy connection** under Network & web, reporting success/failure, elapsed time and the public IP reached through the selected proxy.
+- Added a top-right one-click switch between RSS Guard's bundled minimal-light and minimal-dark skins.
+- Added the torrent-integration contributor attribution and lawful-use notice to Help > About RSS Guard.
 - Added raised, hover and visibly pressed notification-button states, followed by a persistent **Sending…** state while the request is active.
 - Successfully sent notification articles are now marked with a green completed band; selection advances to the next unprocessed article.
 - Added optional per-client colour swatches to the main article **Send to Torrent Client** context menu and its default-client shortcut.
@@ -50,7 +60,7 @@
 - Added qBittorrent 5.2 authentication compatibility: HTTP 204 login responses and `QBT_SID_...` session cookies, while retaining older HTTP 200/`Ok.`/`SID` support.
 - Added matching qBittorrent Origin and Referer headers and robust credential form encoding.
 - Corrected Flood results: HTTP 202 empty responses mean queued/accepted, not zero accepted; HTTP 207 remains partial success; ambiguous HTTP 500 responses now advise checking Flood before retrying.
-- Changed the dedicated Windows portable workflow to run automatically on pushes to `master` as well as manually.
+- Changed the dedicated Windows portable workflow to run automatically when its build trigger is updated on `feature/torrent-automation`, as well as manually.
 - Limited the custom distribution workflow to the required Windows 10/11 x64 Qt 6 WebEngine portable package.
 
 ## 2026-09-08 — Initial implementation

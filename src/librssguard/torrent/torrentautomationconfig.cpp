@@ -47,13 +47,21 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.retryMinutes = root.value(QStringLiteral("retryMinutes")).toInt(1);
   config.historyLimit = root.value(QStringLiteral("historyLimit")).toInt(500);
   config.roundRobinCursor = root.value(QStringLiteral("roundRobinCursor")).toInt(0);
+  config.unknownTorrentSizeBytes = root.value(QStringLiteral("unknownTorrentSizeBytes"))
+                                     .toVariant().toLongLong();
+  if (config.unknownTorrentSizeBytes <= 0) config.unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
   config.deleteData = root.value(QStringLiteral("deleteData")).toBool(false);
   config.cleanupRequireConfirmation = root.value(QStringLiteral("cleanupRequireConfirmation")).toBool(true);
+  config.minimumSeedHoursEnabled = root.value(QStringLiteral("minimumSeedHoursEnabled")).toBool(true);
   config.minimumSeedHours = root.value(QStringLiteral("minimumSeedHours")).toInt(168);
+  config.minimumRatioEnabled = root.value(QStringLiteral("minimumRatioEnabled")).toBool(true);
   config.minimumRatio = root.value(QStringLiteral("minimumRatio")).toDouble(1.0);
+  config.minimumInactiveHoursEnabled = root.value(QStringLiteral("minimumInactiveHoursEnabled")).toBool(true);
   config.minimumInactiveHours = root.value(QStringLiteral("minimumInactiveHours")).toInt(24);
+  config.maximumRemovalsEnabled = root.value(QStringLiteral("maximumRemovalsEnabled")).toBool(true);
   config.maximumRemovalsPerRun = root.value(QStringLiteral("maximumRemovalsPerRun")).toInt(1);
+  config.cleanupStopFreeEnabled = root.value(QStringLiteral("cleanupStopFreeEnabled")).toBool(true);
   config.cleanupStopFreeBytes = root.value(QStringLiteral("cleanupStopFreeBytes")).toVariant().toLongLong();
   if (config.cleanupStopFreeBytes <= 0) config.cleanupStopFreeBytes = 40LL * 1024 * 1024 * 1024;
 
@@ -100,13 +108,19 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("retryMinutes"), retryMinutes);
   root.insert(QStringLiteral("historyLimit"), historyLimit);
   root.insert(QStringLiteral("roundRobinCursor"), roundRobinCursor);
+  root.insert(QStringLiteral("unknownTorrentSizeBytes"), unknownTorrentSizeBytes);
   root.insert(QStringLiteral("cleanupEnabled"), cleanupEnabled);
   root.insert(QStringLiteral("deleteData"), deleteData);
   root.insert(QStringLiteral("cleanupRequireConfirmation"), cleanupRequireConfirmation);
+  root.insert(QStringLiteral("minimumSeedHoursEnabled"), minimumSeedHoursEnabled);
   root.insert(QStringLiteral("minimumSeedHours"), minimumSeedHours);
+  root.insert(QStringLiteral("minimumRatioEnabled"), minimumRatioEnabled);
   root.insert(QStringLiteral("minimumRatio"), minimumRatio);
+  root.insert(QStringLiteral("minimumInactiveHoursEnabled"), minimumInactiveHoursEnabled);
   root.insert(QStringLiteral("minimumInactiveHours"), minimumInactiveHours);
+  root.insert(QStringLiteral("maximumRemovalsEnabled"), maximumRemovalsEnabled);
   root.insert(QStringLiteral("maximumRemovalsPerRun"), maximumRemovalsPerRun);
+  root.insert(QStringLiteral("cleanupStopFreeEnabled"), cleanupStopFreeEnabled);
   root.insert(QStringLiteral("cleanupStopFreeBytes"), cleanupStopFreeBytes);
 
   QJsonArray policies;

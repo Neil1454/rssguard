@@ -27,6 +27,7 @@
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
 #include "torrent/torrentextractor.h"
+#include "torrent/torrentsendhistory.h"
 
 #include <QClipboard>
 #include <QCheckBox>
@@ -38,6 +39,8 @@
 #include <QMessageBox>
 #include <QProcess>
 #include <QPixmap>
+#include <QPainter>
+#include <QPen>
 #include <QScrollBar>
 #include <QTimer>
 
@@ -701,14 +704,37 @@ void MessagesView::initializeContextMenu() {
     TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
   QMenu* torrent_menu = new QMenu(tr("Send to torrent client"), m_contextMenu);
   torrent_menu->setIcon(qApp->icons()->fromTheme(QSL("folder-download"), QSL("go-down")));
-  const auto clientColourIcon = [](const TorrentClientConfig& client) {
+  const auto clientColourIcon = [](const TorrentClientConfig& client, bool sent) {
+    if (sent) {
+      QPixmap tick(16, 16); tick.fill(Qt::transparent);
+      QPainter painter(&tick);
+      painter.setRenderHint(QPainter::Antialiasing);
+      painter.setPen(QPen(QColor(QStringLiteral("#16803a")), 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+      painter.drawLine(QPointF(2.5, 8.5), QPointF(6.5, 12.5));
+      painter.drawLine(QPointF(6.5, 12.5), QPointF(14, 3.5));
+      return QIcon(tick);
+    }
     if (!client.colorContextMenus) return QIcon();
     const QColor colour(client.buttonColor);
     if (!colour.isValid()) return QIcon();
     QPixmap swatch(16, 16); swatch.fill(colour); return QIcon(swatch);
   };
+  TorrentSendHistory* sendHistory = TorrentSendHistory::instance(qApp);
   for (const TorrentClientConfig& client : torrent_clients) {
-    QAction* action = torrent_menu->addAction(clientColourIcon(client), client.name);
+    bool alreadySent = false;
+    bool sawTorrent = false;
+    for (const Message& selected : selected_messages) {
+      if (TorrentExtractor::extract(selected).isEmpty()) continue;
+      sawTorrent = true;
+      if (!sendHistory->wasSent(selected.m_id, client.id)) {
+        alreadySent = false;
+        break;
+      }
+      alreadySent = true;
+    }
+    alreadySent = alreadySent && sawTorrent;
+    QAction* action = torrent_menu->addAction(clientColourIcon(client, alreadySent),
+                                               alreadySent ? tr("✓ %1").arg(client.name) : client.name);
     action->setToolTip(QStringLiteral("%1 — %2").arg(TorrentClientConfig::typeName(client.type), client.baseUrl));
     connect(action, &QAction::triggered, this, [this, client, selected_messages]() {
       sendToTorrentClient(client, selected_messages);
@@ -724,7 +750,19 @@ void MessagesView::initializeContextMenu() {
     return client.isDefault;
   });
   if (default_client != torrent_clients.cend()) {
-    QAction* send_default = m_contextMenu->addAction(clientColourIcon(*default_client),
+    bool defaultSent = false;
+    bool sawDefaultTorrent = false;
+    for (const Message& selected : selected_messages) {
+      if (TorrentExtractor::extract(selected).isEmpty()) continue;
+      sawDefaultTorrent = true;
+      if (!sendHistory->wasSent(selected.m_id, default_client->id)) {
+        defaultSent = false;
+        break;
+      }
+      defaultSent = true;
+    }
+    defaultSent = defaultSent && sawDefaultTorrent;
+    QAction* send_default = m_contextMenu->addAction(clientColourIcon(*default_client, defaultSent),
       tr("Send to default torrent client (%1)").arg(default_client->name));
     connect(send_default, &QAction::triggered, this, [this, client = *default_client, selected_messages]() {
       sendToTorrentClient(client, selected_messages);
@@ -801,7 +839,11 @@ void MessagesView::sendToTorrentClient(const TorrentClientConfig& config, const 
 
   TorrentClient* client = TorrentClient::create(config, this);
   if (client == nullptr) return;
-  connect(client, &TorrentClient::addFinished, this, [this, client, extraction](int added, int failed, const QString& message) {
+  QList<int> processedMessageIds;
+  for (const Message& selected : messages)
+    if (!TorrentExtractor::extract(selected).isEmpty()) processedMessageIds.append(selected.m_id);
+  connect(client, &TorrentClient::addFinished, this, [this, client, extraction, config, processedMessageIds](int added, int failed, const QString& message) {
+    if (added > 0 && failed == 0) TorrentSendHistory::instance(qApp)->markSent(processedMessageIds, config.id);
     QString details = message;
     if (extraction.messagesWithoutTorrent > 0)
       details += tr("\n%1 selected article(s) contained no usable torrent link.").arg(extraction.messagesWithoutTorrent);

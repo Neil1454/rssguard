@@ -36,6 +36,8 @@ The editor changes its URL example and help text when the client type changes. I
 
 The save path is a path on the remote torrent server, not necessarily a folder on the RSS Guard computer. **Use RSS Guard proxy** inherits **Tools > Settings > Network & web > Network proxy**; disable it for a direct LAN connection.
 
+The global Network proxy page includes **Test proxy connection**. It tests the exact values currently displayed and reports elapsed time and the public IP reached through the proxy without showing the password.
+
 ## Version compatibility
 
 RSS Guard detects the version or protocol level during **Test connection** wherever the upstream API exposes it. Compatibility is selected automatically; there is no manual version switch.

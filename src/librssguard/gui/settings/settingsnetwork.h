@@ -8,6 +8,8 @@
 #include "ui_settingsnetwork.h"
 
 class NetworkProxyDetails;
+class QLabel;
+class QPushButton;
 
 class SettingsNetwork : public SettingsPanel {
     Q_OBJECT
@@ -22,8 +24,13 @@ class SettingsNetwork : public SettingsPanel {
     virtual void saveSettings();
     virtual void loadUi();
 
+  private slots:
+    void testProxyConnection();
+
   private:
     NetworkProxyDetails* m_proxyDetails;
+    QPushButton* m_testProxy = nullptr;
+    QLabel* m_proxyTestResult = nullptr;
     Ui::SettingsNetwork* m_ui;
 };
 

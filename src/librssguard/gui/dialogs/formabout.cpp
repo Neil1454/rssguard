@@ -149,7 +149,10 @@ void FormAbout::loadLicenseAndInformation() {
                              "<ul><li><a href=\"mailto://%1\">%1</a> ~e-mail</li>"
                              "<li><a href=\"%2\">%2</a> ~website</li></ul>"
                              "You can obtain source code for %5 from its website."
-                             "<br><br><br>Copyright (C) 2011-%3 %4</body>")
+                             "<br><br><br>Copyright (C) 2011-%3 %4"
+                             "<br><br>Torrent-related integration added by Neil Sampson (aka MonsterDK)."
+                             "<br><small>Torrent integrations must be used only for lawful purposes. "
+                             "Illegal activity is strictly prohibited.</small></body>")
                             .arg(QSL(APP_EMAIL),
                                  QSL(APP_URL),
                                  QString::number(QDateTime::currentDateTime().date().year()),

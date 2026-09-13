@@ -215,6 +215,8 @@ set(SOURCES
   torrent/torrentautomationengine.h
   torrent/torrentextractor.cpp
   torrent/torrentextractor.h
+  torrent/torrentsendhistory.cpp
+  torrent/torrentsendhistory.h
   gui/tabbar.cpp
   gui/tabbar.h
   gui/tabcontent.cpp

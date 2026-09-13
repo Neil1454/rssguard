@@ -6,6 +6,7 @@
 #include "torrent/torrentautomationconfig.h"
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
+#include "core/message.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -13,7 +14,6 @@
 #include <QQueue>
 
 class Feed;
-class Message;
 
 class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     Q_OBJECT
@@ -24,6 +24,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
 
     bool busy() const;
     QStringList recentActivity() const;
+    void runDryTest();
 
   signals:
     void activityAdded(const QString& text);
@@ -35,13 +36,14 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       QString title;
       QString url;
       QString feedId;
+      int messageId = 0;
       QStringList allowedClientIds;
       qint64 sizeBytes = 0;
       int attempt = 0;
     };
 
     explicit TorrentAutomationEngine(QObject* parent = nullptr);
-    void enqueue(const QHash<Feed*, QList<Message>>& articles);
+    void enqueue(const QHash<Feed*, QList<Message>>& articles, bool forceDryRun = false);
     bool ruleMatches(const TorrentAutomationRule& rule, const QString& feedId, const Message& message) const;
     void beginBatch();
     void queryNextClient();
@@ -70,6 +72,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     int m_queryIndex = 0;
     int m_cleanupCount = 0;
     bool m_busy = false;
+    bool m_forcedDryRun = false;
+    QHash<Feed*, QList<Message>> m_lastArticles;
 };
 
 #endif // TORRENTAUTOMATIONENGINE_H

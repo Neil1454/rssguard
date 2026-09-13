@@ -10,7 +10,6 @@
 #include "ui_articlelistnotification.h"
 
 #include <QHash>
-#include <QSet>
 
 class Feed;
 class ArticleListNotificationModel;
@@ -59,7 +58,6 @@ class ArticleListNotification : public BaseToastNotification {
     ArticleListNotificationModel* m_model;
     QHash<Feed*, QList<Message>> m_newMessages;
     QGridLayout* m_torrentActionsLayout = nullptr;
-    QHash<int, QSet<QString>> m_sentClientsByMessage;
     bool m_preview = false;
     bool m_previewTorrentButtons = false;
 };

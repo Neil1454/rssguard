@@ -55,6 +55,14 @@ Client-specific checks:
 - Disabled-list layout: enabled entries are numbered contiguously; disabled entries are greyed, unnumbered, and placed at the bottom.
 - Client colours: every common colour and the system default persist after restart; notification-button, article-menu and settings-list placement can be enabled independently.
 - Notification send feedback: buttons visibly depress, show an in-progress label, and fully successful article rows turn green; failures and partial successes do not.
+- Send history: a successful destination shows a green tick in both the notification and main article context menu, persists after restart, and updates both locations regardless of where the send began.
+- Capability reliability: one transient status failure is retried; exact server-reported total capacity populates Capacity GB; unavailable filesystem totals retain manual capacity and display a reason.
+- Client identity: automation rows display the configured name, configured colour and underlying client type.
+- Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
+- Manual dry test: evaluates the latest fetched eligible items, writes concise DRY RUN routing/cleanup decisions, and performs no add/remove/delete request.
+- Unknown-size reservation: magnet `xl` is honoured and links without a declared size reserve the configured fallback.
+- Proxy test: correct, incorrect, timed-out and authenticated SOCKS5/HTTP proxy settings report clear results without exposing credentials.
+- Theme toggle: the top-right control switches immediately between bundled minimal-light and minimal-dark skins and persists the selection.
 - Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
 - Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
 - Windows palette: unselected client rows do not display forced dark alternate bands.

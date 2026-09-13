@@ -29,6 +29,7 @@
 #include "miscellaneous/mutex.h"
 #include "miscellaneous/settings.h"
 #include "miscellaneous/settingskeys.h"
+#include "miscellaneous/skinfactory.h"
 #include "miscellaneous/thread.h"
 #include "network-web/cookiejar.h"
 #include "network-web/webfactory.h"
@@ -62,6 +63,13 @@ FormMain::FormMain(QWidget* parent, Qt::WindowFlags f)
   // setAttribute(Qt::WA_WindowPropagation, true);
   m_ui->setupUi(this);
   qApp->setMainForm(this);
+
+  m_themeToggle = new QToolButton(m_ui->m_menuBar);
+  m_themeToggle->setAutoRaise(true);
+  m_themeToggle->setAccessibleName(tr("Toggle light and dark mode"));
+  m_ui->m_menuBar->setCornerWidget(m_themeToggle, Qt::TopRightCorner);
+  connect(m_themeToggle, &QToolButton::clicked, this, &FormMain::toggleLightDarkTheme);
+  updateThemeToggle();
 
   setWindowIcon(qApp->desktopAwareIcon());
   setWindowTitle(QSL(APP_LONG_NAME));
@@ -124,6 +132,22 @@ FormMain::FormMain(QWidget* parent, Qt::WindowFlags f)
 
 FormMain::~FormMain() {
   qDebugNN << LOGSEC_GUI << "Destroying FormMain instance.";
+}
+
+void FormMain::updateThemeToggle() {
+  const bool dark = qApp->skins()->selectedSkinName() == QSL(APP_SKIN_DEFAULT_DARK);
+  const QString iconName = dark ? QStringLiteral("weather-clear") : QStringLiteral("weather-clear-night");
+  const QIcon icon = qApp->icons()->fromTheme(iconName);
+  m_themeToggle->setIcon(icon);
+  m_themeToggle->setText(icon.isNull() ? (dark ? QStringLiteral("☀") : QStringLiteral("☾")) : QString());
+  m_themeToggle->setToolTip(dark ? tr("Switch to light mode") : tr("Switch to dark mode"));
+}
+
+void FormMain::toggleLightDarkTheme() {
+  const bool dark = qApp->skins()->selectedSkinName() == QSL(APP_SKIN_DEFAULT_DARK);
+  qApp->skins()->setCurrentSkinName(dark ? QSL(APP_SKIN_DEFAULT) : QSL(APP_SKIN_DEFAULT_DARK));
+  qApp->reloadCurrentSkin(true);
+  updateThemeToggle();
 }
 
 TrayIconMenu* FormMain::trayMenu() {

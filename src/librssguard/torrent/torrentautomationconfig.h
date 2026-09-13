@@ -53,14 +53,20 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   int retryMinutes = 1;
   int historyLimit = 500;
   int roundRobinCursor = 0;
+  qint64 unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
 
   bool cleanupEnabled = false;
   bool deleteData = false;
   bool cleanupRequireConfirmation = true;
+  bool minimumSeedHoursEnabled = true;
   int minimumSeedHours = 168;
+  bool minimumRatioEnabled = true;
   double minimumRatio = 1.0;
+  bool minimumInactiveHoursEnabled = true;
   int minimumInactiveHours = 24;
+  bool maximumRemovalsEnabled = true;
   int maximumRemovalsPerRun = 1;
+  bool cleanupStopFreeEnabled = true;
   qint64 cleanupStopFreeBytes = 40LL * 1024 * 1024 * 1024;
 
   QList<TorrentAutomationClientPolicy> clients;

@@ -1,6 +1,6 @@
 # Native torrent-client integration
 
-The `master` branch of this fork adds native torrent sending to RSS Guard 5.2.6 development source. It is intentionally separated into `src/librssguard/torrent/` with narrow hooks in settings, article actions, and article notifications.
+The `feature/torrent-automation` branch of this fork adds native torrent sending and guarded automation to RSS Guard 5.2.6 development source. It is intentionally separated into `src/librssguard/torrent/` with narrow hooks in settings, article actions, and article notifications.
 
 ## User workflow
 
@@ -16,11 +16,13 @@ When a new-article notification contains a usable torrent link, the notification
 
 Successful-send dialogs can be disabled either from the dialog itself or with **Show confirmation after successful torrent sends** in Torrent clients settings. Failures remain visible.
 
-This feature is manual. It does not automatically send newly fetched feed entries.
+Manual sending remains available independently. The optional **Torrent automation** settings section can also route newly fetched matching entries automatically or simulate its decisions in dry-run mode.
 
 Clients can be retained but disabled, assigned a numbered display priority and colour, and checked together with **Test all enabled**. Colour placement is independently selectable for notification buttons, article context menus, and settings/automation lists. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
 
 Notification torrent buttons have hover, pressed and in-progress feedback. After a complete successful send, the affected article row is shown with a green completed band and selection advances to the next unprocessed article. Partial or failed sends are not marked complete.
+
+Successful destinations are saved per article and client. Green ticks are synchronized between notification buttons and the main-window **Send to torrent client** context menu, including automatic sends.
 
 ## Torrent automation
 
@@ -33,9 +35,15 @@ Notification torrent buttons have hover, pressed and in-progress feedback. After
 - Persists processed-link protection, allocation records, retries and a visible activity history.
 - Queries live workload and torrent lists from qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla, with live disk-space checks where their API exposes it and configured-capacity fallback elsewhere.
 - Marks supported submissions with `rssguard-auto` so cleanup cannot select unrelated torrents.
-- Provides opt-in cleanup with minimum seeding age, ratio, inactivity, confirmation and per-run removal limits. Deleting downloaded data is separately disabled by default.
+- Provides opt-in cleanup with independently enabled seeding-age, ratio, inactivity, target-space and per-run limits. Deleting downloaded data is separately disabled by default and always requires confirmation.
+- Allows each cleanup condition to be enabled independently, while retaining an internal 25-removal emergency cap when the user limit is disabled.
+- Provides a manual dry-run command, transient status retry, exact-capacity autofill where supported, concise capability explanations, and a configurable size reservation for unknown torrents.
 
-Safe marked cleanup is initially limited to qBittorrent and Transmission. Other adapters remain routing-only for deletion until they can prove ownership of a torrent without unsafe remote filesystem commands.
+Safe marked cleanup is capability-gated per client. It is offered only after the authenticated adapter can list torrents and exposes its supported removal operation. rTorrent can remove the torrent entry but deliberately refuses downloaded-data deletion; servers that cannot prove RSS Guard ownership remain routing-only.
+
+## Appearance and proxy diagnostics
+
+RSS Guard already provides bundled light and dark skins. This fork adds a one-click top-right light/dark switch while retaining full skin controls under **User interface**. **Network & web > Network proxy** also includes a test button that reports connectivity, elapsed time and the public IP reached through the displayed proxy settings.
 
 ## Architecture
 
@@ -139,6 +147,9 @@ Non-secret client fields are stored as compact JSON under `TorrentClients/client
 - `src/librssguard/torrent/torrentclient.{h,cpp}`
 - `src/librssguard/torrent/torrentclientconfig.{h,cpp}`
 - `src/librssguard/torrent/torrentextractor.{h,cpp}`
+- `src/librssguard/torrent/torrentsendhistory.{h,cpp}`
+- `src/librssguard/torrent/torrentautomationconfig.{h,cpp}`
+- `src/librssguard/torrent/torrentautomationengine.{h,cpp}`
 - `src/librssguard/gui/settings/settingstorrentclients.{h,cpp}`
 - `docs/source/features/torrent-clients.md`
 - `tests/torrent/test_torrentextractor.cpp`
@@ -166,11 +177,11 @@ Non-secret client fields are stored as compact JSON under `TorrentClients/client
 
 ## Upstream maintenance
 
-The maintained fork branch is `master`. For a future upstream refresh:
+The maintained development branch is `feature/torrent-automation`. For a future upstream refresh:
 
 ```bash
 git fetch upstream
-git rebase upstream/master master
+git rebase upstream/master feature/torrent-automation
 ```
 
-Resolve conflicts primarily in the narrow UI hooks named above. Run the extraction test, all RSS Guard tests, and the Windows portable workflow. GitHub `master` is the canonical project state.
+Resolve conflicts primarily in the narrow UI hooks named above. Run the extraction test, all RSS Guard tests, and the Windows portable workflow. The latest successful Windows artifact from `feature/torrent-automation` is the canonical test package.
