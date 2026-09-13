@@ -2,6 +2,10 @@
 
 ## Torrent automation development build
 
+- Added raised, hover and visibly pressed notification-button states, followed by a persistent **Sending…** state while the request is active.
+- Successfully sent notification articles are now marked with a green completed band; selection advances to the next unprocessed article.
+- Added optional per-client colour swatches to the main article **Send to Torrent Client** context menu and its default-client shortcut.
+- Split client-colour placement into independent notification-button, context-menu and settings/automation-list choices.
 - Added comprehensive mouse-over explanations across General, Clients and limits, RSS rules, Safe cleanup and Activity.
 - Replaced manual internal feed-ID entry with selection from feeds already configured in RSS Guard, plus an explicit all-feeds choice and rule validation.
 - Added persistent, non-destructive per-client capability detection for connection, workload, disk space, torrent listing and safe removal, with selected/all-client testing.
