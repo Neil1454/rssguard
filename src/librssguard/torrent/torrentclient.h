@@ -57,6 +57,8 @@ class RSSGUARD_DLLSPEC TorrentClient : public QObject {
     virtual void addTorrents(const QStringList& urls) = 0;
     virtual void fetchStatus();
     virtual void removeTorrent(const QString& hash, bool deleteData);
+    virtual bool supportsLiveStatus() const;
+    virtual bool supportsRemoval() const;
 
     static TorrentClient* create(const TorrentClientConfig& config, QObject* parent = nullptr);
 
@@ -83,6 +85,8 @@ class QBittorrentClient final : public TorrentClient {
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
     void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void authenticate(const std::function<void(bool, const QString&)>& continuation);
@@ -97,6 +101,8 @@ class TransmissionClient final : public TorrentClient {
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
     void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void rpc(const QJsonObject& request, const std::function<void(QNetworkReply*, const QJsonObject&)>& callback, bool retry = true);
@@ -144,6 +150,8 @@ class DelugeClient final : public TorrentClient {
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
     void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void rpc(const QString& method,
@@ -182,6 +190,8 @@ class PorlaClient final : public TorrentClient {
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
     void removeTorrent(const QString& hash, bool deleteData) override;
+    bool supportsLiveStatus() const override;
+    bool supportsRemoval() const override;
 
   private:
     void rpc(const QString& method,
