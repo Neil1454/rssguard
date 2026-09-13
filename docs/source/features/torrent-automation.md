@@ -14,7 +14,7 @@ Rules are checked from top to bottom and can match selected feeds, required/excl
 
 **Test selected client** and **Test all clients** perform non-destructive capability discovery. The saved result shows connection/authentication, live workload, free-space, torrent-list and safe-removal availability. A test never adds or deletes a torrent, and running it again replaces the previous result.
 
-Every control, table heading and capability indicator has mouse-over help. Client colours can be shown independently on notification buttons and in settings/automation lists.
+Every control, table heading and capability indicator has mouse-over help. Client colours can be shown independently on notification buttons, article context menus and settings/automation lists. Notification actions have clear pressed/in-progress states, and successfully processed rows receive a green completion band.
 
 The runtime ledger records processed links, routing activity and managed allocations so restarting RSS Guard does not resend the same URL. Failed placement is held and retried with a bounded retry count.
 
