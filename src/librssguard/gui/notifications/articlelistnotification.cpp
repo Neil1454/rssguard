@@ -208,37 +208,73 @@ void ArticleListNotification::rebuildTorrentActions() {
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     auto* button = new QPushButton(config.name, this);
+    button->setFlat(false);
+    button->setAutoDefault(false);
+    button->setCursor(Qt::PointingHandCursor);
     button->setMinimumHeight(qMax(32, button->sizeHint().height()));
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     const QColor buttonColor(config.colorNotificationButtons ? config.buttonColor : QString());
     if (buttonColor.isValid()) {
       const QString textColor = buttonColor.lightness() < 145 ? QStringLiteral("#ffffff") : QStringLiteral("#111111");
-      button->setStyleSheet(QStringLiteral("QPushButton { background-color: %1; color: %2; border: 1px solid %1; padding: 4px 8px; } QPushButton:disabled { background-color: #b0b0b0; color: #666666; border-color: #999999; }")
-                              .arg(buttonColor.name(), textColor));
+      const QColor hoverColor = buttonColor.lighter(112);
+      const QColor pressedColor = buttonColor.darker(135);
+      button->setStyleSheet(QStringLiteral(
+        "QPushButton { background-color: %1; color: %2; border: 2px outset %1; border-radius: 3px; padding: 5px 9px; }"
+        "QPushButton:hover { background-color: %3; }"
+        "QPushButton:pressed { background-color: %4; border-style: inset; padding-top: 7px; padding-left: 11px; }"
+        "QPushButton:disabled { background-color: #b0b0b0; color: #666666; border-color: #999999; }")
+          .arg(buttonColor.name(), textColor, hoverColor.name(), pressedColor.name()));
     }
+    else button->setStyleSheet(QStringLiteral(
+      "QPushButton { border: 2px outset palette(mid); border-radius: 3px; padding: 5px 9px; background: palette(button); }"
+      "QPushButton:hover { background: palette(light); }"
+      "QPushButton:pressed { background: palette(dark); border-style: inset; padding-top: 7px; padding-left: 11px; }"));
     button->setEnabled(m_preview || hasTorrent);
     button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
                                   : tr("No torrent link found in the selected article(s)"));
     if (m_preview) button->setToolTip(tr("Preview: %1 (priority %2)").arg(config.name).arg(config.priority));
-    else connect(button, &QPushButton::clicked, this, [this, config]() { sendSelectedToTorrentClient(config); });
+    else connect(button, &QPushButton::clicked, this, [this, config, button]() {
+      button->setText(tr("Sending to %1…").arg(config.name));
+      button->setEnabled(false);
+      sendSelectedToTorrentClient(config);
+    });
     m_torrentActionsLayout->addWidget(button, buttonIndex / 2, buttonIndex % 2);
     ++buttonIndex;
   }
 }
 
 void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientConfig& config) {
-  const TorrentExtractionResult extraction = TorrentExtractor::extract(selectedMessages());
+  const QList<Message> selected = selectedMessages();
+  const TorrentExtractionResult extraction = TorrentExtractor::extract(selected);
 
   if (extraction.urls.isEmpty()) {
     QMessageBox::warning(this,
                          tr("No torrent links found"),
                          tr("No magnet link, .torrent URL, or torrent enclosure was found in the selected article(s)."));
+    rebuildTorrentActions();
     return;
   }
 
+  QList<int> processedMessageIds;
+  for (const Message& message : selected)
+    if (!TorrentExtractor::extract(message).isEmpty()) processedMessageIds.append(message.m_id);
+
   stopTimedClosing();
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::addFinished, this, [this, client](int added, int failed, const QString& message) {
+  connect(client, &TorrentClient::addFinished, this, [this, client, processedMessageIds](int added, int failed, const QString& message) {
+    if (added > 0 && failed == 0) {
+      for (int messageId : processedMessageIds) m_model->setMessageProcessed(messageId);
+      m_ui.m_treeArticles->selectionModel()->clearSelection();
+      m_ui.m_treeArticles->setCurrentIndex(QModelIndex());
+      for (int row = 0; row < m_model->rowCount({}); ++row) {
+        const QModelIndex candidate = m_model->index(row, 0);
+        if (m_model->isMessageProcessed(candidate)) continue;
+        m_ui.m_treeArticles->selectionModel()->select(candidate,
+          QItemSelectionModel::SelectionFlag::ClearAndSelect | QItemSelectionModel::SelectionFlag::Rows);
+        m_ui.m_treeArticles->setCurrentIndex(candidate);
+        break;
+      }
+    }
     if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
                                                QStringLiteral("showSuccessNotifications"),
                                                true).toBool()) {
@@ -254,6 +290,7 @@ void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientCon
       QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), message);
     }
     client->deleteLater();
+    rebuildTorrentActions();
     setupTimedClosing(false);
   });
   client->addTorrents(extraction.urls);
