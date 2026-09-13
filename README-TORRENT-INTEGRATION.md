@@ -24,9 +24,10 @@ Clients can be retained but disabled, assigned a numbered display priority and n
 
 **Tools > Settings > Torrent automation** adds an optional automation engine without changing the manual send workflow. It is disabled by default and starts in dry-run mode.
 
-- Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, weighted, or balanced policy.
-- Applies per-client active-download, managed-count, free-space, weight and fallback-capacity settings.
-- Supports ordered RSS rules with feed, text, exclusion, title-pattern and client-pool matching.
+- Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, priority-biased, or balanced policy.
+- Applies per-client active-download, managed-count, free-space, automation-priority and fallback-capacity settings.
+- Supports ordered RSS rules with selection from existing feeds, text, exclusion, title-pattern and client-pool matching.
+- Detects and remembers each client's non-destructive automation capabilities, individually or in a test-all run.
 - Persists processed-link protection, allocation records, retries and a visible activity history.
 - Queries live workload information from qBittorrent, Transmission, Deluge and Porla, with live disk-space checks where their API exposes it.
 - Marks supported submissions with `rssguard-auto` so cleanup cannot select unrelated torrents.
