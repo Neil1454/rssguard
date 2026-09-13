@@ -24,7 +24,7 @@ enum class TorrentRoutingStrategy {
 struct RSSGUARD_DLLSPEC TorrentAutomationClientPolicy {
   QString clientId;
   bool enabled = true;
-  int weight = 100;
+  int priority = 1;
   int maxActiveDownloads = 3;
   int maxManagedTorrents = 0;
   qint64 minimumFreeBytes = 20LL * 1024 * 1024 * 1024;
@@ -50,7 +50,7 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool dryRun = true;
   bool showNotifications = true;
   TorrentRoutingStrategy strategy = TorrentRoutingStrategy::Balanced;
-  int retryMinutes = 15;
+  int retryMinutes = 1;
   int historyLimit = 500;
   int roundRobinCursor = 0;
 
