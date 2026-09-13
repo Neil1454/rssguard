@@ -6,6 +6,7 @@
 #include "definitions/definitions.h"
 
 #include <QList>
+#include <QDateTime>
 #include <QString>
 
 class Settings;
@@ -29,6 +30,8 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString password;
   QString token;
   QString buttonColor;
+  bool colorNotificationButtons = true;
+  bool colorSettingsLists = true;
   bool enabled = true;
   int priority = 0;
   bool useRssGuardProxy = true;
@@ -36,6 +39,16 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString savePath;
   QString category;
   QStringList tags;
+
+  // Results of the latest non-destructive capability test.
+  bool capabilityTested = false;
+  bool capabilityConnected = false;
+  bool capabilityLiveStatus = false;
+  bool capabilityFreeSpace = false;
+  bool capabilityTorrentList = false;
+  bool capabilityRemoval = false;
+  QDateTime capabilityTestedAt;
+  QString capabilityDetail;
 
   bool isValid(QString* error = nullptr) const;
   static QString typeName(TorrentClientType type);
