@@ -53,7 +53,8 @@ Client-specific checks:
 - Client editor: changing the confirmation checkbox enables Apply; each client type changes the URL example and greys unsupported fields.
 - Client state/order: disabling a client preserves it but removes its menu and notification button; priorities reorder both locations with 1 first.
 - Disabled-list layout: enabled entries are numbered contiguously; disabled entries are greyed, unnumbered, and placed at the bottom.
-- Button colours: every common colour and the system default persist after restart, appear in live notifications and previews, and retain readable text.
+- Client colours: every common colour and the system default persist after restart; notification-button, article-menu and settings-list placement can be enabled independently.
+- Notification send feedback: buttons visibly depress, show an in-progress label, and fully successful article rows turn green; failures and partial successes do not.
 - Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
 - Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
