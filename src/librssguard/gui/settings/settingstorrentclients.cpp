@@ -71,9 +71,11 @@ namespace {
         }
         const int selectedColor = m_color->findData(initial.buttonColor);
         m_color->setCurrentIndex(selectedColor >= 0 ? selectedColor : 0);
-        m_color->setToolTip(tr("Colour used for this client's button on new-article notifications."));
+        m_color->setToolTip(tr("Colour assigned to this client. The options below choose where it appears."));
         m_colorNotifications = new QCheckBox(tr("Use this colour on notification buttons"), this);
         m_colorNotifications->setChecked(initial.colorNotificationButtons);
+        m_colorMenus = new QCheckBox(tr("Show this colour in Send to Torrent Client menus"), this);
+        m_colorMenus->setChecked(initial.colorContextMenus);
         m_colorLists = new QCheckBox(tr("Show this colour in settings and automation lists"), this);
         m_colorLists->setChecked(initial.colorSettingsLists);
         m_proxy = new QCheckBox(tr("Use RSS Guard proxy"), this);
@@ -91,8 +93,9 @@ namespace {
         m_form->addRow(tr("API token (optional):"), m_token);
         m_form->addRow(QString(), m_enabled);
         m_form->addRow(tr("Button priority:"), m_priority);
-        m_form->addRow(tr("Notification button colour:"), m_color);
+        m_form->addRow(tr("Client colour:"), m_color);
         m_form->addRow(QString(), m_colorNotifications);
+        m_form->addRow(QString(), m_colorMenus);
         m_form->addRow(QString(), m_colorLists);
         m_form->addRow(QString(), m_proxy);
         m_form->addRow(QString(), m_default);
@@ -110,6 +113,7 @@ namespace {
         m_category->setPlaceholderText(tr("Example: tv"));
         m_tags->setPlaceholderText(tr("Example: rss, automatic"));
         m_colorNotifications->setToolTip(tr("Apply the selected colour to this client's action button in RSS notification pop-ups."));
+        m_colorMenus->setToolTip(tr("Show the selected colour beside this client in article right-click Send to Torrent Client menus."));
         m_colorLists->setToolTip(tr("Display a colour swatch beside this client in Torrent clients and Torrent automation settings."));
 
         auto* capabilities = new QGroupBox(tr("Last detected automation capabilities"), this);
@@ -170,6 +174,7 @@ namespace {
         result.token = m_token->text();
         result.buttonColor = m_color->currentData().toString();
         result.colorNotificationButtons = m_colorNotifications->isChecked();
+        result.colorContextMenus = m_colorMenus->isChecked();
         result.colorSettingsLists = m_colorLists->isChecked();
         result.enabled = m_enabled->isChecked();
         result.priority = m_priority->value();
@@ -240,7 +245,7 @@ namespace {
       QLineEdit *m_name, *m_url, *m_username, *m_password, *m_token, *m_path, *m_category, *m_tags;
       QFormLayout* m_form;
       QComboBox *m_type, *m_color;
-      QCheckBox *m_enabled, *m_proxy, *m_default, *m_colorNotifications, *m_colorLists;
+      QCheckBox *m_enabled, *m_proxy, *m_default, *m_colorNotifications, *m_colorMenus, *m_colorLists;
       QSpinBox* m_priority;
   };
 }
