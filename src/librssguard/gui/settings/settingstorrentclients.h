@@ -35,6 +35,13 @@ class SettingsTorrentClients : public SettingsPanel {
     void normalizeClientOrder();
     void refreshList(int selected = -1);
     int selectedIndex() const;
+    QString recordCapabilities(const TorrentClientConfig& tested,
+                               bool connected,
+                               bool liveStatus,
+                               bool freeSpace,
+                               bool torrentList,
+                               bool removal,
+                               const QString& detail);
 
     QList<TorrentClientConfig> m_clients;
     QCheckBox* m_showSuccessNotifications = nullptr;
