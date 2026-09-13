@@ -14,10 +14,12 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QFont>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QPixmap>
@@ -70,6 +72,10 @@ namespace {
         const int selectedColor = m_color->findData(initial.buttonColor);
         m_color->setCurrentIndex(selectedColor >= 0 ? selectedColor : 0);
         m_color->setToolTip(tr("Colour used for this client's button on new-article notifications."));
+        m_colorNotifications = new QCheckBox(tr("Use this colour on notification buttons"), this);
+        m_colorNotifications->setChecked(initial.colorNotificationButtons);
+        m_colorLists = new QCheckBox(tr("Show this colour in settings and automation lists"), this);
+        m_colorLists->setChecked(initial.colorSettingsLists);
         m_proxy = new QCheckBox(tr("Use RSS Guard proxy"), this);
         m_proxy->setChecked(initial.useRssGuardProxy);
         m_default = new QCheckBox(tr("Default torrent client"), this);
@@ -86,6 +92,8 @@ namespace {
         m_form->addRow(QString(), m_enabled);
         m_form->addRow(tr("Button priority:"), m_priority);
         m_form->addRow(tr("Notification button colour:"), m_color);
+        m_form->addRow(QString(), m_colorNotifications);
+        m_form->addRow(QString(), m_colorLists);
         m_form->addRow(QString(), m_proxy);
         m_form->addRow(QString(), m_default);
         m_form->addRow(tr("Default save path (optional):"), m_path);
@@ -101,6 +109,33 @@ namespace {
         m_path->setPlaceholderText(tr("Example: /downloads/rss"));
         m_category->setPlaceholderText(tr("Example: tv"));
         m_tags->setPlaceholderText(tr("Example: rss, automatic"));
+        m_colorNotifications->setToolTip(tr("Apply the selected colour to this client's action button in RSS notification pop-ups."));
+        m_colorLists->setToolTip(tr("Display a colour swatch beside this client in Torrent clients and Torrent automation settings."));
+
+        auto* capabilities = new QGroupBox(tr("Last detected automation capabilities"), this);
+        auto* capabilityLayout = new QVBoxLayout(capabilities);
+        const auto addCapability = [capabilityLayout, capabilities](const QString& text, bool checked, const QString& tip) {
+          auto* box = new QCheckBox(text, capabilities);
+          box->setChecked(checked);
+          box->setEnabled(false);
+          box->setToolTip(tip);
+          capabilityLayout->addWidget(box);
+        };
+        addCapability(tr("Connection and authentication"), initial.capabilityConnected,
+                      tr("The most recent test successfully connected and authenticated."));
+        addCapability(tr("Live workload status"), initial.capabilityLiveStatus,
+                      tr("The client returned live downloading and seeding information."));
+        addCapability(tr("Live free disk space"), initial.capabilityFreeSpace,
+                      tr("The client API returned usable free-space information."));
+        addCapability(tr("Torrent listing"), initial.capabilityTorrentList,
+                      tr("The client returned its torrent list, including an empty list when no torrents exist."));
+        addCapability(tr("Safe removal API available"), initial.capabilityRemoval,
+                      tr("The adapter and tested status API support removal. No torrent is deleted during the test."));
+        auto* capabilityWhen = new QLabel(initial.capabilityTested
+          ? tr("Last tested: %1").arg(QLocale().toString(initial.capabilityTestedAt.toLocalTime(), QLocale::ShortFormat))
+          : tr("Not tested yet. Save the client, then use Test connection."), capabilities);
+        capabilityWhen->setWordWrap(true);
+        capabilityLayout->addWidget(capabilityWhen);
         connect(m_type, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { updateClientFields(); });
         connect(m_token, &QLineEdit::textChanged, this, [this]() { updateClientFields(); });
         connect(m_enabled, &QCheckBox::toggled, this, [this](bool enabled) {
@@ -111,6 +146,7 @@ namespace {
         m_form->labelForField(m_priority)->setEnabled(initial.enabled);
         updateClientFields();
         outer->addLayout(m_form);
+        outer->addWidget(capabilities);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
         connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
           TorrentClientConfig candidate = value();
@@ -133,6 +169,8 @@ namespace {
         result.password = m_password->text();
         result.token = m_token->text();
         result.buttonColor = m_color->currentData().toString();
+        result.colorNotificationButtons = m_colorNotifications->isChecked();
+        result.colorSettingsLists = m_colorLists->isChecked();
         result.enabled = m_enabled->isChecked();
         result.priority = m_priority->value();
         result.useRssGuardProxy = m_proxy->isChecked();
@@ -202,7 +240,7 @@ namespace {
       QLineEdit *m_name, *m_url, *m_username, *m_password, *m_token, *m_path, *m_category, *m_tags;
       QFormLayout* m_form;
       QComboBox *m_type, *m_color;
-      QCheckBox *m_enabled, *m_proxy, *m_default;
+      QCheckBox *m_enabled, *m_proxy, *m_default, *m_colorNotifications, *m_colorLists;
       QSpinBox* m_priority;
   };
 }
@@ -297,12 +335,16 @@ void SettingsTorrentClients::refreshList(int selected) {
     if (client.isDefault) text += tr(" (default)");
     auto* item = new QListWidgetItem(text, m_list);
     if (!client.enabled) item->setForeground(palette().color(QPalette::ColorGroup::Disabled, QPalette::ColorRole::Text));
-    if (!client.buttonColor.isEmpty()) {
+    if (client.colorSettingsLists && !client.buttonColor.isEmpty()) {
       QPixmap swatch(14, 14);
       swatch.fill(QColor(client.buttonColor));
       item->setIcon(QIcon(swatch));
     }
-    item->setToolTip(client.useRssGuardProxy ? tr("Uses RSS Guard proxy") : tr("Direct connection; proxy disabled"));
+    QString tip = client.useRssGuardProxy ? tr("Uses RSS Guard proxy") : tr("Direct connection; proxy disabled");
+    if (client.capabilityTested) tip += tr("\nLast test: %1\n%2")
+      .arg(QLocale().toString(client.capabilityTestedAt.toLocalTime(), QLocale::ShortFormat), client.capabilityDetail);
+    else tip += tr("\nAutomation capabilities have not been tested yet.");
+    item->setToolTip(tip);
   }
   if (!m_clients.isEmpty()) m_list->setCurrentRow(qBound(0, selected < 0 ? 0 : selected, static_cast<int>(m_clients.size()) - 1));
   updateButtons();
@@ -357,14 +399,59 @@ void SettingsTorrentClients::testClient() {
   const int row = selectedIndex();
   if (row < 0) return;
   m_test->setEnabled(false);
-  TorrentClient* client = TorrentClient::create(m_clients.at(row), this);
-  connect(client, &TorrentClient::testFinished, this, [this, client](bool success, const QString& message) {
-    m_test->setEnabled(true);
-    if (success) QMessageBox::information(this, tr("Torrent client connection"), message);
-    else QMessageBox::warning(this, tr("Torrent client connection"), message);
-    client->deleteLater();
+  const TorrentClientConfig config = m_clients.at(row);
+  TorrentClient* client = TorrentClient::create(config, this);
+  connect(client, &TorrentClient::testFinished, this, [this, client, config](bool success, const QString& message) {
+    if (!success || !client->supportsLiveStatus()) {
+      const QString report = recordCapabilities(config, success, false, false, false, false, message);
+      m_test->setEnabled(true);
+      refreshList(selectedIndex());
+      QMessageBox box(success ? QMessageBox::Information : QMessageBox::Warning,
+                      tr("Torrent client capability test"), report, QMessageBox::Ok, this);
+      box.setTextFormat(Qt::RichText); box.exec(); client->deleteLater(); return;
+    }
+    connect(client, &TorrentClient::statusFinished, this, [this, client, config, message](const TorrentClientStatus& status) {
+      const bool live = status.reachable;
+      const QString detail = message + QStringLiteral(" ") + status.detail;
+      const QString report = recordCapabilities(config, true, live, live && status.liveSpace, live,
+                                                 live && client->supportsRemoval(), detail);
+      m_test->setEnabled(true);
+      refreshList(selectedIndex());
+      QMessageBox box(live ? QMessageBox::Information : QMessageBox::Warning,
+                      tr("Torrent client capability test"), report, QMessageBox::Ok, this);
+      box.setTextFormat(Qt::RichText); box.exec(); client->deleteLater();
+    });
+    client->fetchStatus();
   });
   client->testConnection();
+}
+
+QString SettingsTorrentClients::recordCapabilities(const TorrentClientConfig& tested,
+                                                    bool connected,
+                                                    bool liveStatus,
+                                                    bool freeSpace,
+                                                    bool torrentList,
+                                                    bool removal,
+                                                    const QString& detail) {
+  for (TorrentClientConfig& config : m_clients) {
+    if (config.id != tested.id) continue;
+    config.capabilityTested = true;
+    config.capabilityConnected = connected;
+    config.capabilityLiveStatus = liveStatus;
+    config.capabilityFreeSpace = freeSpace;
+    config.capabilityTorrentList = torrentList;
+    config.capabilityRemoval = removal;
+    config.capabilityTestedAt = QDateTime::currentDateTimeUtc();
+    config.capabilityDetail = detail;
+    break;
+  }
+  TorrentClientConfig::save(settings(), m_clients);
+  dirtifySettings();
+  const auto mark = [](bool yes) { return yes ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"); };
+  return tr("<b>%1</b><br>%2 Connection and authentication<br>%3 Live workload status<br>%4 Live free disk space"
+            "<br>%5 Torrent listing<br>%6 Safe removal API<br><br>%7")
+    .arg(tested.name.toHtmlEscaped(), mark(connected), mark(liveStatus), mark(freeSpace), mark(torrentList),
+         mark(removal), detail.toHtmlEscaped());
 }
 
 void SettingsTorrentClients::testAllClients() {
@@ -391,18 +478,32 @@ void SettingsTorrentClients::testNextClient() {
     result.exec();
     m_testAllFailures = 0;
     m_testAll->setEnabled(true);
+    refreshList(selectedIndex());
     updateButtons();
     return;
   }
   const TorrentClientConfig config = m_testAllQueue.takeFirst();
   TorrentClient* client = TorrentClient::create(config, this);
   connect(client, &TorrentClient::testFinished, this, [this, client, config](bool success, const QString& message) {
-    if (!success) ++m_testAllFailures;
-    m_testAllResults.append(QStringLiteral("%1 <b>%2</b> — %3")
-                              .arg(success ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"),
-                                   config.name.toHtmlEscaped(), message.toHtmlEscaped()));
-    client->deleteLater();
-    testNextClient();
+    if (!success || !client->supportsLiveStatus()) {
+      if (!success) ++m_testAllFailures;
+      recordCapabilities(config, success, false, false, false, false, message);
+      m_testAllResults.append(QStringLiteral("%1 <b>%2</b> — %3")
+                                .arg(success ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"),
+                                     config.name.toHtmlEscaped(), message.toHtmlEscaped()));
+      client->deleteLater(); testNextClient(); return;
+    }
+    connect(client, &TorrentClient::statusFinished, this, [this, client, config, message](const TorrentClientStatus& status) {
+      const bool ok = status.reachable;
+      if (!ok) ++m_testAllFailures;
+      const QString detail = message + QStringLiteral(" ") + status.detail;
+      recordCapabilities(config, true, ok, ok && status.liveSpace, ok, ok && client->supportsRemoval(), detail);
+      m_testAllResults.append(QStringLiteral("%1 <b>%2</b> — %3")
+                                .arg(ok ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"),
+                                     config.name.toHtmlEscaped(), detail.toHtmlEscaped()));
+      client->deleteLater(); testNextClient();
+    });
+    client->fetchStatus();
   });
   client->testConnection();
 }
