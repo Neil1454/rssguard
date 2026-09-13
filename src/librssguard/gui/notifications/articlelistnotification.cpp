@@ -207,13 +207,21 @@ void ArticleListNotification::rebuildTorrentActions() {
   if (m_preview && !m_previewTorrentButtons) return;
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
-    auto* button = new QPushButton(config.name, this);
+    bool alreadySent = !messages.isEmpty();
+    for (const Message& message : messages) {
+      if (!m_sentClientsByMessage.value(message.m_id).contains(config.id)) {
+        alreadySent = false;
+        break;
+      }
+    }
+    auto* button = new QPushButton(alreadySent ? tr("✓ %1").arg(config.name) : config.name, this);
     button->setFlat(false);
     button->setAutoDefault(false);
     button->setCursor(Qt::PointingHandCursor);
     button->setMinimumHeight(qMax(32, button->sizeHint().height()));
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    const QColor buttonColor(config.colorNotificationButtons ? config.buttonColor : QString());
+    const QColor buttonColor(alreadySent ? QStringLiteral("#2eaf55")
+                                         : (config.colorNotificationButtons ? config.buttonColor : QString()));
     if (buttonColor.isValid()) {
       const QString textColor = buttonColor.lightness() < 145 ? QStringLiteral("#ffffff") : QStringLiteral("#111111");
       const QColor hoverColor = buttonColor.lighter(112);
@@ -229,9 +237,16 @@ void ArticleListNotification::rebuildTorrentActions() {
       "QPushButton { border: 2px outset palette(mid); border-radius: 3px; padding: 5px 9px; background: palette(button); }"
       "QPushButton:hover { background: palette(light); }"
       "QPushButton:pressed { background: palette(dark); border-style: inset; padding-top: 7px; padding-left: 11px; }"));
-    button->setEnabled(m_preview || hasTorrent);
-    button->setToolTip(hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
-                                  : tr("No torrent link found in the selected article(s)"));
+    if (alreadySent) {
+      button->setStyleSheet(QStringLiteral(
+        "QPushButton, QPushButton:disabled { background-color: #2eaf55; color: #ffffff; "
+        "border: 2px solid #19733a; border-radius: 3px; padding: 5px 9px; }"));
+    }
+    button->setEnabled(m_preview || (hasTorrent && !alreadySent));
+    button->setToolTip(alreadySent
+                         ? tr("The selected article torrent(s) were already sent successfully to %1").arg(config.name)
+                         : (hasTorrent ? tr("Send the selected article torrent(s) to %1").arg(config.name)
+                                       : tr("No torrent link found in the selected article(s)")));
     if (m_preview) button->setToolTip(tr("Preview: %1 (priority %2)").arg(config.name).arg(config.priority));
     else connect(button, &QPushButton::clicked, this, [this, config, button]() {
       button->setText(tr("Sending to %1…").arg(config.name));
@@ -261,18 +276,11 @@ void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientCon
 
   stopTimedClosing();
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::addFinished, this, [this, client, processedMessageIds](int added, int failed, const QString& message) {
+  connect(client, &TorrentClient::addFinished, this, [this, client, processedMessageIds, config](int added, int failed, const QString& message) {
     if (added > 0 && failed == 0) {
-      for (int messageId : processedMessageIds) m_model->setMessageProcessed(messageId);
-      m_ui.m_treeArticles->selectionModel()->clearSelection();
-      m_ui.m_treeArticles->setCurrentIndex(QModelIndex());
-      for (int row = 0; row < m_model->rowCount({}); ++row) {
-        const QModelIndex candidate = m_model->index(row, 0);
-        if (m_model->isMessageProcessed(candidate)) continue;
-        m_ui.m_treeArticles->selectionModel()->select(candidate,
-          QItemSelectionModel::SelectionFlag::ClearAndSelect | QItemSelectionModel::SelectionFlag::Rows);
-        m_ui.m_treeArticles->setCurrentIndex(candidate);
-        break;
+      for (int messageId : processedMessageIds) {
+        m_sentClientsByMessage[messageId].insert(config.id);
+        m_model->setMessageProcessed(messageId);
       }
     }
     if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
