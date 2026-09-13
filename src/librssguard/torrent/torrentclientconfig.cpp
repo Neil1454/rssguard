@@ -78,6 +78,8 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
     client.username = object.value(QStringLiteral("username")).toString();
     client.buttonColor = object.value(QStringLiteral("buttonColor")).toString();
+    client.colorNotificationButtons = object.value(QStringLiteral("colorNotificationButtons")).toBool(true);
+    client.colorSettingsLists = object.value(QStringLiteral("colorSettingsLists")).toBool(true);
     client.enabled = object.value(QStringLiteral("enabled")).toBool(true);
     client.priority = object.value(QStringLiteral("priority")).toInt(++legacyPriority);
     client.useRssGuardProxy = object.value(QStringLiteral("useRssGuardProxy")).toBool(true);
@@ -85,6 +87,14 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.savePath = object.value(QStringLiteral("savePath")).toString();
     client.category = object.value(QStringLiteral("category")).toString();
     for (const QJsonValue& tag : object.value(QStringLiteral("tags")).toArray()) client.tags.append(tag.toString());
+    client.capabilityTested = object.value(QStringLiteral("capabilityTested")).toBool(false);
+    client.capabilityConnected = object.value(QStringLiteral("capabilityConnected")).toBool(false);
+    client.capabilityLiveStatus = object.value(QStringLiteral("capabilityLiveStatus")).toBool(false);
+    client.capabilityFreeSpace = object.value(QStringLiteral("capabilityFreeSpace")).toBool(false);
+    client.capabilityTorrentList = object.value(QStringLiteral("capabilityTorrentList")).toBool(false);
+    client.capabilityRemoval = object.value(QStringLiteral("capabilityRemoval")).toBool(false);
+    client.capabilityTestedAt = QDateTime::fromString(object.value(QStringLiteral("capabilityTestedAt")).toString(), Qt::ISODate);
+    client.capabilityDetail = object.value(QStringLiteral("capabilityDetail")).toString();
     client.password = settings->password(SecretsGroup, client.id + QStringLiteral("/password")).toString();
     client.token = settings->password(SecretsGroup, client.id + QStringLiteral("/token")).toString();
     if (!client.id.isEmpty()) clients.append(client);
@@ -110,6 +120,8 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("baseUrl"), client.baseUrl.trimmed());
     object.insert(QStringLiteral("username"), client.username);
     object.insert(QStringLiteral("buttonColor"), client.buttonColor);
+    object.insert(QStringLiteral("colorNotificationButtons"), client.colorNotificationButtons);
+    object.insert(QStringLiteral("colorSettingsLists"), client.colorSettingsLists);
     object.insert(QStringLiteral("enabled"), client.enabled);
     object.insert(QStringLiteral("priority"), client.priority);
     object.insert(QStringLiteral("useRssGuardProxy"), client.useRssGuardProxy);
@@ -117,6 +129,14 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("savePath"), client.savePath);
     object.insert(QStringLiteral("category"), client.category);
     object.insert(QStringLiteral("tags"), QJsonArray::fromStringList(client.tags));
+    object.insert(QStringLiteral("capabilityTested"), client.capabilityTested);
+    object.insert(QStringLiteral("capabilityConnected"), client.capabilityConnected);
+    object.insert(QStringLiteral("capabilityLiveStatus"), client.capabilityLiveStatus);
+    object.insert(QStringLiteral("capabilityFreeSpace"), client.capabilityFreeSpace);
+    object.insert(QStringLiteral("capabilityTorrentList"), client.capabilityTorrentList);
+    object.insert(QStringLiteral("capabilityRemoval"), client.capabilityRemoval);
+    object.insert(QStringLiteral("capabilityTestedAt"), client.capabilityTestedAt.toUTC().toString(Qt::ISODate));
+    object.insert(QStringLiteral("capabilityDetail"), client.capabilityDetail);
     array.append(object);
 
     settings->setPassword(SecretsGroup, client.id + QStringLiteral("/password"), client.password);
