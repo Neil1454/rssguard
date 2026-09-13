@@ -18,7 +18,9 @@ Successful-send dialogs can be disabled either from the dialog itself or with **
 
 This feature is manual. It does not automatically send newly fetched feed entries.
 
-Clients can be retained but disabled, assigned a numbered display priority and notification-button colour, and checked together with **Test all enabled**. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
+Clients can be retained but disabled, assigned a numbered display priority and colour, and checked together with **Test all enabled**. Colour placement is independently selectable for notification buttons, article context menus, and settings/automation lists. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
+
+Notification torrent buttons have hover, pressed and in-progress feedback. After a complete successful send, the affected article row is shown with a green completed band and selection advances to the next unprocessed article. Partial or failed sends are not marked complete.
 
 ## Torrent automation
 
