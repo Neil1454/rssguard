@@ -7,6 +7,7 @@
 
 #include <QAbstractListModel>
 #include <QFont>
+#include <QSet>
 
 class ArticleListNotificationModel : public QAbstractListModel {
     Q_OBJECT
@@ -21,6 +22,8 @@ class ArticleListNotificationModel : public QAbstractListModel {
     Message& message(const QModelIndex& idx);
     const Message& message(const QModelIndex& idx) const;
     void setMessageRead(const QModelIndex& idx, bool read);
+    void setMessageProcessed(int messageId);
+    bool isMessageProcessed(const QModelIndex& idx) const;
 
     void nextPage();
     void previousPage();
@@ -45,6 +48,7 @@ class ArticleListNotificationModel : public QAbstractListModel {
     int m_currentPage;
     QFont m_fontArticlesNormal;
     QFont m_fontArticlesUnread;
+    QSet<int> m_processedMessageIds;
 };
 
 #endif // ARTICLELISTNOTIFICATIONMODEL_H
