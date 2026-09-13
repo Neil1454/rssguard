@@ -79,6 +79,7 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.username = object.value(QStringLiteral("username")).toString();
     client.buttonColor = object.value(QStringLiteral("buttonColor")).toString();
     client.colorNotificationButtons = object.value(QStringLiteral("colorNotificationButtons")).toBool(true);
+    client.colorContextMenus = object.value(QStringLiteral("colorContextMenus")).toBool(true);
     client.colorSettingsLists = object.value(QStringLiteral("colorSettingsLists")).toBool(true);
     client.enabled = object.value(QStringLiteral("enabled")).toBool(true);
     client.priority = object.value(QStringLiteral("priority")).toInt(++legacyPriority);
@@ -121,6 +122,7 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("username"), client.username);
     object.insert(QStringLiteral("buttonColor"), client.buttonColor);
     object.insert(QStringLiteral("colorNotificationButtons"), client.colorNotificationButtons);
+    object.insert(QStringLiteral("colorContextMenus"), client.colorContextMenus);
     object.insert(QStringLiteral("colorSettingsLists"), client.colorSettingsLists);
     object.insert(QStringLiteral("enabled"), client.enabled);
     object.insert(QStringLiteral("priority"), client.priority);
