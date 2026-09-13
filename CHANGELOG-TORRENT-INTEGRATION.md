@@ -9,6 +9,8 @@
 - Added comprehensive mouse-over explanations across General, Clients and limits, RSS rules, Safe cleanup and Activity.
 - Replaced manual internal feed-ID entry with selection from feeds already configured in RSS Guard, plus an explicit all-feeds choice and rule validation.
 - Added persistent, non-destructive per-client capability detection for connection, workload, disk space, torrent listing and safe removal, with selected/all-client testing.
+- Expanded automation monitoring to Flood, rTorrent/ruTorrent and rQBit. Flood now supplies workload, torrent listing, removal and live disk information when its activity API exposes it; rTorrent supplies workload/listing and safe torrent removal; rQBit supplies workload/listing and removal. Transmission now retries disk checks against its reported download directory.
+- Notification torrent-client actions now remain independently usable. Each successful destination receives its own remembered green tick, so the same RSS item can be sent to additional clients without losing the selection.
 - Changed the new-install retry default from 15 minutes to 1 minute.
 - Replaced the unclear automation weight field with automation priority (1 is highest) and updated priority, priority-biased and balanced routing accordingly.
 - Added independent choices for applying each client's colour to notification buttons and to settings/automation lists.
