@@ -4,12 +4,8 @@ name: Torrent integration Windows portable
 on:
   workflow_dispatch:
   push:
-    branches: ["master", "feature/torrent-automation"]
-
-concurrency:
-  # Keep only the newest complete branch revision when several files are updated together.
-  group: torrent-windows-${{ github.ref }}
-  cancel-in-progress: true
+    branches: ["feature/torrent-automation"]
+    paths: [".github/torrent-windows-build-trigger"]
 
 jobs:
   windows-portable:
