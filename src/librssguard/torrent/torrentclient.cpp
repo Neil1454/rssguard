@@ -57,6 +57,8 @@ TorrentClient::TorrentClient(TorrentClientConfig config, QObject* parent)
 TorrentClient::~TorrentClient() = default;
 
 const TorrentClientConfig& TorrentClient::config() const { return m_config; }
+bool TorrentClient::supportsLiveStatus() const { return false; }
+bool TorrentClient::supportsRemoval() const { return false; }
 
 void TorrentClient::fetchStatus() {
   connect(this, &TorrentClient::testFinished, this, [this](bool success, const QString& message) {
@@ -108,6 +110,8 @@ TorrentClient* TorrentClient::create(const TorrentClientConfig& config, QObject*
 }
 
 QBittorrentClient::QBittorrentClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+bool QBittorrentClient::supportsLiveStatus() const { return true; }
+bool QBittorrentClient::supportsRemoval() const { return true; }
 
 void QBittorrentClient::authenticate(const std::function<void(bool, const QString&)>& continuation) {
   QNetworkRequest request(endpoint(QStringLiteral("/api/v2/auth/login")));
@@ -264,6 +268,8 @@ TransmissionClient::TransmissionClient(const TorrentClientConfig& config, QObjec
             authenticator->setPassword(m_config.password);
           });
 }
+bool TransmissionClient::supportsLiveStatus() const { return true; }
+bool TransmissionClient::supportsRemoval() const { return true; }
 
 void TransmissionClient::rpc(const QJsonObject& object, const std::function<void(QNetworkReply*, const QJsonObject&)>& callback, bool retry) {
   QNetworkRequest request(endpoint(QString()));
@@ -550,6 +556,8 @@ void RTorrentClient::addNext() {
 }
 
 DelugeClient::DelugeClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+bool DelugeClient::supportsLiveStatus() const { return true; }
+bool DelugeClient::supportsRemoval() const { return true; }
 
 void DelugeClient::rpc(const QString& method,
                        const QJsonArray& params,
@@ -804,6 +812,8 @@ void RQBitClient::addNext() {
 }
 
 PorlaClient::PorlaClient(const TorrentClientConfig& config, QObject* parent) : TorrentClient(config, parent) {}
+bool PorlaClient::supportsLiveStatus() const { return true; }
+bool PorlaClient::supportsRemoval() const { return true; }
 
 void PorlaClient::rpc(const QString& method,
                       const QJsonObject& params,
