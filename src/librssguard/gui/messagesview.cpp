@@ -30,12 +30,14 @@
 
 #include <QClipboard>
 #include <QCheckBox>
+#include <QColor>
 #include <QFileIconProvider>
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
+#include <QPixmap>
 #include <QScrollBar>
 #include <QTimer>
 
@@ -699,8 +701,14 @@ void MessagesView::initializeContextMenu() {
     TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
   QMenu* torrent_menu = new QMenu(tr("Send to torrent client"), m_contextMenu);
   torrent_menu->setIcon(qApp->icons()->fromTheme(QSL("folder-download"), QSL("go-down")));
+  const auto clientColourIcon = [](const TorrentClientConfig& client) {
+    if (!client.colorContextMenus) return QIcon();
+    const QColor colour(client.buttonColor);
+    if (!colour.isValid()) return QIcon();
+    QPixmap swatch(16, 16); swatch.fill(colour); return QIcon(swatch);
+  };
   for (const TorrentClientConfig& client : torrent_clients) {
-    QAction* action = torrent_menu->addAction(client.name);
+    QAction* action = torrent_menu->addAction(clientColourIcon(client), client.name);
     action->setToolTip(QStringLiteral("%1 — %2").arg(TorrentClientConfig::typeName(client.type), client.baseUrl));
     connect(action, &QAction::triggered, this, [this, client, selected_messages]() {
       sendToTorrentClient(client, selected_messages);
@@ -716,7 +724,8 @@ void MessagesView::initializeContextMenu() {
     return client.isDefault;
   });
   if (default_client != torrent_clients.cend()) {
-    QAction* send_default = m_contextMenu->addAction(tr("Send to default torrent client (%1)").arg(default_client->name));
+    QAction* send_default = m_contextMenu->addAction(clientColourIcon(*default_client),
+      tr("Send to default torrent client (%1)").arg(default_client->name));
     connect(send_default, &QAction::triggered, this, [this, client = *default_client, selected_messages]() {
       sendToTorrentClient(client, selected_messages);
     });
