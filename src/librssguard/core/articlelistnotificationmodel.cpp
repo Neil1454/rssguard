@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include <QFont>
+#include <QColor>
 
 ArticleListNotificationModel::ArticleListNotificationModel(QObject* parent)
   : QAbstractListModel(parent), m_currentPage(0) {}
@@ -63,6 +64,19 @@ void ArticleListNotificationModel::setMessageRead(const QModelIndex& idx, bool r
   emit dataChanged(idx, idx, {Qt::ItemDataRole::FontRole});
 }
 
+void ArticleListNotificationModel::setMessageProcessed(int messageId) {
+  if (m_processedMessageIds.contains(messageId)) return;
+  m_processedMessageIds.insert(messageId);
+  if (rowCount({}) > 0)
+    emit dataChanged(index(0, 0), index(rowCount({}) - 1, 0),
+                     {Qt::ItemDataRole::BackgroundRole, Qt::ItemDataRole::ForegroundRole,
+                      Qt::ItemDataRole::ToolTipRole});
+}
+
+bool ArticleListNotificationModel::isMessageProcessed(const QModelIndex& idx) const {
+  return m_processedMessageIds.contains(message(idx).m_id);
+}
+
 void ArticleListNotificationModel::nextPage() {
   if (!nextPageAvailable()) {
     return;
@@ -113,8 +127,20 @@ QVariant ArticleListNotificationModel::data(const QModelIndex& index, int role) 
 
   switch (role) {
     case Qt::ItemDataRole::DisplayRole:
-    case Qt::ItemDataRole::ToolTipRole:
       return article.m_title;
+
+    case Qt::ItemDataRole::ToolTipRole:
+      return m_processedMessageIds.contains(article.m_id)
+               ? tr("%1\nSent successfully to a torrent client.").arg(article.m_title)
+               : article.m_title;
+
+    case Qt::ItemDataRole::BackgroundRole:
+      if (m_processedMessageIds.contains(article.m_id)) return QColor(QStringLiteral("#b7e4c7"));
+      break;
+
+    case Qt::ItemDataRole::ForegroundRole:
+      if (m_processedMessageIds.contains(article.m_id)) return QColor(QStringLiteral("#14532d"));
+      break;
 
     case Qt::ItemDataRole::FontRole:
       return article.m_isRead ? m_fontArticlesNormal : m_fontArticlesUnread;
