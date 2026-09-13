@@ -29,7 +29,7 @@ QString TorrentAutomationConfig::strategyName(TorrentRoutingStrategy strategy) {
     case TorrentRoutingStrategy::LeastBusy: return QObject::tr("Least busy");
     case TorrentRoutingStrategy::MostFreeSpace: return QObject::tr("Most free space");
     case TorrentRoutingStrategy::RoundRobin: return QObject::tr("Even distribution (round robin)");
-    case TorrentRoutingStrategy::Weighted: return QObject::tr("Weighted distribution");
+    case TorrentRoutingStrategy::Weighted: return QObject::tr("Priority-biased distribution");
     case TorrentRoutingStrategy::Balanced: return QObject::tr("Balanced (recommended)");
   }
   return QObject::tr("Balanced (recommended)");
@@ -44,7 +44,7 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.dryRun = root.value(QStringLiteral("dryRun")).toBool(true);
   config.showNotifications = root.value(QStringLiteral("showNotifications")).toBool(true);
   config.strategy = static_cast<TorrentRoutingStrategy>(root.value(QStringLiteral("strategy")).toInt(5));
-  config.retryMinutes = root.value(QStringLiteral("retryMinutes")).toInt(15);
+  config.retryMinutes = root.value(QStringLiteral("retryMinutes")).toInt(1);
   config.historyLimit = root.value(QStringLiteral("historyLimit")).toInt(500);
   config.roundRobinCursor = root.value(QStringLiteral("roundRobinCursor")).toInt(0);
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
@@ -62,7 +62,9 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
     TorrentAutomationClientPolicy policy;
     policy.clientId = object.value(QStringLiteral("clientId")).toString();
     policy.enabled = object.value(QStringLiteral("enabled")).toBool(true);
-    policy.weight = object.value(QStringLiteral("weight")).toInt(100);
+    policy.priority = object.value(QStringLiteral("priority")).toInt(1);
+    if (!object.contains(QStringLiteral("priority")) && object.contains(QStringLiteral("weight")))
+      policy.priority = 1;
     policy.maxActiveDownloads = object.value(QStringLiteral("maxActiveDownloads")).toInt(3);
     policy.maxManagedTorrents = object.value(QStringLiteral("maxManagedTorrents")).toInt(0);
     policy.minimumFreeBytes = object.value(QStringLiteral("minimumFreeBytes")).toVariant().toLongLong();
@@ -111,7 +113,7 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   for (const TorrentAutomationClientPolicy& policy : clients) {
     policies.append(QJsonObject{{QStringLiteral("clientId"), policy.clientId},
                                 {QStringLiteral("enabled"), policy.enabled},
-                                {QStringLiteral("weight"), policy.weight},
+                                {QStringLiteral("priority"), policy.priority},
                                 {QStringLiteral("maxActiveDownloads"), policy.maxActiveDownloads},
                                 {QStringLiteral("maxManagedTorrents"), policy.maxManagedTorrents},
                                 {QStringLiteral("minimumFreeBytes"), policy.minimumFreeBytes},
