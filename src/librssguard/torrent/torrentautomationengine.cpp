@@ -169,7 +169,12 @@ QList<int> TorrentAutomationEngine::eligibleClientIndexes(const Job& job) const 
 
 int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
   if (eligible.isEmpty()) return -1;
-  if (m_config.strategy == TorrentRoutingStrategy::Priority) return eligible.first();
+  if (m_config.strategy == TorrentRoutingStrategy::Priority) {
+    return *std::min_element(eligible.cbegin(), eligible.cend(), [this](int left, int right) {
+      return m_config.policyFor(m_clients.at(left).id).priority <
+             m_config.policyFor(m_clients.at(right).id).priority;
+    });
+  }
   if (m_config.strategy == TorrentRoutingStrategy::RoundRobin) {
     const int selected = eligible.at(m_config.roundRobinCursor % eligible.size());
     ++m_config.roundRobinCursor;
@@ -177,12 +182,15 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
     return selected;
   }
   if (m_config.strategy == TorrentRoutingStrategy::Weighted) {
+    int highestPriority = 1;
+    for (int index : eligible) highestPriority = qMax(highestPriority, m_config.policyFor(m_clients.at(index).id).priority);
     int total = 0;
-    for (int index : eligible) total += qMax(1, m_config.policyFor(m_clients.at(index).id).weight);
+    for (int index : eligible)
+      total += qMax(1, highestPriority + 1 - m_config.policyFor(m_clients.at(index).id).priority);
     int point = m_config.roundRobinCursor++ % total;
     m_config.save(qApp->settings());
     for (int index : eligible) {
-      point -= qMax(1, m_config.policyFor(m_clients.at(index).id).weight);
+      point -= qMax(1, highestPriority + 1 - m_config.policyFor(m_clients.at(index).id).priority);
       if (point < 0) return index;
     }
   }
@@ -197,8 +205,8 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
     else if (m_config.strategy == TorrentRoutingStrategy::MostFreeSpace) score = status.freeBytes;
     else {
       const double freeRatio = status.totalBytes > 0 ? double(status.freeBytes) / double(status.totalBytes) : 0.25;
-      score = freeRatio * 1000.0 + policy.weight - status.activeDownloads * 200.0 -
-              status.queuedDownloads * 80.0 - m_clients.at(index).priority * 5.0;
+      score = freeRatio * 1000.0 - status.activeDownloads * 200.0 - status.queuedDownloads * 80.0 -
+              policy.priority * 25.0;
     }
     if (score > bestScore) { bestScore = score; best = index; }
   }
