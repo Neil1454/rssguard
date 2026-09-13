@@ -31,7 +31,7 @@ Notification torrent buttons have hover, pressed and in-progress feedback. After
 - Supports ordered RSS rules with selection from existing feeds, text, exclusion, title-pattern and client-pool matching.
 - Detects and remembers each client's non-destructive automation capabilities, individually or in a test-all run.
 - Persists processed-link protection, allocation records, retries and a visible activity history.
-- Queries live workload information from qBittorrent, Transmission, Deluge and Porla, with live disk-space checks where their API exposes it.
+- Queries live workload and torrent lists from qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla, with live disk-space checks where their API exposes it and configured-capacity fallback elsewhere.
 - Marks supported submissions with `rssguard-auto` so cleanup cannot select unrelated torrents.
 - Provides opt-in cleanup with minimum seeding age, ratio, inactivity, confirmation and per-run removal limits. Deleting downloaded data is separately disabled by default.
 
