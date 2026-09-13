@@ -6,6 +6,10 @@ on:
   push:
     branches: ["master", "feature/torrent-automation"]
 
+concurrency:
+  group: torrent-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-portable:
     runs-on: windows-2022
