@@ -6,7 +6,9 @@ Open **Tools > Settings > Torrent automation**. Automation is disabled by defaul
 
 ## Routing
 
-Available strategies are priority order, least busy, most free space, even round-robin, priority-biased distribution and balanced. A client must be enabled both in **Torrent clients** and in the automation client table. Per-client hard limits cover active downloads, managed torrent count and minimum free space. Automation priority 1 is highest; it is separate from the notification-button order.
+Available strategies are priority order, least busy, most free space, even round-robin, priority-biased distribution and balanced. A client must be enabled both in **Torrent clients** and in the automation client table. Per-client controls cover active downloads, aggregate download rate, managed torrent count, minimum free space, target free-space percentage, request timeout and retry count. Automation priority 1 is highest; it is separate from the notification-button order. Balanced routing scores the free-space ratio, active and queued downloads, aggregate download rate and configured priority.
+
+Use **Process automatically** on a new-article notification or in the main article context menu for approval-based routing. A destination assessment uses blue for the recommended client, green for another suitable client, amber for a soft limit that can be overridden manually, and red for an unavailable or disallowed client. The state and reason are always written beside the colour. Direct named-client actions remain available and bypass soft automation limits.
 
 qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla expose live workload and torrent-list information. qBittorrent, Transmission and Porla expose live disk information directly; Flood supplies it from its activity stream when the server makes mount information available. rTorrent and rQBit use the optional configured-capacity estimate because their portable APIs do not expose filesystem free space.
 
@@ -24,7 +26,7 @@ Every control, table heading and capability indicator has mouse-over help. Clien
 
 Every successful client destination receives its own persistent green tick. The notification buttons and the main article **Send to torrent client** menu use the same saved history, including sends initiated by automation, so both locations remain synchronized.
 
-The runtime ledger records processed links, routing activity and managed allocations so restarting RSS Guard does not resend the same URL. Failed placement is held and retried with a bounded retry count.
+The runtime ledger records processed links, routing activity, managed allocations and pending retries so restarting RSS Guard does not resend the same URL or lose queued work. Retry timing, attempt count, exponential backoff and request timeout are configurable globally, with per-client overrides. A definite transient failure can fail over to the next suitable client. After an ambiguous timeout, a magnet's info hash is checked on the original client before failover; an ambiguous direct `.torrent` URL is not automatically resent because its outcome cannot be verified safely.
 
 ## Cleanup safety
 
@@ -33,6 +35,8 @@ Cleanup is disabled by default and dry-run mode never removes anything. Automati
 The seeding-age, ratio, inactivity, per-run removal limit and target-free-space controls can each be enabled or disabled. Every enabled eligibility condition must pass; disabled conditions are ignored. Disabling the chosen per-run limit still leaves an internal hard maximum of 25 removals. **Delete downloaded data** is a separate destructive option.
 
 Potentially dangerous changes display warnings when selected. Keep **Ask before every removal** and **Dry run** enabled while validating a configuration. Deleting downloaded data always requires confirmation, as does cleanup with every eligibility filter disabled. Unknown torrent sizes reserve 10 GB by default (configurable); an exact `xl` value in a magnet link takes precedence.
+
+Eligible completed automation-managed torrents are considered oldest-first. Optional upload protection skips a candidate whose current upload rate is at or above the configured threshold until a later cleanup pass; unknown upload speeds can also be protected conservatively. The free-space target can combine a fixed minimum, a percentage of detected/configured capacity, and a percentage-based cleanup batch.
 
 The cleanup checkbox for a client remains disabled until a capability test confirms listing and safe-removal support. Actual cleanup still requires a completed torrent to carry RSS Guard's automation marker, so an adapter that cannot prove ownership remains effectively routing-only.
 

@@ -55,6 +55,7 @@ RSS Guard detects the version or protocol level during **Test connection** where
 - Select one or several article rows, right-click, and choose **Send to torrent client > _client name_**.
 - Use the direct default-client action when a default client is configured.
 - On a new-article notification, the first article is selected automatically. Torrent clients are shown as a two-column grid of full-width named buttons so longer instance names remain readable. Click one to send, or use Ctrl/Shift to select several notification rows and send all of their torrent links together.
+- Choose **Process automatically** in the notification or main context menu to assess the configured automation pool before sending. Blue means recommended, green suitable, amber manually overridable, and red unavailable; a written status and reason accompany every colour.
 - Buttons include enabled clients only, follow their configured priority order, and optionally use each client's selected colour with automatically contrasting text.
 - Buttons show raised, hover, pressed and in-progress feedback. A fully successful send gives each affected article a green completed band and advances selection to the next unprocessed article.
 - To prevent a notification disappearing while choosing a torrent client, enable **Tools > Settings > Notifications > Keep new-article notifications open until dismissed**. Its timer and right-click dismissal are then disabled; close it with its close button.
@@ -65,6 +66,8 @@ RSS Guard recognises magnet links, BitTorrent enclosures, and recognisable HTTP(
 ## Confirmation messages
 
 Successful-send confirmations can be disabled from a success dialog or with **Show confirmation after successful torrent sends** in Torrent clients settings. Error and failure messages are not suppressed.
+
+Manual named-client sends use bounded timeout/retry handling but remain independent of automation dry-run mode. If a magnet submission times out ambiguously, RSS Guard checks its info hash before any failover. An ambiguous direct `.torrent` URL cannot be verified reliably, so RSS Guard reports that it may already have been accepted instead of risking an automatic duplicate.
 
 Flood HTTP 202 means the request was queued successfully even when Flood returns an empty result array. An HTTP 500 response is ambiguous because some Flood installations submit the torrent before reporting the error; check Flood before retrying.
 

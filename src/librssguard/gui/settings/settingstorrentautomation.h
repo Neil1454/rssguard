@@ -48,6 +48,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
                                bool liveStatus,
                                bool freeSpace,
                                bool torrentList,
+                               bool transferRates,
                                bool removal,
                                qint64 totalBytes,
                                const QString& detail);
@@ -55,12 +56,15 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     TorrentAutomationConfig m_config;
     QCheckBox *m_enabled = nullptr, *m_dryRun = nullptr, *m_notifications = nullptr;
     QComboBox* m_strategy = nullptr;
-    QSpinBox *m_retry = nullptr, *m_historyLimit = nullptr;
+    QSpinBox* m_historyLimit = nullptr;
     QDoubleSpinBox* m_unknownSizeGb = nullptr;
+    QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;
+    QSpinBox *m_retryAttempts = nullptr, *m_retryInitialSeconds = nullptr,
+             *m_retryMaximumSeconds = nullptr, *m_requestTimeoutSeconds = nullptr;
     QTableWidget* m_clients = nullptr;
     QList<TorrentClientConfig> m_clientConfigs, m_testQueue;
     QCheckBox *m_capConnected = nullptr, *m_capStatus = nullptr, *m_capSpace = nullptr,
-              *m_capList = nullptr, *m_capRemoval = nullptr;
+              *m_capList = nullptr, *m_capRates = nullptr, *m_capRemoval = nullptr;
     QLabel* m_capabilityTested = nullptr;
     QPushButton *m_testSelected = nullptr, *m_testAll = nullptr, *m_runDryTest = nullptr;
     QStringList m_testResults;
@@ -72,6 +76,9 @@ class SettingsTorrentAutomation final : public SettingsPanel {
               *m_maxRemovalsEnabled = nullptr, *m_cleanupStopGbEnabled = nullptr;
     QSpinBox *m_seedHours = nullptr, *m_inactiveHours = nullptr, *m_maxRemovals = nullptr;
     QDoubleSpinBox *m_ratio = nullptr, *m_cleanupStopGb = nullptr;
+    QCheckBox *m_protectUploading = nullptr, *m_protectUnknownSpeed = nullptr;
+    QSpinBox* m_protectUploadKib = nullptr;
+    QDoubleSpinBox* m_cleanupBatchPercent = nullptr;
 };
 
 #endif // SETTINGSTORRENTAUTOMATION_H

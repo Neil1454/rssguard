@@ -22,6 +22,8 @@ struct RSSGUARD_DLLSPEC TorrentRemoteItem {
   QDateTime added;
   QDateTime completed;
   QDateTime lastActivity;
+  qint64 downloadBytesPerSecond = -1;
+  qint64 uploadBytesPerSecond = -1;
   bool downloading = false;
   bool seeding = false;
   bool managedByAutomation = false;
@@ -35,6 +37,8 @@ struct RSSGUARD_DLLSPEC TorrentClientStatus {
   int activeDownloads = 0;
   int queuedDownloads = 0;
   int seeding = 0;
+  qint64 downloadBytesPerSecond = -1;
+  qint64 uploadBytesPerSecond = -1;
   QList<TorrentRemoteItem> torrents;
   QString detail;
 };

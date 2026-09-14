@@ -26,6 +26,8 @@
 #include "services/abstract/serviceroot.h"
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
+#include "torrent/torrentautomationengine.h"
+#include "torrent/torrentautomationconfig.h"
 #include "torrent/torrentextractor.h"
 #include "torrent/torrentsendhistory.h"
 
@@ -720,6 +722,14 @@ void MessagesView::initializeContextMenu() {
     QPixmap swatch(16, 16); swatch.fill(colour); return QIcon(swatch);
   };
   TorrentSendHistory* sendHistory = TorrentSendHistory::instance(qApp);
+  QAction* automaticRouting = torrent_menu->addAction(qApp->icons()->fromTheme(QSL("system-run")),
+                                                        tr("Process automatically…"));
+  automaticRouting->setToolTip(tr("Assess live client health, download load, priority and storage, then choose or override the recommended destination."));
+  automaticRouting->setEnabled(!TorrentExtractor::extract(selected_messages).urls.isEmpty());
+  connect(automaticRouting, &QAction::triggered, this, [this, selected_messages]() {
+    TorrentAutomationEngine::processApprovedArticles(nullptr, selected_messages, this, qApp);
+  });
+  torrent_menu->addSeparator();
   for (const TorrentClientConfig& client : torrent_clients) {
     bool alreadySent = false;
     bool sawTorrent = false;
@@ -836,36 +846,7 @@ void MessagesView::sendToTorrentClient(const TorrentClientConfig& config, const 
                              tr("No magnet links, .torrent URLs, or torrent enclosures were found in the selected article(s)."));
     return;
   }
-
-  TorrentClient* client = TorrentClient::create(config, this);
-  if (client == nullptr) return;
-  QList<int> processedMessageIds;
-  for (const Message& selected : messages)
-    if (!TorrentExtractor::extract(selected).isEmpty()) processedMessageIds.append(selected.m_id);
-  connect(client, &TorrentClient::addFinished, this, [this, client, extraction, config, processedMessageIds](int added, int failed, const QString& message) {
-    if (added > 0 && failed == 0) TorrentSendHistory::instance(qApp)->markSent(processedMessageIds, config.id);
-    QString details = message;
-    if (extraction.messagesWithoutTorrent > 0)
-      details += tr("\n%1 selected article(s) contained no usable torrent link.").arg(extraction.messagesWithoutTorrent);
-    if (extraction.duplicatesRemoved > 0)
-      details += tr("\n%1 duplicate link(s) were skipped.").arg(extraction.duplicatesRemoved);
-    if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
-                                               QStringLiteral("showSuccessNotifications"),
-                                               true).toBool()) {
-      QMessageBox box(QMessageBox::Information, tr("Torrents sent"), details, QMessageBox::Ok, this);
-      auto* dontShowAgain = new QCheckBox(tr("Don't show successful-send confirmations again"), &box);
-      box.setCheckBox(dontShowAgain);
-      box.exec();
-      if (dontShowAgain->isChecked()) {
-        qApp->settings()->setValue(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"), false);
-      }
-    }
-    else if (failed > 0) {
-      QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), details);
-    }
-    client->deleteLater();
-  });
-  client->addTorrents(extraction.urls);
+  TorrentAutomationEngine::processDirectArticles(config, messages, qApp);
 }
 
 void MessagesView::mousePressEvent(QMouseEvent* event) {

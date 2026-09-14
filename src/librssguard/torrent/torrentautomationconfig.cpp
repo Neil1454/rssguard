@@ -45,6 +45,12 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.showNotifications = root.value(QStringLiteral("showNotifications")).toBool(true);
   config.strategy = static_cast<TorrentRoutingStrategy>(root.value(QStringLiteral("strategy")).toInt(5));
   config.retryMinutes = root.value(QStringLiteral("retryMinutes")).toInt(1);
+  config.retryEnabled = root.value(QStringLiteral("retryEnabled")).toBool(true);
+  config.retryAttempts = root.value(QStringLiteral("retryAttempts")).toInt(3);
+  config.retryInitialSeconds = root.value(QStringLiteral("retryInitialSeconds")).toInt(config.retryMinutes * 60);
+  config.retryMaximumSeconds = root.value(QStringLiteral("retryMaximumSeconds")).toInt(900);
+  config.retryExponentialBackoff = root.value(QStringLiteral("retryExponentialBackoff")).toBool(true);
+  config.requestTimeoutSeconds = root.value(QStringLiteral("requestTimeoutSeconds")).toInt(15);
   config.historyLimit = root.value(QStringLiteral("historyLimit")).toInt(500);
   config.roundRobinCursor = root.value(QStringLiteral("roundRobinCursor")).toInt(0);
   config.unknownTorrentSizeBytes = root.value(QStringLiteral("unknownTorrentSizeBytes"))
@@ -64,6 +70,11 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.cleanupStopFreeEnabled = root.value(QStringLiteral("cleanupStopFreeEnabled")).toBool(true);
   config.cleanupStopFreeBytes = root.value(QStringLiteral("cleanupStopFreeBytes")).toVariant().toLongLong();
   if (config.cleanupStopFreeBytes <= 0) config.cleanupStopFreeBytes = 40LL * 1024 * 1024 * 1024;
+  config.protectUploadingEnabled = root.value(QStringLiteral("protectUploadingEnabled")).toBool(true);
+  config.protectUploadBytesPerSecond = root.value(QStringLiteral("protectUploadBytesPerSecond")).toVariant().toLongLong();
+  if (config.protectUploadBytesPerSecond <= 0) config.protectUploadBytesPerSecond = 256LL * 1024;
+  config.protectWhenSpeedUnknown = root.value(QStringLiteral("protectWhenSpeedUnknown")).toBool(true);
+  config.cleanupBatchPercent = root.value(QStringLiteral("cleanupBatchPercent")).toDouble(5.0);
 
   for (const QJsonValue& value : root.value(QStringLiteral("clients")).toArray()) {
     const QJsonObject object = value.toObject();
@@ -76,7 +87,11 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
     policy.maxActiveDownloads = object.value(QStringLiteral("maxActiveDownloads")).toInt(3);
     policy.maxManagedTorrents = object.value(QStringLiteral("maxManagedTorrents")).toInt(0);
     policy.minimumFreeBytes = object.value(QStringLiteral("minimumFreeBytes")).toVariant().toLongLong();
+    policy.targetFreePercent = object.value(QStringLiteral("targetFreePercent")).toDouble(0.0);
     policy.configuredCapacityBytes = object.value(QStringLiteral("configuredCapacityBytes")).toVariant().toLongLong();
+    policy.maximumDownloadBytesPerSecond = object.value(QStringLiteral("maximumDownloadBytesPerSecond")).toVariant().toLongLong();
+    policy.requestTimeoutSeconds = object.value(QStringLiteral("requestTimeoutSeconds")).toInt(0);
+    policy.retryAttempts = object.value(QStringLiteral("retryAttempts")).toInt(-1);
     policy.allowCleanup = object.value(QStringLiteral("allowCleanup")).toBool(false);
     if (!policy.clientId.isEmpty()) config.clients.append(policy);
   }
@@ -106,6 +121,12 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("showNotifications"), showNotifications);
   root.insert(QStringLiteral("strategy"), static_cast<int>(strategy));
   root.insert(QStringLiteral("retryMinutes"), retryMinutes);
+  root.insert(QStringLiteral("retryEnabled"), retryEnabled);
+  root.insert(QStringLiteral("retryAttempts"), retryAttempts);
+  root.insert(QStringLiteral("retryInitialSeconds"), retryInitialSeconds);
+  root.insert(QStringLiteral("retryMaximumSeconds"), retryMaximumSeconds);
+  root.insert(QStringLiteral("retryExponentialBackoff"), retryExponentialBackoff);
+  root.insert(QStringLiteral("requestTimeoutSeconds"), requestTimeoutSeconds);
   root.insert(QStringLiteral("historyLimit"), historyLimit);
   root.insert(QStringLiteral("roundRobinCursor"), roundRobinCursor);
   root.insert(QStringLiteral("unknownTorrentSizeBytes"), unknownTorrentSizeBytes);
@@ -122,6 +143,10 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("maximumRemovalsPerRun"), maximumRemovalsPerRun);
   root.insert(QStringLiteral("cleanupStopFreeEnabled"), cleanupStopFreeEnabled);
   root.insert(QStringLiteral("cleanupStopFreeBytes"), cleanupStopFreeBytes);
+  root.insert(QStringLiteral("protectUploadingEnabled"), protectUploadingEnabled);
+  root.insert(QStringLiteral("protectUploadBytesPerSecond"), protectUploadBytesPerSecond);
+  root.insert(QStringLiteral("protectWhenSpeedUnknown"), protectWhenSpeedUnknown);
+  root.insert(QStringLiteral("cleanupBatchPercent"), cleanupBatchPercent);
 
   QJsonArray policies;
   for (const TorrentAutomationClientPolicy& policy : clients) {
@@ -131,7 +156,11 @@ void TorrentAutomationConfig::save(Settings* settings) const {
                                 {QStringLiteral("maxActiveDownloads"), policy.maxActiveDownloads},
                                 {QStringLiteral("maxManagedTorrents"), policy.maxManagedTorrents},
                                 {QStringLiteral("minimumFreeBytes"), policy.minimumFreeBytes},
+                                {QStringLiteral("targetFreePercent"), policy.targetFreePercent},
                                 {QStringLiteral("configuredCapacityBytes"), policy.configuredCapacityBytes},
+                                {QStringLiteral("maximumDownloadBytesPerSecond"), policy.maximumDownloadBytesPerSecond},
+                                {QStringLiteral("requestTimeoutSeconds"), policy.requestTimeoutSeconds},
+                                {QStringLiteral("retryAttempts"), policy.retryAttempts},
                                 {QStringLiteral("allowCleanup"), policy.allowCleanup}});
   }
   root.insert(QStringLiteral("clients"), policies);

@@ -11,9 +11,11 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QObject>
+#include <QPointer>
 #include <QQueue>
 
 class Feed;
+class QWidget;
 
 class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     Q_OBJECT
@@ -21,6 +23,13 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
   public:
     static TorrentAutomationEngine* instance(QObject* parent = nullptr);
     static void processNewArticles(const QHash<Feed*, QList<Message>>& articles, QObject* parent = nullptr);
+    static void processApprovedArticles(Feed* feed,
+                                        const QList<Message>& articles,
+                                        QWidget* dialogParent = nullptr,
+                                        QObject* parent = nullptr);
+    static void processDirectArticles(const TorrentClientConfig& client,
+                                      const QList<Message>& articles,
+                                      QObject* parent = nullptr);
 
     bool busy() const;
     QStringList recentActivity() const;
@@ -40,16 +49,27 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       QStringList allowedClientIds;
       qint64 sizeBytes = 0;
       int attempt = 0;
+      QStringList attemptedClientIds;
+      QString verificationClientId;
+      QDateTime nextAttempt;
+      bool manualApproval = false;
+      bool directOverride = false;
     };
 
     explicit TorrentAutomationEngine(QObject* parent = nullptr);
-    void enqueue(const QHash<Feed*, QList<Message>>& articles, bool forceDryRun = false);
+    void enqueue(const QHash<Feed*, QList<Message>>& articles,
+                 bool forceDryRun = false,
+                 bool manualApproval = false,
+                 bool forceEnabled = false);
     bool ruleMatches(const TorrentAutomationRule& rule, const QString& feedId, const Message& message) const;
     void beginBatch();
     void queryNextClient();
     void processNextJob();
     QList<int> eligibleClientIndexes(const Job& job) const;
     int selectClient(const QList<int>& eligible);
+    int confirmManualDestination(const Job& job, const QList<int>& eligible, int recommended);
+    QString clientRestriction(int index, const Job& job, bool* softRestriction = nullptr) const;
+    qint64 clientFreeSpaceTarget(int index) const;
     void sendJob(const Job& job, int clientIndex);
     bool tryCleanup(const Job& job);
     void finishBatch();
@@ -61,6 +81,10 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     void loadRuntime();
     void saveRuntime();
     void notify(const QString& title, const QString& detail, bool warning = false);
+    void scheduleRetry(Job job, const QString& reason);
+    void armDeferredJob(const Job& job);
+    bool isTransientFailure(const QString& message) const;
+    bool isAmbiguousFailure(const QString& message) const;
 
     TorrentAutomationConfig m_config;
     QList<TorrentClientConfig> m_clients;
@@ -73,6 +97,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     int m_cleanupCount = 0;
     bool m_busy = false;
     bool m_forcedDryRun = false;
+    QList<Job> m_deferredJobs;
+    QPointer<QWidget> m_manualDialogParent;
     QHash<Feed*, QList<Message>> m_lastArticles;
 };
 

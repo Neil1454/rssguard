@@ -12,6 +12,8 @@
 #include "network-web/webfactory.h"
 #include "torrent/torrentclient.h"
 #include "torrent/torrentclientconfig.h"
+#include "torrent/torrentautomationengine.h"
+#include "torrent/torrentautomationconfig.h"
 #include "torrent/torrentextractor.h"
 #include "torrent/torrentsendhistory.h"
 
@@ -114,6 +116,9 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
             for (int messageId : messageIds) m_model->setMessageProcessed(messageId);
             rebuildTorrentActions();
           });
+  connect(TorrentAutomationEngine::instance(qApp), &TorrentAutomationEngine::busyChanged, this, [this](bool busy) {
+    if (!busy) { rebuildTorrentActions(); setupTimedClosing(false); }
+  });
 }
 
 void ArticleListNotification::loadResults(const QHash<Feed*, QList<Message>>& new_messages) {
@@ -214,6 +219,24 @@ void ArticleListNotification::rebuildTorrentActions() {
     TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
   TorrentSendHistory* history = TorrentSendHistory::instance(qApp);
   if (m_preview && !m_previewTorrentButtons) return;
+  bool allAlreadyProcessed = !messages.isEmpty();
+  for (const Message& message : messages)
+    if (!history->wasSentToAnyClient(message.m_id)) { allAlreadyProcessed = false; break; }
+  auto* automatic = new QPushButton(allAlreadyProcessed ? tr("✓ Processed automatically") : tr("Process automatically"), this);
+  automatic->setMinimumHeight(36);
+  automatic->setCursor(Qt::PointingHandCursor);
+  automatic->setStyleSheet(allAlreadyProcessed
+    ? QStringLiteral("QPushButton { background:#2eaf55; color:white; border:2px solid #19733a; border-radius:3px; padding:6px; }")
+    : QStringLiteral("QPushButton { background:#1877d2; color:white; border:2px outset #1877d2; border-radius:3px; padding:6px; font-weight:600; } QPushButton:pressed { background:#0f4f91; border-style:inset; padding-top:8px; }"));
+  automatic->setEnabled(m_preview || (hasTorrent && !allAlreadyProcessed));
+  automatic->setToolTip(tr("Assess live capacity, download load, priority and health, then choose or override the recommended torrent client."));
+  if (!m_preview) connect(automatic, &QPushButton::clicked, this, [this, automatic, messages]() {
+    automatic->setText(tr("Assessing torrent clients…"));
+    automatic->setEnabled(false);
+    stopTimedClosing();
+    TorrentAutomationEngine::processApprovedArticles(selectedFeed(), messages, this, qApp);
+  });
+  m_torrentActionsLayout->addWidget(automatic, 0, 0, 1, 2);
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     bool alreadySent = !messages.isEmpty();
@@ -262,7 +285,7 @@ void ArticleListNotification::rebuildTorrentActions() {
       button->setEnabled(false);
       sendSelectedToTorrentClient(config);
     });
-    m_torrentActionsLayout->addWidget(button, buttonIndex / 2, buttonIndex % 2);
+    m_torrentActionsLayout->addWidget(button, 1 + buttonIndex / 2, buttonIndex % 2);
     ++buttonIndex;
   }
 }
@@ -278,37 +301,8 @@ void ArticleListNotification::sendSelectedToTorrentClient(const TorrentClientCon
     rebuildTorrentActions();
     return;
   }
-
-  QList<int> processedMessageIds;
-  for (const Message& message : selected)
-    if (!TorrentExtractor::extract(message).isEmpty()) processedMessageIds.append(message.m_id);
-
   stopTimedClosing();
-  TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::addFinished, this, [this, client, processedMessageIds, config](int added, int failed, const QString& message) {
-    if (added > 0 && failed == 0) {
-      TorrentSendHistory::instance(qApp)->markSent(processedMessageIds, config.id);
-      for (int messageId : processedMessageIds) m_model->setMessageProcessed(messageId);
-    }
-    if (failed == 0 && qApp->settings()->value(QStringLiteral("TorrentClients"),
-                                               QStringLiteral("showSuccessNotifications"),
-                                               true).toBool()) {
-      QMessageBox box(QMessageBox::Information, tr("Torrents sent"), message, QMessageBox::Ok, this);
-      auto* dontShowAgain = new QCheckBox(tr("Don't show successful-send confirmations again"), &box);
-      box.setCheckBox(dontShowAgain);
-      box.exec();
-      if (dontShowAgain->isChecked()) {
-        qApp->settings()->setValue(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"), false);
-      }
-    }
-    else if (failed > 0) {
-      QMessageBox::warning(this, added > 0 ? tr("Some torrents were not sent") : tr("Torrents were not sent"), message);
-    }
-    client->deleteLater();
-    rebuildTorrentActions();
-    setupTimedClosing(false);
-  });
-  client->addTorrents(extraction.urls);
+  TorrentAutomationEngine::processDirectArticles(config, selected, qApp);
 }
 
 void ArticleListNotification::showFeed(int index) {

@@ -2,6 +2,14 @@
 
 ## Torrent automation development build
 
+- Build 54 adds approval-based **Process automatically** actions to new-article notifications and the main article context menu. It assesses every participating client before sending and retains the existing direct client buttons.
+- Added a traffic-light destination assessment: blue is the recommended destination, green is suitable, amber can be manually overridden, and red is unavailable. Every colour is accompanied by text and a reason.
+- Balanced routing now considers priority, active and queued downloads, aggregate download rate, and free-space ratio. Per-client maximum download rate, request timeout, retry count, minimum free space and target-free-space percentage are configurable.
+- Added persistent bounded retries with optional exponential backoff, immediate failover after definite transient failures, and configurable global/per-client request timeouts.
+- Added duplicate-safe handling for ambiguous timeouts: magnet info hashes are checked on the original client before failover. Ambiguous direct `.torrent` URL submissions are held for manual checking because blindly retrying could create a duplicate.
+- Cleanup now deletes eligible completed automation-managed torrents oldest-first, can protect torrents uploading above a configurable rate, can conservatively protect unknown upload speeds, and can round recovery to a configurable capacity percentage.
+- Capability tests now record transfer-rate monitoring as a separate detected capability. Live aggregate and per-torrent transfer rates are collected where supported by qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla.
+- Direct named-client sends now use the same resilient asynchronous send pipeline and retry history, while remaining real manual sends when automation dry-run mode is enabled.
 - Build 53 synchronizes persistent green per-client send ticks between article notifications, the main article context menu and automatic sends.
 - Capability tests retry one transient status failure, explain API limitations precisely, and fill **Capacity GB** only when a server reports an exact total capacity.
 - Client rows now show the configured name plus the underlying client type in secondary text.

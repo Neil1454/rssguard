@@ -93,6 +93,7 @@ QList<TorrentClientConfig> TorrentClientConfig::load(Settings* settings) {
     client.capabilityLiveStatus = object.value(QStringLiteral("capabilityLiveStatus")).toBool(false);
     client.capabilityFreeSpace = object.value(QStringLiteral("capabilityFreeSpace")).toBool(false);
     client.capabilityTorrentList = object.value(QStringLiteral("capabilityTorrentList")).toBool(false);
+    client.capabilityTransferRates = object.value(QStringLiteral("capabilityTransferRates")).toBool(false);
     client.capabilityRemoval = object.value(QStringLiteral("capabilityRemoval")).toBool(false);
     client.capabilityTestedAt = QDateTime::fromString(object.value(QStringLiteral("capabilityTestedAt")).toString(), Qt::ISODate);
     client.capabilityDetail = object.value(QStringLiteral("capabilityDetail")).toString();
@@ -136,6 +137,7 @@ void TorrentClientConfig::save(Settings* settings, const QList<TorrentClientConf
     object.insert(QStringLiteral("capabilityLiveStatus"), client.capabilityLiveStatus);
     object.insert(QStringLiteral("capabilityFreeSpace"), client.capabilityFreeSpace);
     object.insert(QStringLiteral("capabilityTorrentList"), client.capabilityTorrentList);
+    object.insert(QStringLiteral("capabilityTransferRates"), client.capabilityTransferRates);
     object.insert(QStringLiteral("capabilityRemoval"), client.capabilityRemoval);
     object.insert(QStringLiteral("capabilityTestedAt"), client.capabilityTestedAt.toUTC().toString(Qt::ISODate));
     object.insert(QStringLiteral("capabilityDetail"), client.capabilityDetail);

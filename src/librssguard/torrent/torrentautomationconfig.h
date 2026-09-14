@@ -28,7 +28,11 @@ struct RSSGUARD_DLLSPEC TorrentAutomationClientPolicy {
   int maxActiveDownloads = 3;
   int maxManagedTorrents = 0;
   qint64 minimumFreeBytes = 20LL * 1024 * 1024 * 1024;
+  double targetFreePercent = 0.0;
   qint64 configuredCapacityBytes = 0;
+  qint64 maximumDownloadBytesPerSecond = 0;
+  int requestTimeoutSeconds = 0;
+  int retryAttempts = -1;
   bool allowCleanup = false;
 };
 
@@ -51,6 +55,12 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool showNotifications = true;
   TorrentRoutingStrategy strategy = TorrentRoutingStrategy::Balanced;
   int retryMinutes = 1;
+  bool retryEnabled = true;
+  int retryAttempts = 3;
+  int retryInitialSeconds = 60;
+  int retryMaximumSeconds = 900;
+  bool retryExponentialBackoff = true;
+  int requestTimeoutSeconds = 15;
   int historyLimit = 500;
   int roundRobinCursor = 0;
   qint64 unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
@@ -68,6 +78,10 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   int maximumRemovalsPerRun = 1;
   bool cleanupStopFreeEnabled = true;
   qint64 cleanupStopFreeBytes = 40LL * 1024 * 1024 * 1024;
+  bool protectUploadingEnabled = true;
+  qint64 protectUploadBytesPerSecond = 256LL * 1024;
+  bool protectWhenSpeedUnknown = true;
+  double cleanupBatchPercent = 5.0;
 
   QList<TorrentAutomationClientPolicy> clients;
   QList<TorrentAutomationRule> rules;

@@ -40,6 +40,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   QString savePath;
   QString category;
   QStringList tags;
+  int requestTimeoutSeconds = 15;
 
   // Results of the latest non-destructive capability test.
   bool capabilityTested = false;
@@ -47,6 +48,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
   bool capabilityLiveStatus = false;
   bool capabilityFreeSpace = false;
   bool capabilityTorrentList = false;
+  bool capabilityTransferRates = false;
   bool capabilityRemoval = false;
   QDateTime capabilityTestedAt;
   QString capabilityDetail;

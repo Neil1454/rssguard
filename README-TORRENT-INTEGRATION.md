@@ -29,13 +29,14 @@ Successful destinations are saved per article and client. Green ticks are synchr
 **Tools > Settings > Torrent automation** adds an optional automation engine without changing the manual send workflow. It is disabled by default and starts in dry-run mode.
 
 - Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, priority-biased, or balanced policy.
-- Applies per-client active-download, managed-count, free-space, automation-priority and fallback-capacity settings.
+- Applies per-client active-download, aggregate-download-rate, managed-count, free-space, target-free-percentage, automation-priority, timeout/retry and fallback-capacity settings.
+- Adds **Process automatically** to notifications and the main article context menu. Manual approval displays blue/green/amber/red destination assessments, explains each result, and permits an explicit override of amber limits while keeping unavailable red clients blocked.
 - Supports ordered RSS rules with selection from existing feeds, text, exclusion, title-pattern and client-pool matching.
 - Detects and remembers each client's non-destructive automation capabilities, individually or in a test-all run.
-- Persists processed-link protection, allocation records, retries and a visible activity history.
+- Persists processed-link protection, allocation records, pending retries and a visible activity history across restarts. Definite temporary failures fail over; ambiguous magnet timeouts are verified by info hash before any resend.
 - Queries live workload and torrent lists from qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla, with live disk-space checks where their API exposes it and configured-capacity fallback elsewhere.
 - Marks supported submissions with `rssguard-auto` so cleanup cannot select unrelated torrents.
-- Provides opt-in cleanup with independently enabled seeding-age, ratio, inactivity, target-space and per-run limits. Deleting downloaded data is separately disabled by default and always requires confirmation.
+- Provides opt-in oldest-first cleanup with independently enabled seeding-age, ratio, inactivity, target-space and per-run limits. It can retain actively uploading torrents above a chosen rate and recover space in configurable percentage batches. Deleting downloaded data is separately disabled by default and always requires confirmation.
 - Allows each cleanup condition to be enabled independently, while retaining an internal 25-removal emergency cap when the user limit is disabled.
 - Provides a manual dry-run command, transient status retry, exact-capacity autofill where supported, concise capability explanations, and a configurable size reservation for unknown torrents.
 
