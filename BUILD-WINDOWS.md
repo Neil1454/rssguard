@@ -5,7 +5,7 @@ The target matching the normal modern RSS Guard portable package is **Qt 6 + Web
 ## Recommended: GitHub Actions
 
 1. Open the fork's [Torrent integration Windows portable workflow](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml).
-2. Open the newest successful run for `master`.
+2. Open the newest successful run for `feature/torrent-automation`.
 3. Download the `RSSGuard-Torrent-Test` artifact.
 4. Extract the downloaded ZIP, then extract the `.7z` inside it into a new folder.
 5. Run `rssguard.exe`. Do not extract over an existing RSS Guard folder.
@@ -29,7 +29,7 @@ From **Developer PowerShell for VS 2022**:
 ```powershell
 git clone --recursive https://github.com/<your-account>/rssguard.git RSSGuard-Torrent-Source
 Set-Location RSSGuard-Torrent-Source
-git switch master
+git switch feature/torrent-automation
 $env:GITHUB_TOKEN = "<your GitHub token>"
 $env:FEEDLY_CLIENT_ID = ""
 $env:FEEDLY_CLIENT_SECRET = ""

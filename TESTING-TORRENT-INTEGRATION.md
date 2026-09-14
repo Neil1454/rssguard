@@ -10,7 +10,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow has successfully compiled and packaged the integration with Qt 6, MSVC, and WebEngine on Windows. Each change to `master` triggers a new authoritative portable build. Live client behavior still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow has successfully compiled and packaged Build 55 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -71,6 +71,17 @@ Client-specific checks:
 - rQBit: server/version detection, optional Basic authentication, magnet/URL add, output folder, and rejected credentials.
 - Porla: required JWT authentication, `sys.versions`, magnet add, remote `.torrent` download/base64 submission, save path, preset, and invalid-token response.
 - Transmission versions: RPC 16/Transmission 3.00 adds without labels; RPC 17+ adds configured labels.
+- Approval routing: **Process automatically** is present in both the notification and article context menu; blue identifies the recommendation, green a suitable alternative, amber a manually overridable soft limit and red a blocked destination; each state includes explanatory text.
+- Balanced load: priority, active/queued downloads, aggregate download rate and free-space ratio affect the recommendation as configured.
+- Soft-limit override: an amber active-download, aggregate-rate, managed-count or reserve warning can be overridden in approval mode; red unavailable, disallowed and physically insufficient-space states cannot.
+- Timeouts and retry: global and per-client request timeouts apply; retry count and exponential backoff persist; a temporary preferred-client failure considers the next healthy client.
+- Retry restart: close RSS Guard with an item queued, reopen it and confirm the pending retry remains scheduled without duplicating the item.
+- Ambiguous magnet timeout: simulate a lost response after acceptance and confirm RSS Guard finds the info hash on the original client before failover.
+- Ambiguous direct torrent URL: simulate a lost response and confirm RSS Guard reports an uncertain outcome instead of automatically risking a duplicate.
+- Percentage capacity: the fixed free-space reserve and target-free percentage use the larger resulting target; fallback configured capacity is used only when live totals are unavailable.
+- Upload-aware cleanup: eligible managed torrents are ordered oldest-first; a torrent at or above the configured upload threshold is skipped until another cleanup pass; unknown speed protection behaves conservatively.
+- Cleanup batching: the requested recovery target rounds upward by the configured percentage of total/fallback capacity.
+- Direct/manual independence: a named-client button performs a real manual send even while Torrent automation is configured for dry-run mode.
 
 ## Release gate
 
