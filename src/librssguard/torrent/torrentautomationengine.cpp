@@ -382,7 +382,7 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
 int TorrentAutomationEngine::confirmManualDestination(const Job& job,
                                                        const QList<int>& eligible,
                                                        int recommended) {
-  QDialog dialog(m_manualDialogParent == nullptr ? qApp->mainFormWidget() : m_manualDialogParent);
+  QDialog dialog(m_manualDialogParent == nullptr ? qApp->mainFormWidget() : m_manualDialogParent.data());
   dialog.setWindowTitle(tr("Torrent routing decision"));
   dialog.setMinimumWidth(560);
   auto* layout = new QVBoxLayout(&dialog);

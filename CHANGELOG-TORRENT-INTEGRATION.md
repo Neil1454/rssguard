@@ -2,7 +2,7 @@
 
 ## Torrent automation development build
 
-- Build 54 adds approval-based **Process automatically** actions to new-article notifications and the main article context menu. It assesses every participating client before sending and retains the existing direct client buttons.
+- Build 55 adds approval-based **Process automatically** actions to new-article notifications and the main article context menu. It assesses every participating client before sending and retains the existing direct client buttons.
 - Added a traffic-light destination assessment: blue is the recommended destination, green is suitable, amber can be manually overridden, and red is unavailable. Every colour is accompanied by text and a reason.
 - Balanced routing now considers priority, active and queued downloads, aggregate download rate, and free-space ratio. Per-client maximum download rate, request timeout, retry count, minimum free space and target-free-space percentage are configurable.
 - Added persistent bounded retries with optional exponential backoff, immediate failover after definite transient failures, and configurable global/per-client request timeouts.
