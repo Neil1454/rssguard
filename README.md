@@ -9,6 +9,8 @@ This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://g
 
 The current downloadable test version is **Build 55**, based on RSS Guard **5.2.6 development source**. Build 55 passed the Windows x64 Qt 6 WebEngine compile, packaging and artifact-upload workflow. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 55 application code. Clone or download the feature branch when building this fork from source.
+
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
 ## Download and install
