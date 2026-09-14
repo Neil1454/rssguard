@@ -1,13 +1,16 @@
 name: Bug Report
-description: Create a report to help us improve
+description: Report an RSS Guard or torrent-integration problem
 title: '[BUG]: '
 labels: Type-Defect
-assignees: martinrotter
+assignees: ''
 body:
   - type: markdown
     attributes:
       value: |
-        Dear RSS Guard contributor, almost every bug report needs the RSS Guard DEBUG LOG.
+        For torrent-integration reports, use the latest Neil1454 Windows test build and identify its build number.
+        Never include passwords, tokens, cookies, private feed contents, tracker passkeys or private seedbox addresses.
+
+        Almost every bug report needs the RSS Guard DEBUG LOG.
         Please attach it unless you are absolutely sure it is not relevant.
 
         How to create the debug log is described here:
@@ -20,6 +23,37 @@ body:
         Also, only report bugs after testing RSS Guard behavior in LATEST version you can get your hands on. I can understand that maybe your Linux distribution ships RSS Guard which is one or two versions behind upstream but I will NOT fix bugs reported against years old codebase.
 
         Please, RESPECT this template. You might be interested in reading [www.chiark.greenend.org.uk](http://www.chiark.greenend.org.uk/~sgtatham/bugs.html).
+  - type: textarea
+    attributes:
+      label: Fork build and commit
+      description: For example, Build 55 and the short commit shown under Help > About RSS Guard.
+      placeholder: Build 55 / commit 81157cf6
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Affected area
+      options:
+        - Torrent client configuration or connection
+        - Manual torrent sending
+        - Notification torrent actions
+        - Torrent automation routing
+        - Retry or failover
+        - Safe cleanup
+        - Proxy or network
+        - Theme or user interface
+        - General RSS Guard behaviour
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Torrent-client environment
+      description: If applicable, give the client type/version, local or remote hosting, reverse proxy, redacted URL shape, and whether Use RSS Guard proxy is enabled.
+      placeholder: |
+        Client and version:
+        Local/remote/reverse proxy:
+        Redacted URL shape:
+        RSS Guard proxy enabled:
   - type: textarea
     attributes:
       label: Brief description of the issue

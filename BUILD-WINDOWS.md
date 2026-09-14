@@ -5,12 +5,12 @@ The target matching the normal modern RSS Guard portable package is **Qt 6 + Web
 ## Recommended: GitHub Actions
 
 1. Open the fork's [Torrent integration Windows portable workflow](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml).
-2. Open the newest successful run for `master`.
+2. Open the newest successful run for `feature/torrent-automation`.
 3. Download the `RSSGuard-Torrent-Test` artifact.
 4. Extract the downloaded ZIP, then extract the `.7z` inside it into a new folder.
 5. Run `rssguard.exe`. Do not extract over an existing RSS Guard folder.
 
-The workflow runs automatically after a push to `master` and can also be started manually. It uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. The workflow creates a temporary local package-version tag because the fork does not carry upstream tags. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
+The workflow runs when the build-trigger file changes on `feature/torrent-automation` and can also be started manually. It uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. Build 55 uses the temporary package-version tag `5.2.6-torrent-build55`. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
 
 Only the Windows 10/11 x64 Qt 6 WebEngine portable package is required for this fork. No custom installer, Linux package, or macOS package is currently produced.
 
@@ -29,7 +29,7 @@ From **Developer PowerShell for VS 2022**:
 ```powershell
 git clone --recursive https://github.com/<your-account>/rssguard.git RSSGuard-Torrent-Source
 Set-Location RSSGuard-Torrent-Source
-git switch master
+git switch feature/torrent-automation
 $env:GITHUB_TOKEN = "<your GitHub token>"
 $env:FEEDLY_CLIENT_ID = ""
 $env:FEEDLY_CLIENT_SECRET = ""

@@ -10,7 +10,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow has successfully compiled and packaged the integration with Qt 6, MSVC, and WebEngine on Windows. Each change to `master` triggers a new authoritative portable build. Live client behavior still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow has successfully compiled and packaged Build 55 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -53,7 +53,16 @@ Client-specific checks:
 - Client editor: changing the confirmation checkbox enables Apply; each client type changes the URL example and greys unsupported fields.
 - Client state/order: disabling a client preserves it but removes its menu and notification button; priorities reorder both locations with 1 first.
 - Disabled-list layout: enabled entries are numbered contiguously; disabled entries are greyed, unnumbered, and placed at the bottom.
-- Button colours: every common colour and the system default persist after restart, appear in live notifications and previews, and retain readable text.
+- Client colours: every common colour and the system default persist after restart; notification-button, article-menu and settings-list placement can be enabled independently.
+- Notification send feedback: buttons visibly depress, show an in-progress label, and fully successful article rows turn green; failures and partial successes do not.
+- Send history: a successful destination shows a green tick in both the notification and main article context menu, persists after restart, and updates both locations regardless of where the send began.
+- Capability reliability: one transient status failure is retried; exact server-reported total capacity populates Capacity GB; unavailable filesystem totals retain manual capacity and display a reason.
+- Client identity: automation rows display the configured name, configured colour and underlying client type.
+- Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
+- Manual dry test: evaluates the latest fetched eligible items, writes concise DRY RUN routing/cleanup decisions, and performs no add/remove/delete request.
+- Unknown-size reservation: magnet `xl` is honoured and links without a declared size reserve the configured fallback.
+- Proxy test: correct, incorrect, timed-out and authenticated SOCKS5/HTTP proxy settings report clear results without exposing credentials.
+- Theme toggle: the top-right control switches immediately between bundled minimal-light and minimal-dark skins and persists the selection.
 - Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
 - Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
@@ -62,6 +71,17 @@ Client-specific checks:
 - rQBit: server/version detection, optional Basic authentication, magnet/URL add, output folder, and rejected credentials.
 - Porla: required JWT authentication, `sys.versions`, magnet add, remote `.torrent` download/base64 submission, save path, preset, and invalid-token response.
 - Transmission versions: RPC 16/Transmission 3.00 adds without labels; RPC 17+ adds configured labels.
+- Approval routing: **Process automatically** is present in both the notification and article context menu; blue identifies the recommendation, green a suitable alternative, amber a manually overridable soft limit and red a blocked destination; each state includes explanatory text.
+- Balanced load: priority, active/queued downloads, aggregate download rate and free-space ratio affect the recommendation as configured.
+- Soft-limit override: an amber active-download, aggregate-rate, managed-count or reserve warning can be overridden in approval mode; red unavailable, disallowed and physically insufficient-space states cannot.
+- Timeouts and retry: global and per-client request timeouts apply; retry count and exponential backoff persist; a temporary preferred-client failure considers the next healthy client.
+- Retry restart: close RSS Guard with an item queued, reopen it and confirm the pending retry remains scheduled without duplicating the item.
+- Ambiguous magnet timeout: simulate a lost response after acceptance and confirm RSS Guard finds the info hash on the original client before failover.
+- Ambiguous direct torrent URL: simulate a lost response and confirm RSS Guard reports an uncertain outcome instead of automatically risking a duplicate.
+- Percentage capacity: the fixed free-space reserve and target-free percentage use the larger resulting target; fallback configured capacity is used only when live totals are unavailable.
+- Upload-aware cleanup: eligible managed torrents are ordered oldest-first; a torrent at or above the configured upload threshold is skipped until another cleanup pass; unknown speed protection behaves conservatively.
+- Cleanup batching: the requested recovery target rounds upward by the configured percentage of total/fallback capacity.
+- Direct/manual independence: a named-client button performs a real manual send even while Torrent automation is configured for dry-run mode.
 
 ## Release gate
 

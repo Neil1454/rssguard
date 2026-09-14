@@ -1,5 +1,47 @@
 # Torrent integration changelog
 
+## Torrent automation development build
+
+- Build 55 adds approval-based **Process automatically** actions to new-article notifications and the main article context menu. It assesses every participating client before sending and retains the existing direct client buttons.
+- Added a traffic-light destination assessment: blue is the recommended destination, green is suitable, amber can be manually overridden, and red is unavailable. Every colour is accompanied by text and a reason.
+- Balanced routing now considers priority, active and queued downloads, aggregate download rate, and free-space ratio. Per-client maximum download rate, request timeout, retry count, minimum free space and target-free-space percentage are configurable.
+- Added persistent bounded retries with optional exponential backoff, immediate failover after definite transient failures, and configurable global/per-client request timeouts.
+- Added duplicate-safe handling for ambiguous timeouts: magnet info hashes are checked on the original client before failover. Ambiguous direct `.torrent` URL submissions are held for manual checking because blindly retrying could create a duplicate.
+- Cleanup now deletes eligible completed automation-managed torrents oldest-first, can protect torrents uploading above a configurable rate, can conservatively protect unknown upload speeds, and can round recovery to a configurable capacity percentage.
+- Capability tests now record transfer-rate monitoring as a separate detected capability. Live aggregate and per-torrent transfer rates are collected where supported by qBittorrent, Transmission, Flood, rTorrent/ruTorrent, Deluge, rQBit and Porla.
+- Direct named-client sends now use the same resilient asynchronous send pipeline and retry history, while remaining real manual sends when automation dry-run mode is enabled.
+- Build 53 synchronizes persistent green per-client send ticks between article notifications, the main article context menu and automatic sends.
+- Capability tests retry one transient status failure, explain API limitations precisely, and fill **Capacity GB** only when a server reports an exact total capacity.
+- Client rows now show the configured name plus the underlying client type in secondary text.
+- Added independent enable switches for the cleanup age, ratio, inactivity, per-run limit and target-free-space controls. Disabled removal limits retain an internal hard cap of 25 per run.
+- Added **Run dry test now** to simulate routing and cleanup against the most recently fetched eligible items without sending or deleting anything.
+- Added warnings when users enable cleanup, downloaded-data deletion, unattended removal, high removal counts, or disable cleanup safeguards. Downloaded-data deletion and cleanup with no eligibility filters now always require confirmation.
+- Added a configurable 10 GB default reservation for torrents whose links do not declare their size; magnet `xl` values are used when present.
+- Added **Test proxy connection** under Network & web, reporting success/failure, elapsed time and the public IP reached through the selected proxy.
+- Added a top-right one-click switch between RSS Guard's bundled minimal-light and minimal-dark skins.
+- Added the torrent-integration contributor attribution and lawful-use notice to Help > About RSS Guard.
+- Added raised, hover and visibly pressed notification-button states, followed by a persistent **Sending…** state while the request is active.
+- Successfully sent notification articles are now marked with a green completed band; selection advances to the next unprocessed article.
+- Added optional per-client colour swatches to the main article **Send to Torrent Client** context menu and its default-client shortcut.
+- Split client-colour placement into independent notification-button, context-menu and settings/automation-list choices.
+- Added comprehensive mouse-over explanations across General, Clients and limits, RSS rules, Safe cleanup and Activity.
+- Replaced manual internal feed-ID entry with selection from feeds already configured in RSS Guard, plus an explicit all-feeds choice and rule validation.
+- Added persistent, non-destructive per-client capability detection for connection, workload, disk space, torrent listing and safe removal, with selected/all-client testing.
+- Expanded automation monitoring to Flood, rTorrent/ruTorrent and rQBit. Flood now supplies workload, torrent listing, removal and live disk information when its activity API exposes it; rTorrent supplies workload/listing and safe torrent removal; rQBit supplies workload/listing and removal. Transmission now retries disk checks against its reported download directory.
+- Notification torrent-client actions now remain independently usable. Each successful destination receives its own remembered green tick, so the same RSS item can be sent to additional clients without losing the selection.
+- Changed the new-install retry default from 15 minutes to 1 minute.
+- Replaced the unclear automation weight field with automation priority (1 is highest) and updated priority, priority-biased and balanced routing accordingly.
+- Added independent choices for applying each client's colour to notification buttons and to settings/automation lists.
+- Added a separate **Torrent automation** settings section with General, Clients and limits, RSS rules, Safe cleanup and Activity pages.
+- Added optional event-driven processing of newly fetched torrent RSS entries; the existing manual send controls remain available.
+- Added priority, least-busy, most-free-space, round-robin, weighted and balanced routing strategies.
+- Added per-client participation, weight, active-download limit, managed-torrent limit, minimum free space, estimated capacity and cleanup permission.
+- Added persistent duplicate protection, allocation records, decision history, bounded retry and automation notifications.
+- Added live status adapters for qBittorrent, Transmission, Deluge and Porla. Other adapters use connection health and optional estimated capacity.
+- Added the `rssguard-auto` ownership marker for supported clients.
+- Added opt-in guarded cleanup for marked qBittorrent and Transmission torrents, with completion, ratio, age, inactivity, confirmation, data-deletion and per-run limits.
+- Automation and cleanup are disabled by default; dry-run mode is enabled by default.
+
 ## 2026-09-09 — Notifications and compatibility corrections
 
 - Added rQBit HTTP API support with optional Basic authentication and output-folder selection.
@@ -26,7 +68,7 @@
 - Added qBittorrent 5.2 authentication compatibility: HTTP 204 login responses and `QBT_SID_...` session cookies, while retaining older HTTP 200/`Ok.`/`SID` support.
 - Added matching qBittorrent Origin and Referer headers and robust credential form encoding.
 - Corrected Flood results: HTTP 202 empty responses mean queued/accepted, not zero accepted; HTTP 207 remains partial success; ambiguous HTTP 500 responses now advise checking Flood before retrying.
-- Changed the dedicated Windows portable workflow to run automatically on pushes to `master` as well as manually.
+- Changed the dedicated Windows portable workflow to run automatically when its build trigger is updated on `feature/torrent-automation`, as well as manually.
 - Limited the custom distribution workflow to the required Windows 10/11 x64 Qt 6 WebEngine portable package.
 
 ## 2026-09-08 — Initial implementation
