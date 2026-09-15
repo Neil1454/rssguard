@@ -64,6 +64,17 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   int historyLimit = 500;
   int roundRobinCursor = 0;
   qint64 unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
+  bool reconciliationEnabled = true;
+  bool reserveRemainingBytes = true;
+  bool preventDuplicateAcrossClients = true;
+  int reconciliationMinutes = 30;
+  bool circuitBreakerEnabled = true;
+  int circuitBreakerFailures = 3;
+  int circuitBreakerCooldownMinutes = 15;
+  int circuitBreakerRecoverySuccesses = 2;
+  bool scheduleEnabled = false;
+  int scheduleStartHour = 0;
+  int scheduleEndHour = 24;
 
   bool cleanupEnabled = false;
   bool deleteData = false;
@@ -81,6 +92,17 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool protectUploadingEnabled = true;
   qint64 protectUploadBytesPerSecond = 256LL * 1024;
   bool protectWhenSpeedUnknown = true;
+  int protectRecentUploadHours = 24;
+  bool cleanupGraceEnabled = true;
+  int cleanupGraceHours = 24;
+  bool smartCleanupOrder = true;
+  bool minimumCopiesEnabled = false;
+  int minimumCopiesAcrossClients = 1;
+  QStringList protectedTags;
+  QStringList protectedTrackerTerms;
+  bool cleanupScheduleEnabled = false;
+  int cleanupScheduleStartHour = 0;
+  int cleanupScheduleEndHour = 24;
   double cleanupBatchPercent = 5.0;
 
   QList<TorrentAutomationClientPolicy> clients;

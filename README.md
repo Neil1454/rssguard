@@ -1,15 +1,15 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-57-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-58-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 57**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 58**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 57 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 58 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -95,6 +95,8 @@ Every colour is accompanied by a written status and reason, so the decision does
 - Definite temporary network failures can immediately fail over to the next suitable client.
 - Work waiting for a healthy destination is retained in a persistent retry queue across application restarts.
 - Authentication and invalid-configuration errors are not repeatedly retried.
+- Repeatedly failing clients enter a configurable circuit-breaker cooldown and must pass consecutive recovery checks before receiving automatic work again.
+- The Activity page exposes the persistent queue, including its reason and next-attempt time, with retry-now, choose-client and cancel controls.
 - After an ambiguous magnet timeout, RSS Guard checks the magnet info hash on the original client before any failover, preventing an unnecessary duplicate send.
 - An ambiguous direct `.torrent` URL cannot always be verified reliably. RSS Guard reports that it may already have succeeded instead of blindly resending it.
 
@@ -111,12 +113,19 @@ Non-destructive selected/all-client tests record whether the authenticated API c
 
 An exact server-reported capacity is copied into the automation capacity field. Where an API does not expose filesystem totals, a manually configured capacity can be used as an estimate. The capability test never adds or removes a torrent.
 
+Build 58 periodically reconciles the managed ledger with reachable clients. It updates actual sizes and unfinished-byte reservations, removes stale allocations, and recognises still-present RSS Guard-owned hashes. The client table identifies whether storage decisions are based on live space, a reconciled estimate, a ledger-only estimate or no usable figure.
+
 ### Guarded cleanup
 
 Cleanup is **off by default**. It only considers completed torrents that RSS Guard automation marked with `rssguard-auto`; unrelated and manually added torrents are excluded.
 
-- Oldest eligible completed torrents are considered first.
+- A smart cleanup score can combine age, size and ratio; oldest-first ordering remains available.
 - Minimum seeding age, ratio and inactivity requirements can be enabled independently.
+- Protected tag/label names and tracker text can exclude important torrents from cleanup.
+- Optional minimum-copy protection prevents cleanup from removing the last configured completed copy.
+- Recent upload activity remains protected for a configurable period, in addition to the current-speed threshold.
+- Optional two-stage cleanup marks a candidate, waits through a grace period, then rechecks every safeguard before removal.
+- Routing and cleanup can each be restricted to configurable local-time windows.
 - Cleanup can target a fixed free-space value and/or a percentage of client capacity.
 - Space recovery can be rounded into configurable capacity-percentage batches.
 - Torrents uploading at or above a configurable speed can be protected until a later cleanup pass.
@@ -126,6 +135,8 @@ Cleanup is **off by default**. It only considers completed torrents that RSS Gua
 - Cleanup with all eligibility filters disabled also requires confirmation.
 
 Use **Run dry test now** to assess recent eligible RSS entries against live client status and record what would be sent or removed. A dry run makes no add, remove or delete request.
+
+Torrent-client layout and automation rules can be exported to JSON and imported on another machine. Credentials and tokens are deliberately excluded; credentials already stored for matching client IDs are retained.
 
 ## Network and privacy behaviour
 
@@ -141,7 +152,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 57 — current candidate** | Cleanup-state integrity; independent configurable status retries; capability checks based on actually returned transfer-rate values; explicit removal-permission limitation; common Web UI-to-API URL suggestions; regression tests; visible fork build number. |
+| **Build 58 — current candidate** | Live ledger reconciliation and unfinished-space reservations; global duplicate checks; circuit breaker with verified recovery; persistent queue controls; scheduled routing/cleanup; protected tags/trackers/copies/recent uploads; two-stage smart cleanup; rule dry testing; storage-source visibility; credential-free configuration export/import. |
+| Build 57 — rollback candidate | Cleanup-state integrity; independent configurable status retries; capability checks based on actually returned transfer-rate values; explicit removal-permission limitation; common Web UI-to-API URL suggestions; regression tests; visible fork build number. |
 | Build 56 | Incidental documentation workflow run; not a distributed torrent build. |
 | Build 55 | Approval-based automatic processing; blue/green/amber/red client assessment; transfer-speed-aware balanced routing; percentage free-space targets; persistent configurable retries and failover; duplicate-safe magnet timeout verification; oldest-first upload-aware cleanup; expanded documentation. |
 | Build 54 | Intermediate CI run containing the Build 55 feature set; failed Windows compilation and was replaced. It should not be used or distributed. |
@@ -170,7 +182,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 57 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 58 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

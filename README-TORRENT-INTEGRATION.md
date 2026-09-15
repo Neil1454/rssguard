@@ -39,6 +39,11 @@ Successful destinations are saved per article and client. Green ticks are synchr
 - Provides opt-in oldest-first cleanup with independently enabled seeding-age, ratio, inactivity, target-space and per-run limits. It can retain actively uploading torrents above a chosen rate and recover space in configurable percentage batches. Deleting downloaded data is separately disabled by default and always requires confirmation.
 - Allows each cleanup condition to be enabled independently, while retaining an internal 25-removal emergency cap when the user limit is disabled.
 - Provides a manual dry-run command, transient status retry, exact-capacity autofill where supported, concise capability explanations, and a configurable size reservation for unknown torrents.
+- Reconciles managed allocations with reachable torrent lists, reserves unfinished bytes, reports the source/confidence of storage figures, and prevents unintended cross-client magnet duplicates.
+- Exposes the persistent retry queue with retry-now, choose-client and cancel actions, plus configurable routing hours.
+- Temporarily isolates repeatedly failing clients and requires consecutive successful recovery checks before automatic reuse.
+- Adds smart two-stage cleanup with a grace/recheck period, recent-upload history, protected tags/trackers, optional minimum completed-copy retention, and a separate cleanup schedule.
+- Exports and imports the non-secret torrent configuration as JSON; passwords and tokens are deliberately excluded.
 
 Safe marked cleanup is capability-gated per client. It is offered only after the authenticated adapter can list torrents and exposes its supported removal operation. rTorrent can remove the torrent entry but deliberately refuses downloaded-data deletion; servers that cannot prove RSS Guard ownership remain routing-only.
 

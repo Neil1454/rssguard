@@ -33,7 +33,11 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
 
     bool busy() const;
     QStringList recentActivity() const;
+    QStringList pendingRetries() const;
     void runDryTest();
+    void retryPending(int index);
+    void sendPendingToClient(int index, const QString& clientId);
+    void cancelPending(int index);
 
   signals:
     void activityAdded(const QString& text);
@@ -45,6 +49,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       QString title;
       QString url;
       QString feedId;
+      QString ruleName;
       int messageId = 0;
       QStringList allowedClientIds;
       qint64 sizeBytes = 0;
@@ -52,6 +57,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       QStringList attemptedClientIds;
       QString verificationClientId;
       QDateTime nextAttempt;
+      QString queueReason;
       bool manualApproval = false;
       bool directOverride = false;
     };
@@ -77,6 +83,16 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     bool wasProcessed(const QString& key) const;
     void markProcessed(const QString& key);
     qint64 estimatedManagedBytes(const QString& clientId) const;
+    qint64 outstandingManagedBytes(const QString& clientId) const;
+    void reconcileManagedState();
+    bool withinHourWindow(int startHour, int endHour) const;
+    void scheduleForWindow(Job job, int startHour, const QString& reason);
+    void scheduleAt(Job job, const QDateTime& when, const QString& reason);
+    int completedCopyCount(const QString& hash) const;
+    QDateTime lastUploadActivity(const QString& clientId, const QString& hash) const;
+    double cleanupScore(const TorrentRemoteItem& item, const QDateTime& now) const;
+    bool circuitBreakerOpen(const QString& clientId, QString* detail = nullptr) const;
+    bool updateCircuitBreaker(const QString& clientId, bool success, const QString& detail);
     QString jobKey(const QString& url) const;
     void loadRuntime();
     void saveRuntime();
@@ -93,6 +109,9 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QStringList m_processed;
     QJsonArray m_history;
     QJsonArray m_managed;
+    QJsonArray m_cleanupCandidates;
+    QJsonArray m_uploadActivity;
+    QJsonArray m_clientHealth;
     int m_pendingStatusQueries = 0;
     int m_cleanupCount = 0;
     bool m_busy = false;
@@ -100,6 +119,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QList<Job> m_deferredJobs;
     QPointer<QWidget> m_manualDialogParent;
     QHash<Feed*, QList<Message>> m_lastArticles;
+    QDateTime m_lastReconcile;
 };
 
 #endif // TORRENTAUTOMATIONENGINE_H

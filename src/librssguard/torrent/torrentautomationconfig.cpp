@@ -56,6 +56,17 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.unknownTorrentSizeBytes = root.value(QStringLiteral("unknownTorrentSizeBytes"))
                                      .toVariant().toLongLong();
   if (config.unknownTorrentSizeBytes <= 0) config.unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
+  config.reconciliationEnabled = root.value(QStringLiteral("reconciliationEnabled")).toBool(true);
+  config.reserveRemainingBytes = root.value(QStringLiteral("reserveRemainingBytes")).toBool(true);
+  config.preventDuplicateAcrossClients = root.value(QStringLiteral("preventDuplicateAcrossClients")).toBool(true);
+  config.reconciliationMinutes = root.value(QStringLiteral("reconciliationMinutes")).toInt(30);
+  config.circuitBreakerEnabled = root.value(QStringLiteral("circuitBreakerEnabled")).toBool(true);
+  config.circuitBreakerFailures = root.value(QStringLiteral("circuitBreakerFailures")).toInt(3);
+  config.circuitBreakerCooldownMinutes = root.value(QStringLiteral("circuitBreakerCooldownMinutes")).toInt(15);
+  config.circuitBreakerRecoverySuccesses = root.value(QStringLiteral("circuitBreakerRecoverySuccesses")).toInt(2);
+  config.scheduleEnabled = root.value(QStringLiteral("scheduleEnabled")).toBool(false);
+  config.scheduleStartHour = root.value(QStringLiteral("scheduleStartHour")).toInt(0);
+  config.scheduleEndHour = root.value(QStringLiteral("scheduleEndHour")).toInt(24);
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
   config.deleteData = root.value(QStringLiteral("deleteData")).toBool(false);
   config.cleanupRequireConfirmation = root.value(QStringLiteral("cleanupRequireConfirmation")).toBool(true);
@@ -74,6 +85,19 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.protectUploadBytesPerSecond = root.value(QStringLiteral("protectUploadBytesPerSecond")).toVariant().toLongLong();
   if (config.protectUploadBytesPerSecond <= 0) config.protectUploadBytesPerSecond = 256LL * 1024;
   config.protectWhenSpeedUnknown = root.value(QStringLiteral("protectWhenSpeedUnknown")).toBool(true);
+  config.protectRecentUploadHours = root.value(QStringLiteral("protectRecentUploadHours")).toInt(24);
+  config.cleanupGraceEnabled = root.value(QStringLiteral("cleanupGraceEnabled")).toBool(true);
+  config.cleanupGraceHours = root.value(QStringLiteral("cleanupGraceHours")).toInt(24);
+  config.smartCleanupOrder = root.value(QStringLiteral("smartCleanupOrder")).toBool(true);
+  config.minimumCopiesEnabled = root.value(QStringLiteral("minimumCopiesEnabled")).toBool(false);
+  config.minimumCopiesAcrossClients = root.value(QStringLiteral("minimumCopiesAcrossClients")).toInt(1);
+  for (const QJsonValue& value : root.value(QStringLiteral("protectedTags")).toArray())
+    config.protectedTags.append(value.toString());
+  for (const QJsonValue& value : root.value(QStringLiteral("protectedTrackerTerms")).toArray())
+    config.protectedTrackerTerms.append(value.toString());
+  config.cleanupScheduleEnabled = root.value(QStringLiteral("cleanupScheduleEnabled")).toBool(false);
+  config.cleanupScheduleStartHour = root.value(QStringLiteral("cleanupScheduleStartHour")).toInt(0);
+  config.cleanupScheduleEndHour = root.value(QStringLiteral("cleanupScheduleEndHour")).toInt(24);
   config.cleanupBatchPercent = root.value(QStringLiteral("cleanupBatchPercent")).toDouble(5.0);
 
   for (const QJsonValue& value : root.value(QStringLiteral("clients")).toArray()) {
@@ -130,6 +154,17 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("historyLimit"), historyLimit);
   root.insert(QStringLiteral("roundRobinCursor"), roundRobinCursor);
   root.insert(QStringLiteral("unknownTorrentSizeBytes"), unknownTorrentSizeBytes);
+  root.insert(QStringLiteral("reconciliationEnabled"), reconciliationEnabled);
+  root.insert(QStringLiteral("reserveRemainingBytes"), reserveRemainingBytes);
+  root.insert(QStringLiteral("preventDuplicateAcrossClients"), preventDuplicateAcrossClients);
+  root.insert(QStringLiteral("reconciliationMinutes"), reconciliationMinutes);
+  root.insert(QStringLiteral("circuitBreakerEnabled"), circuitBreakerEnabled);
+  root.insert(QStringLiteral("circuitBreakerFailures"), circuitBreakerFailures);
+  root.insert(QStringLiteral("circuitBreakerCooldownMinutes"), circuitBreakerCooldownMinutes);
+  root.insert(QStringLiteral("circuitBreakerRecoverySuccesses"), circuitBreakerRecoverySuccesses);
+  root.insert(QStringLiteral("scheduleEnabled"), scheduleEnabled);
+  root.insert(QStringLiteral("scheduleStartHour"), scheduleStartHour);
+  root.insert(QStringLiteral("scheduleEndHour"), scheduleEndHour);
   root.insert(QStringLiteral("cleanupEnabled"), cleanupEnabled);
   root.insert(QStringLiteral("deleteData"), deleteData);
   root.insert(QStringLiteral("cleanupRequireConfirmation"), cleanupRequireConfirmation);
@@ -146,6 +181,17 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("protectUploadingEnabled"), protectUploadingEnabled);
   root.insert(QStringLiteral("protectUploadBytesPerSecond"), protectUploadBytesPerSecond);
   root.insert(QStringLiteral("protectWhenSpeedUnknown"), protectWhenSpeedUnknown);
+  root.insert(QStringLiteral("protectRecentUploadHours"), protectRecentUploadHours);
+  root.insert(QStringLiteral("cleanupGraceEnabled"), cleanupGraceEnabled);
+  root.insert(QStringLiteral("cleanupGraceHours"), cleanupGraceHours);
+  root.insert(QStringLiteral("smartCleanupOrder"), smartCleanupOrder);
+  root.insert(QStringLiteral("minimumCopiesEnabled"), minimumCopiesEnabled);
+  root.insert(QStringLiteral("minimumCopiesAcrossClients"), minimumCopiesAcrossClients);
+  root.insert(QStringLiteral("protectedTags"), QJsonArray::fromStringList(protectedTags));
+  root.insert(QStringLiteral("protectedTrackerTerms"), QJsonArray::fromStringList(protectedTrackerTerms));
+  root.insert(QStringLiteral("cleanupScheduleEnabled"), cleanupScheduleEnabled);
+  root.insert(QStringLiteral("cleanupScheduleStartHour"), cleanupScheduleStartHour);
+  root.insert(QStringLiteral("cleanupScheduleEndHour"), cleanupScheduleEndHour);
   root.insert(QStringLiteral("cleanupBatchPercent"), cleanupBatchPercent);
 
   QJsonArray policies;

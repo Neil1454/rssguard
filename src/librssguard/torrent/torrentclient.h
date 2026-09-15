@@ -16,6 +16,8 @@
 struct RSSGUARD_DLLSPEC TorrentRemoteItem {
   QString hash;
   QString name;
+  QString tracker;
+  QStringList tags;
   qint64 sizeBytes = 0;
   double progress = 0.0;
   double ratio = 0.0;

@@ -11,6 +11,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QSpinBox;
@@ -39,6 +40,11 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     void testAllClients();
     void testNextClient();
     void runDryTest();
+    void exportConfiguration();
+    void importConfiguration();
+    void retryQueuedItem();
+    void chooseQueuedClient();
+    void cancelQueuedItem();
 
   private:
     TorrentAutomationRule editRuleDialog(const TorrentAutomationRule& initial, bool* accepted);
@@ -61,6 +67,11 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;
     QSpinBox *m_retryAttempts = nullptr, *m_retryInitialSeconds = nullptr,
              *m_retryMaximumSeconds = nullptr, *m_requestTimeoutSeconds = nullptr;
+    QCheckBox *m_reconciliation = nullptr, *m_reserveRemaining = nullptr, *m_preventDuplicates = nullptr,
+              *m_circuitBreaker = nullptr, *m_schedule = nullptr;
+    QSpinBox *m_reconciliationMinutes = nullptr, *m_breakerFailures = nullptr,
+             *m_breakerCooldown = nullptr, *m_breakerRecoverySuccesses = nullptr;
+    QComboBox *m_scheduleStart = nullptr, *m_scheduleEnd = nullptr;
     QTableWidget* m_clients = nullptr;
     QList<TorrentClientConfig> m_clientConfigs, m_testQueue;
     QCheckBox *m_capConnected = nullptr, *m_capStatus = nullptr, *m_capSpace = nullptr,
@@ -70,6 +81,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QStringList m_testResults;
     int m_testFailures = 0;
     QListWidget *m_rules = nullptr, *m_activity = nullptr;
+    QListWidget* m_queue = nullptr;
     QPushButton *m_editRule = nullptr, *m_removeRule = nullptr;
     QCheckBox *m_cleanup = nullptr, *m_deleteData = nullptr, *m_confirmCleanup = nullptr;
     QCheckBox *m_seedHoursEnabled = nullptr, *m_ratioEnabled = nullptr, *m_inactiveHoursEnabled = nullptr,
@@ -77,7 +89,12 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QSpinBox *m_seedHours = nullptr, *m_inactiveHours = nullptr, *m_maxRemovals = nullptr;
     QDoubleSpinBox *m_ratio = nullptr, *m_cleanupStopGb = nullptr;
     QCheckBox *m_protectUploading = nullptr, *m_protectUnknownSpeed = nullptr;
-    QSpinBox* m_protectUploadKib = nullptr;
+    QSpinBox *m_protectUploadKib = nullptr, *m_protectRecentHours = nullptr,
+             *m_cleanupGraceHours = nullptr, *m_minimumCopies = nullptr;
+    QCheckBox *m_cleanupGrace = nullptr, *m_smartCleanup = nullptr,
+              *m_minimumCopiesEnabled = nullptr, *m_cleanupSchedule = nullptr;
+    QComboBox *m_cleanupScheduleStart = nullptr, *m_cleanupScheduleEnd = nullptr;
+    QLineEdit *m_protectedTags = nullptr, *m_protectedTrackers = nullptr;
     QDoubleSpinBox* m_cleanupBatchPercent = nullptr;
 };
 

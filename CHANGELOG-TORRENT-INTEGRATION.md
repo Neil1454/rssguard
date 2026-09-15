@@ -2,6 +2,17 @@
 
 ## Torrent automation development build
 
+- Build 58 adds periodic and per-routing reconciliation of RSS Guard's managed ledger against reachable client torrent lists. Actual sizes and remaining-download reservations are refreshed, externally removed entries are discarded, and matching owned hashes are rediscovered conservatively.
+- Added explicit storage-source reporting in **Clients and limits**: live free space, reconciled capacity estimate, managed-ledger estimate, or unknown. Unfinished managed downloads can reserve their remaining bytes to prevent over-allocation.
+- Added cross-client magnet info-hash duplicate prevention for unattended automation. Direct named-client actions remain available when a deliberate additional copy is wanted.
+- Added a persistent queue viewer with the hold/retry reason and local next-attempt time, plus **Retry selected now**, **Choose client and send**, and **Cancel selected** controls.
+- Added a configurable client circuit breaker. Repeated failures temporarily sideline one client without blocking the others; consecutive successful recovery checks are required before automatic reuse.
+- Added optional local-time windows for unattended routing and cleanup. Deferred items remain in the persistent queue across restart.
+- Added smart cleanup scoring using age, size and ratio; recent-upload protection; tag/label and tracker protection; optional minimum completed-copy protection across configured clients; and two-stage mark/wait/recheck cleanup with a configurable grace period.
+- Added a rule dry-test shortcut that explains which named rule would route each recent RSS item.
+- Added credential-free JSON export/import for torrent client layout and automation configuration. Passwords and tokens are never exported; matching locally stored credentials are retained on import.
+- Build 57 remains the immediate rollback candidate, and Build 19 remains the pre-automation rollback point.
+
 - Build 57 fixes cleanup bookkeeping so a successfully removed torrent is removed from both the live snapshot and the managed-capacity ledger before another cleanup decision. Failed removals are bounded and cannot repeatedly select the same client in one attempt.
 - Client status checks now honour global/per-client retry counts, request timeouts and backoff independently, so one busy client does not prevent other clients from being assessed.
 - Capability tests only mark transfer speeds when the server actually returns aggregate or per-torrent rate values. Removal is now labelled as adapter/API support rather than a guarantee of server-side permission.

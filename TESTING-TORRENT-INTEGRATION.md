@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 57 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 58 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -85,6 +85,16 @@ Client-specific checks:
 - Upload-aware cleanup: eligible managed torrents are ordered oldest-first; a torrent at or above the configured upload threshold is skipped until another cleanup pass; unknown speed protection behaves conservatively.
 - Cleanup batching: the requested recovery target rounds upward by the configured percentage of total/fallback capacity.
 - Direct/manual independence: a named-client button performs a real manual send even while Torrent automation is configured for dry-run mode.
+- Reconciliation: change progress and remove a managed torrent outside RSS Guard; the next reachable status pass updates remaining-byte reservations and removes the stale ledger entry without adopting unrelated torrents.
+- Storage source: verify each client row accurately distinguishes live space, reconciled estimate, managed estimate and unknown; rTorrent/rQBit manual capacities decrease by reconciled downloaded bytes and retain outstanding reservations.
+- Duplicate policy: an unattended magnet already present on any reachable client is skipped by info hash; a direct named-client action can intentionally create another copy.
+- Persistent queue controls: restart with scheduled work, then verify its reason/time and retry-now, choose-client and cancel actions without duplicating completed sends.
+- Circuit breaker: fail one client for the configured number of checks, confirm other clients continue, then confirm the sidelined client is reused only after the configured consecutive recovery successes.
+- Operating windows: outside routing/cleanup hours, verify work is deferred to the next local opening and survives restart; direct named-client sending remains available.
+- Protected cleanup: verify exact tag/label and case-insensitive tracker exclusions, recent-upload retention and minimum-copy protection across reachable clients.
+- Cleanup grace: verify the first pass only marks a candidate, the later pass rechecks current conditions, and a newly protected or active torrent is not removed.
+- Configuration transfer: export JSON, confirm no username/password/token fields are present, import it into a clean profile, and verify rules/layout while entering credentials separately.
+- Rule dry test: refresh feeds, run **Test rules against latest items**, and confirm Activity identifies the matching rule without an add/remove/delete request.
 
 ## Release gate
 

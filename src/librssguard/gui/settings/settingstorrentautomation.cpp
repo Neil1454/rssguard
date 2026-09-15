@@ -19,9 +19,15 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -32,6 +38,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSpinBox>
+#include <QSaveFile>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTimer>
@@ -150,6 +157,15 @@ void SettingsTorrentAutomation::loadUi() {
   m_runDryTest = new QPushButton(tr("Run dry test now"), general);
   m_runDryTest->setToolTip(tr("Re-evaluate the most recently fetched RSS items using live client status. Nothing is sent, removed or deleted."));
   generalLayout->addWidget(m_runDryTest, 0, Qt::AlignRight);
+  auto* configurationButtons = new QHBoxLayout();
+  auto* exportConfiguration = new QPushButton(tr("Export torrent configuration"), general);
+  auto* importConfiguration = new QPushButton(tr("Import torrent configuration"), general);
+  exportConfiguration->setToolTip(tr("Save torrent clients and automation rules to a portable JSON file. Passwords and API tokens are never exported."));
+  importConfiguration->setToolTip(tr("Import a previously exported torrent configuration. Existing matching credentials are retained; credentials are never read from the file."));
+  configurationButtons->addStretch();
+  configurationButtons->addWidget(exportConfiguration);
+  configurationButtons->addWidget(importConfiguration);
+  generalLayout->addLayout(configurationButtons);
   auto* safety = new QLabel(tr("Automation works while RSS Guard is running. Duplicate torrent URLs are recorded so a restart does not send them again."), general);
   safety->setWordWrap(true);
   generalLayout->addWidget(safety);
@@ -184,14 +200,58 @@ void SettingsTorrentAutomation::loadUi() {
   const int retriesTab = tabs->addTab(retriesPage, tr("Retries and health"));
   tabs->setTabToolTip(retriesTab, tr("Control request timeouts, retry limits and backoff for temporarily unavailable torrent clients."));
 
+  auto* maintenancePage = new QWidget(tabs);
+  auto* maintenanceLayout = new QVBoxLayout(maintenancePage);
+  auto* maintenanceForm = new QFormLayout();
+  m_reconciliation = new QCheckBox(tr("Reconcile managed storage with live torrent lists"), maintenancePage);
+  m_reserveRemaining = new QCheckBox(tr("Reserve space still needed by unfinished managed downloads"), maintenancePage);
+  m_preventDuplicates = new QCheckBox(tr("Skip automatic sends when the torrent already exists"), maintenancePage);
+  m_reconciliationMinutes = new QSpinBox(maintenancePage); m_reconciliationMinutes->setRange(1, 1440); m_reconciliationMinutes->setSuffix(tr(" minutes"));
+  m_circuitBreaker = new QCheckBox(tr("Temporarily sideline repeatedly failing clients"), maintenancePage);
+  m_breakerFailures = new QSpinBox(maintenancePage); m_breakerFailures->setRange(1, 20);
+  m_breakerCooldown = new QSpinBox(maintenancePage); m_breakerCooldown->setRange(1, 1440); m_breakerCooldown->setSuffix(tr(" minutes"));
+  m_breakerRecoverySuccesses = new QSpinBox(maintenancePage); m_breakerRecoverySuccesses->setRange(1, 10);
+  m_schedule = new QCheckBox(tr("Limit unattended routing to these hours"), maintenancePage);
+  m_scheduleStart = new QComboBox(maintenancePage); m_scheduleEnd = new QComboBox(maintenancePage);
+  for (int hour = 0; hour <= 24; ++hour) {
+    const QString label = QStringLiteral("%1:00").arg(hour, 2, 10, QLatin1Char('0'));
+    if (hour < 24) m_scheduleStart->addItem(label, hour);
+    m_scheduleEnd->addItem(label, hour);
+  }
+  auto* scheduleRow = new QWidget(maintenancePage); auto* scheduleLayout = new QHBoxLayout(scheduleRow);
+  scheduleLayout->setContentsMargins(0, 0, 0, 0); scheduleLayout->addWidget(m_scheduleStart); scheduleLayout->addWidget(new QLabel(tr("to"), scheduleRow)); scheduleLayout->addWidget(m_scheduleEnd);
+  m_reconciliation->setToolTip(tr("After live status is read, repair managed sizes, progress reservations, removed entries and RSS Guard-owned entries found on the server."));
+  m_reserveRemaining->setToolTip(tr("Keep unfinished bytes reserved when deciding whether another torrent safely fits. This reduces overfilling while several downloads are active."));
+  m_preventDuplicates->setToolTip(tr("Compare magnet info hashes across reachable clients before unattended sending. Direct named-client actions can still intentionally create another copy."));
+  m_reconciliationMinutes->setToolTip(tr("Minimum intended interval between full reconciliation passes. Normal routing still obtains current workload status."));
+  m_circuitBreaker->setToolTip(tr("After repeated failures, stop contacting that client for the cooldown period while other clients continue normally."));
+  m_breakerFailures->setToolTip(tr("Consecutive failed status cycles before the client is temporarily sidelined."));
+  m_breakerCooldown->setToolTip(tr("How long a sidelined client remains out of automatic checks before a recovery attempt."));
+  m_breakerRecoverySuccesses->setToolTip(tr("Consecutive successful status checks required after cooldown before automatic routing uses the client again."));
+  m_schedule->setToolTip(tr("Outside this local-time window, unattended jobs wait in the persistent queue. Direct named-client sends still work."));
+  scheduleRow->setToolTip(tr("Local start and end hour. A start later than the end creates an overnight window."));
+  maintenanceForm->addRow(m_reconciliation);
+  maintenanceForm->addRow(m_reserveRemaining);
+  maintenanceForm->addRow(m_preventDuplicates);
+  maintenanceForm->addRow(tr("Reconciliation interval:"), m_reconciliationMinutes);
+  maintenanceForm->addRow(m_circuitBreaker);
+  maintenanceForm->addRow(tr("Failures before cooldown:"), m_breakerFailures);
+  maintenanceForm->addRow(tr("Client cooldown:"), m_breakerCooldown);
+  maintenanceForm->addRow(tr("Successful recovery checks:"), m_breakerRecoverySuccesses);
+  maintenanceForm->addRow(m_schedule);
+  maintenanceForm->addRow(tr("Routing window:"), scheduleRow);
+  maintenanceLayout->addLayout(maintenanceForm); maintenanceLayout->addStretch();
+  const int maintenanceTab = tabs->addTab(maintenancePage, tr("Maintenance"));
+  tabs->setTabToolTip(maintenanceTab, tr("Keep storage estimates aligned with live clients, reserve unfinished downloads, schedule routing and isolate failing clients."));
+
   auto* clientsPage = new QWidget(tabs);
   auto* clientsLayout = new QVBoxLayout(clientsPage);
   auto* clientsHelp = new QLabel(tr("Limits block unattended routing. Approval-based processing can explicitly override amber load/target warnings, but never red unavailable or insufficient-space states. Zero means no limit."), clientsPage);
   clientsHelp->setWordWrap(true);
   clientsLayout->addWidget(clientsHelp);
   m_clients = new QTableWidget(clientsPage);
-  m_clients->setColumnCount(12);
-  m_clients->setHorizontalHeaderLabels({tr("Use"), tr("Client"), tr("Max active"), tr("Max managed"), tr("Priority"), tr("Min free GB"), tr("Target free %"), tr("Capacity GB"), tr("Max down MiB/s"), tr("Timeout s"), tr("Retries"), tr("Cleanup")});
+  m_clients->setColumnCount(13);
+  m_clients->setHorizontalHeaderLabels({tr("Use"), tr("Client"), tr("Max active"), tr("Max managed"), tr("Priority"), tr("Min free GB"), tr("Target free %"), tr("Capacity GB"), tr("Max down MiB/s"), tr("Timeout s"), tr("Retries"), tr("Cleanup"), tr("Storage source")});
   const QStringList clientTips{
     tr("Include this client in automatic routing."),
     tr("Configured torrent client. Its colour comes from Torrent clients settings."),
@@ -204,7 +264,8 @@ void SettingsTorrentAutomation::loadUi() {
     tr("Treat the client as overloaded above this total download speed. Zero disables this limit."),
     tr("Per-client request timeout. Zero uses the default from Retries and health."),
     tr("Per-client retry count. Minus one uses the default from Retries and health."),
-    tr("Permit Safe cleanup on this client. Available only when tested APIs can list and safely remove managed torrents.")};
+    tr("Permit Safe cleanup on this client. Available only when tested APIs can list and safely remove managed torrents."),
+    tr("Shows whether storage decisions use live disk space, a reconciled estimate, a managed-ledger estimate, or no usable figure.")};
   for (int column = 0; column < clientTips.size(); ++column)
     m_clients->horizontalHeaderItem(column)->setToolTip(clientTips.at(column));
   m_clients->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -253,10 +314,12 @@ void SettingsTorrentAutomation::loadUi() {
   auto* add = new QPushButton(tr("Add rule"), rulesPage);
   m_editRule = new QPushButton(tr("Edit"), rulesPage);
   m_removeRule = new QPushButton(tr("Remove"), rulesPage);
+  auto* testRules = new QPushButton(tr("Test rules against latest items"), rulesPage);
   add->setToolTip(tr("Create a rule using feeds already configured in RSS Guard, text filters, and allowed clients."));
   m_editRule->setToolTip(tr("Edit the selected automation rule."));
   m_removeRule->setToolTip(tr("Remove the selected automation rule."));
-  ruleButtons->addWidget(add); ruleButtons->addWidget(m_editRule); ruleButtons->addWidget(m_removeRule); ruleButtons->addStretch();
+  testRules->setToolTip(tr("Run a dry explanation against the most recently fetched items. Matching, routing and cleanup decisions appear in Activity without changing a client."));
+  ruleButtons->addWidget(add); ruleButtons->addWidget(m_editRule); ruleButtons->addWidget(m_removeRule); ruleButtons->addStretch(); ruleButtons->addWidget(testRules);
   rulesLayout->addLayout(ruleButtons);
   const int rulesTab = tabs->addTab(rulesPage, tr("RSS rules"));
   tabs->setTabToolTip(rulesTab, tr("Control which incoming RSS items qualify and which clients they may use."));
@@ -283,6 +346,23 @@ void SettingsTorrentAutomation::loadUi() {
   m_protectUploading = new QCheckBox(tr("Protect torrents uploading above"), cleanupPage);
   m_protectUploadKib = new QSpinBox(cleanupPage); m_protectUploadKib->setRange(1, 100000000); m_protectUploadKib->setSuffix(tr(" KiB/s"));
   m_protectUnknownSpeed = new QCheckBox(tr("Protect a torrent when its upload speed is unavailable"), cleanupPage);
+  m_protectRecentHours = new QSpinBox(cleanupPage); m_protectRecentHours->setRange(0, 8760); m_protectRecentHours->setSuffix(tr(" hours"));
+  m_cleanupGrace = new QCheckBox(tr("Use a grace period before permanent removal"), cleanupPage);
+  m_cleanupGraceHours = new QSpinBox(cleanupPage); m_cleanupGraceHours->setRange(1, 8760); m_cleanupGraceHours->setSuffix(tr(" hours"));
+  m_smartCleanup = new QCheckBox(tr("Use smart cleanup scoring"), cleanupPage);
+  m_minimumCopiesEnabled = new QCheckBox(tr("Keep completed copies across all clients"), cleanupPage);
+  m_minimumCopies = new QSpinBox(cleanupPage); m_minimumCopies->setRange(1, 20);
+  m_protectedTags = new QLineEdit(cleanupPage);
+  m_protectedTrackers = new QLineEdit(cleanupPage);
+  m_cleanupSchedule = new QCheckBox(tr("Only perform cleanup during these hours"), cleanupPage);
+  m_cleanupScheduleStart = new QComboBox(cleanupPage); m_cleanupScheduleEnd = new QComboBox(cleanupPage);
+  for (int hour = 0; hour <= 24; ++hour) {
+    const QString label = QStringLiteral("%1:00").arg(hour, 2, 10, QLatin1Char('0'));
+    if (hour < 24) m_cleanupScheduleStart->addItem(label, hour);
+    m_cleanupScheduleEnd->addItem(label, hour);
+  }
+  auto* cleanupWindow = new QWidget(cleanupPage); auto* cleanupWindowLayout = new QHBoxLayout(cleanupWindow);
+  cleanupWindowLayout->setContentsMargins(0, 0, 0, 0); cleanupWindowLayout->addWidget(m_cleanupScheduleStart); cleanupWindowLayout->addWidget(new QLabel(tr("to"), cleanupWindow)); cleanupWindowLayout->addWidget(m_cleanupScheduleEnd);
   m_cleanupBatchPercent = new QDoubleSpinBox(cleanupPage); m_cleanupBatchPercent->setRange(0, 100); m_cleanupBatchPercent->setDecimals(1); m_cleanupBatchPercent->setSuffix(tr(" %"));
   m_cleanup->setToolTip(tr("Allow cleanup only when routing is blocked because an opted-in client is below its minimum-free-space limit."));
   m_deleteData->setToolTip(tr("Also erase downloaded files. Leave off to remove only the torrent job. This action cannot be undone."));
@@ -300,6 +380,15 @@ void SettingsTorrentAutomation::loadUi() {
   m_protectUploading->setToolTip(tr("Skip an otherwise eligible old torrent for this cleanup session while its current upload speed is at or above the chosen threshold."));
   m_protectUploadKib->setToolTip(tr("Per-torrent upload-speed threshold. Skipped torrents are reconsidered during the next cleanup session."));
   m_protectUnknownSpeed->setToolTip(tr("Safest behaviour for adapters that cannot report a per-torrent upload speed."));
+  m_protectRecentHours->setToolTip(tr("Protect a torrent for this long after RSS Guard last observed it uploading. Zero disables historical upload protection."));
+  m_cleanupGrace->setToolTip(tr("First mark a torrent as a cleanup candidate, then check it again after the grace period before removal."));
+  m_cleanupGraceHours->setToolTip(tr("Minimum wait between selecting a cleanup candidate and allowing its permanent removal."));
+  m_smartCleanup->setToolTip(tr("Rank eligible torrents using age, recoverable size and ratio. Disable to use oldest-completed-first ordering."));
+  m_minimumCopiesEnabled->setToolTip(tr("Do not remove a completed torrent if that would leave fewer than the selected number of completed copies across reachable clients."));
+  m_minimumCopies->setToolTip(tr("Minimum completed copies retained across the configured client pool."));
+  m_protectedTags->setToolTip(tr("Comma-separated exact tags or labels that must never be removed automatically, for example: keep, archive."));
+  m_protectedTrackers->setToolTip(tr("Comma-separated tracker host text that must never be removed automatically, for example: tracker.example."));
+  m_cleanupSchedule->setToolTip(tr("Queue cleanup until this local-time maintenance window. Routing may still use another client outside the cleanup window."));
   m_cleanupBatchPercent->setToolTip(tr("Round the required free-space target upward by this percentage of total capacity. Zero disables batch rounding."));
   const auto optionalControl = [cleanupPage](QCheckBox* enabled, QWidget* editor) {
     auto* container = new QWidget(cleanupPage);
@@ -319,6 +408,13 @@ void SettingsTorrentAutomation::loadUi() {
   cleanupForm->addRow(tr("Target free space after cleanup:"), optionalControl(m_cleanupStopGbEnabled, m_cleanupStopGb));
   cleanupForm->addRow(m_protectUploading, m_protectUploadKib);
   cleanupForm->addRow(m_protectUnknownSpeed);
+  cleanupForm->addRow(tr("Protect after recent upload:"), m_protectRecentHours);
+  cleanupForm->addRow(m_cleanupGrace, m_cleanupGraceHours);
+  cleanupForm->addRow(m_smartCleanup);
+  cleanupForm->addRow(m_minimumCopiesEnabled, m_minimumCopies);
+  cleanupForm->addRow(tr("Never remove tags:"), m_protectedTags);
+  cleanupForm->addRow(tr("Never remove trackers containing:"), m_protectedTrackers);
+  cleanupForm->addRow(m_cleanupSchedule, cleanupWindow);
   cleanupForm->addRow(tr("Cleanup space batch:"), m_cleanupBatchPercent);
   cleanupLayout->addLayout(cleanupForm);
   cleanupLayout->addStretch();
@@ -328,10 +424,20 @@ void SettingsTorrentAutomation::loadUi() {
   auto* activityPage = new QWidget(tabs);
   auto* activityLayout = new QVBoxLayout(activityPage);
   m_activity = new QListWidget(activityPage);
+  m_queue = new QListWidget(activityPage);
+  m_queue->setToolTip(tr("Persistent items waiting for a retry, maintenance window or healthy destination."));
   auto* refresh = new QPushButton(tr("Refresh activity"), activityPage);
+  auto* retryQueued = new QPushButton(tr("Retry selected now"), activityPage);
+  auto* chooseQueued = new QPushButton(tr("Choose client and send"), activityPage);
+  auto* cancelQueued = new QPushButton(tr("Cancel selected"), activityPage);
   m_activity->setToolTip(tr("Newest recorded routing, retry, failure, dry-run and cleanup decisions appear at the top."));
   refresh->setToolTip(tr("Reload the latest automation events from the in-memory activity history."));
-  activityLayout->addWidget(m_activity, 1);
+  activityLayout->addWidget(new QLabel(tr("Pending automation queue:"), activityPage));
+  activityLayout->addWidget(m_queue, 1);
+  auto* queueButtons = new QHBoxLayout(); queueButtons->addWidget(retryQueued); queueButtons->addWidget(chooseQueued); queueButtons->addWidget(cancelQueued); queueButtons->addStretch();
+  activityLayout->addLayout(queueButtons);
+  activityLayout->addWidget(new QLabel(tr("Decision history:"), activityPage));
+  activityLayout->addWidget(m_activity, 2);
   activityLayout->addWidget(refresh, 0, Qt::AlignRight);
   const int activityTab = tabs->addTab(activityPage, tr("Activity"));
   tabs->setTabToolTip(activityTab, tr("Review what automation decided and why. Dry-run decisions are recorded here too."));
@@ -339,16 +445,25 @@ void SettingsTorrentAutomation::loadUi() {
   const QList<QObject*> dirtyObjects{m_enabled, m_dryRun, m_notifications, m_strategy, m_historyLimit, m_unknownSizeGb,
                                      m_retryEnabled, m_retryAttempts, m_retryInitialSeconds, m_retryMaximumSeconds,
                                      m_retryBackoff, m_requestTimeoutSeconds,
+                                     m_reconciliation, m_reserveRemaining, m_preventDuplicates, m_reconciliationMinutes,
+                                     m_circuitBreaker, m_breakerFailures, m_breakerCooldown,
+                                     m_breakerRecoverySuccesses,
+                                     m_schedule, m_scheduleStart, m_scheduleEnd,
                                      m_cleanup, m_deleteData, m_confirmCleanup, m_seedHours, m_ratio,
                                      m_inactiveHours, m_maxRemovals, m_cleanupStopGb, m_seedHoursEnabled,
                                      m_ratioEnabled, m_inactiveHoursEnabled, m_maxRemovalsEnabled,
                                      m_cleanupStopGbEnabled, m_protectUploading, m_protectUploadKib,
-                                     m_protectUnknownSpeed, m_cleanupBatchPercent, m_clients};
+                                     m_protectUnknownSpeed, m_protectRecentHours, m_cleanupGrace,
+                                     m_cleanupGraceHours, m_smartCleanup, m_minimumCopiesEnabled,
+                                     m_minimumCopies, m_protectedTags, m_protectedTrackers,
+                                     m_cleanupSchedule, m_cleanupScheduleStart, m_cleanupScheduleEnd,
+                                     m_cleanupBatchPercent, m_clients};
   for (QObject* object : dirtyObjects) {
     if (auto* box = qobject_cast<QCheckBox*>(object)) connect(box, &QCheckBox::toggled, this, &SettingsTorrentAutomation::dirtifySettings);
     else if (auto* combo = qobject_cast<QComboBox*>(object)) connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsTorrentAutomation::dirtifySettings);
     else if (auto* spin = qobject_cast<QSpinBox*>(object)) connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &SettingsTorrentAutomation::dirtifySettings);
     else if (auto* dspin = qobject_cast<QDoubleSpinBox*>(object)) connect(dspin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &SettingsTorrentAutomation::dirtifySettings);
+    else if (auto* line = qobject_cast<QLineEdit*>(object)) connect(line, &QLineEdit::textChanged, this, &SettingsTorrentAutomation::dirtifySettings);
   }
   connect(m_clients, &QTableWidget::cellChanged, this, &SettingsTorrentAutomation::dirtifySettings);
   connect(m_clients, &QTableWidget::currentCellChanged, this, [this]() { updateCapabilityDisplay(); });
@@ -372,7 +487,29 @@ void SettingsTorrentAutomation::loadUi() {
                              m_maxRemovalsEnabled, m_cleanupStopGbEnabled})
     connect(option, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
   connect(m_protectUploading, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
+  connect(m_cleanupGrace, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
+  connect(m_minimumCopiesEnabled, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
+  connect(m_cleanupSchedule, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
+  const auto updateMaintenanceControls = [this]() {
+    m_reconciliationMinutes->setEnabled(m_reconciliation->isChecked());
+    m_reserveRemaining->setEnabled(m_reconciliation->isChecked());
+    m_breakerFailures->setEnabled(m_circuitBreaker->isChecked());
+    m_breakerCooldown->setEnabled(m_circuitBreaker->isChecked());
+    m_breakerRecoverySuccesses->setEnabled(m_circuitBreaker->isChecked());
+    m_scheduleStart->setEnabled(m_schedule->isChecked());
+    m_scheduleEnd->setEnabled(m_schedule->isChecked());
+  };
+  connect(m_reconciliation, &QCheckBox::toggled, this, updateMaintenanceControls);
+  connect(m_circuitBreaker, &QCheckBox::toggled, this, updateMaintenanceControls);
+  connect(m_schedule, &QCheckBox::toggled, this, updateMaintenanceControls);
+  updateMaintenanceControls();
   connect(m_runDryTest, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
+  connect(testRules, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
+  connect(exportConfiguration, &QPushButton::clicked, this, &SettingsTorrentAutomation::exportConfiguration);
+  connect(importConfiguration, &QPushButton::clicked, this, &SettingsTorrentAutomation::importConfiguration);
+  connect(retryQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::retryQueuedItem);
+  connect(chooseQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::chooseQueuedClient);
+  connect(cancelQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::cancelQueuedItem);
   connect(TorrentAutomationEngine::instance(qApp), &TorrentAutomationEngine::activityAdded,
           this, [this]() { refreshActivity(); });
   connect(m_cleanup, &QCheckBox::clicked, this, [this](bool checked) {
@@ -401,6 +538,18 @@ void SettingsTorrentAutomation::loadUi() {
     if (!checked && m_cleanup->isChecked()) QMessageBox::warning(this, tr("Cleanup target disabled"),
       tr("Cleanup will stop as soon as the client meets its own minimum-free-space requirement."));
   });
+  connect(m_cleanupGrace, &QCheckBox::clicked, this, [this](bool checked) {
+    if (!checked && m_cleanup->isChecked()) QMessageBox::warning(this, tr("Cleanup grace period disabled"),
+      tr("Eligible torrents may be removed during their first cleanup assessment. Keep per-removal confirmation enabled while testing."));
+  });
+  connect(m_minimumCopiesEnabled, &QCheckBox::clicked, this, [this](bool checked) {
+    if (!checked && m_cleanup->isChecked()) QMessageBox::warning(this, tr("Copy protection disabled"),
+      tr("Cleanup will not check whether another completed copy exists on a different configured client."));
+  });
+  connect(m_reconciliation, &QCheckBox::clicked, this, [this](bool checked) {
+    if (!checked) QMessageBox::warning(this, tr("Storage reconciliation disabled"),
+      tr("Manual capacity estimates can drift when torrents are changed outside RSS Guard. Live free-space readings remain preferred where available."));
+  });
   connect(m_maxRemovals, &QAbstractSpinBox::editingFinished, this, [this]() {
     if (m_cleanup->isChecked() && m_maxRemovalsEnabled->isChecked() && m_maxRemovals->value() > 10)
       QMessageBox::warning(this, tr("High cleanup removal limit"),
@@ -424,6 +573,17 @@ void SettingsTorrentAutomation::loadSettings() {
   m_requestTimeoutSeconds->setValue(m_config.requestTimeoutSeconds);
   m_historyLimit->setValue(m_config.historyLimit);
   m_unknownSizeGb->setValue(m_config.unknownTorrentSizeBytes / GiB);
+  m_reconciliation->setChecked(m_config.reconciliationEnabled);
+  m_reserveRemaining->setChecked(m_config.reserveRemainingBytes);
+  m_preventDuplicates->setChecked(m_config.preventDuplicateAcrossClients);
+  m_reconciliationMinutes->setValue(m_config.reconciliationMinutes);
+  m_circuitBreaker->setChecked(m_config.circuitBreakerEnabled);
+  m_breakerFailures->setValue(m_config.circuitBreakerFailures);
+  m_breakerCooldown->setValue(m_config.circuitBreakerCooldownMinutes);
+  m_breakerRecoverySuccesses->setValue(m_config.circuitBreakerRecoverySuccesses);
+  m_schedule->setChecked(m_config.scheduleEnabled);
+  m_scheduleStart->setCurrentIndex(m_scheduleStart->findData(m_config.scheduleStartHour));
+  m_scheduleEnd->setCurrentIndex(m_scheduleEnd->findData(m_config.scheduleEndHour));
   m_cleanup->setChecked(m_config.cleanupEnabled);
   m_deleteData->setChecked(m_config.deleteData);
   m_confirmCleanup->setChecked(m_config.cleanupRequireConfirmation);
@@ -440,6 +600,17 @@ void SettingsTorrentAutomation::loadSettings() {
   m_protectUploading->setChecked(m_config.protectUploadingEnabled);
   m_protectUploadKib->setValue(int(m_config.protectUploadBytesPerSecond / 1024));
   m_protectUnknownSpeed->setChecked(m_config.protectWhenSpeedUnknown);
+  m_protectRecentHours->setValue(m_config.protectRecentUploadHours);
+  m_cleanupGrace->setChecked(m_config.cleanupGraceEnabled);
+  m_cleanupGraceHours->setValue(m_config.cleanupGraceHours);
+  m_smartCleanup->setChecked(m_config.smartCleanupOrder);
+  m_minimumCopiesEnabled->setChecked(m_config.minimumCopiesEnabled);
+  m_minimumCopies->setValue(m_config.minimumCopiesAcrossClients);
+  m_protectedTags->setText(m_config.protectedTags.join(QStringLiteral(", ")));
+  m_protectedTrackers->setText(m_config.protectedTrackerTerms.join(QStringLiteral(", ")));
+  m_cleanupSchedule->setChecked(m_config.cleanupScheduleEnabled);
+  m_cleanupScheduleStart->setCurrentIndex(m_cleanupScheduleStart->findData(m_config.cleanupScheduleStartHour));
+  m_cleanupScheduleEnd->setCurrentIndex(m_cleanupScheduleEnd->findData(m_config.cleanupScheduleEndHour));
   m_cleanupBatchPercent->setValue(m_config.cleanupBatchPercent);
   refreshClientPolicies();
   refreshRules();
@@ -463,6 +634,17 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.requestTimeoutSeconds = m_requestTimeoutSeconds->value();
   m_config.historyLimit = m_historyLimit->value();
   m_config.unknownTorrentSizeBytes = qint64(m_unknownSizeGb->value() * GiB);
+  m_config.reconciliationEnabled = m_reconciliation->isChecked();
+  m_config.reserveRemainingBytes = m_reserveRemaining->isChecked();
+  m_config.preventDuplicateAcrossClients = m_preventDuplicates->isChecked();
+  m_config.reconciliationMinutes = m_reconciliationMinutes->value();
+  m_config.circuitBreakerEnabled = m_circuitBreaker->isChecked();
+  m_config.circuitBreakerFailures = m_breakerFailures->value();
+  m_config.circuitBreakerCooldownMinutes = m_breakerCooldown->value();
+  m_config.circuitBreakerRecoverySuccesses = m_breakerRecoverySuccesses->value();
+  m_config.scheduleEnabled = m_schedule->isChecked();
+  m_config.scheduleStartHour = m_scheduleStart->currentData().toInt();
+  m_config.scheduleEndHour = m_scheduleEnd->currentData().toInt();
   m_config.cleanupEnabled = m_cleanup->isChecked();
   m_config.deleteData = m_deleteData->isChecked();
   m_config.cleanupRequireConfirmation = m_confirmCleanup->isChecked();
@@ -479,6 +661,19 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.protectUploadingEnabled = m_protectUploading->isChecked();
   m_config.protectUploadBytesPerSecond = qint64(m_protectUploadKib->value()) * 1024;
   m_config.protectWhenSpeedUnknown = m_protectUnknownSpeed->isChecked();
+  m_config.protectRecentUploadHours = m_protectRecentHours->value();
+  m_config.cleanupGraceEnabled = m_cleanupGrace->isChecked();
+  m_config.cleanupGraceHours = m_cleanupGraceHours->value();
+  m_config.smartCleanupOrder = m_smartCleanup->isChecked();
+  m_config.minimumCopiesEnabled = m_minimumCopiesEnabled->isChecked();
+  m_config.minimumCopiesAcrossClients = m_minimumCopies->value();
+  m_config.protectedTags = m_protectedTags->text().split(QLatin1Char(','), Qt::SkipEmptyParts);
+  for (QString& value : m_config.protectedTags) value = value.trimmed();
+  m_config.protectedTrackerTerms = m_protectedTrackers->text().split(QLatin1Char(','), Qt::SkipEmptyParts);
+  for (QString& value : m_config.protectedTrackerTerms) value = value.trimmed();
+  m_config.cleanupScheduleEnabled = m_cleanupSchedule->isChecked();
+  m_config.cleanupScheduleStartHour = m_cleanupScheduleStart->currentData().toInt();
+  m_config.cleanupScheduleEndHour = m_cleanupScheduleEnd->currentData().toInt();
   m_config.cleanupBatchPercent = m_cleanupBatchPercent->value();
   m_config.clients.clear();
   for (int row = 0; row < m_clients->rowCount(); ++row) {
@@ -554,6 +749,16 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
     m_clients->setItem(row, 9, new QTableWidgetItem(QString::number(policy.requestTimeoutSeconds)));
     m_clients->setItem(row, 10, new QTableWidgetItem(QString::number(policy.retryAttempts)));
     m_clients->setItem(row, 11, cleanup);
+    QString storageSource;
+    if (client.capabilityFreeSpace) storageSource = policy.configuredCapacityBytes > 0
+      ? tr("Live free + known total") : tr("Live free; total unknown");
+    else if (m_config.reconciliationEnabled && client.capabilityTorrentList && policy.configuredCapacityBytes > 0)
+      storageSource = tr("Reconciled estimate");
+    else if (policy.configuredCapacityBytes > 0) storageSource = tr("Managed estimate");
+    else storageSource = tr("Unknown");
+    auto* storage = new QTableWidgetItem(storageSource);
+    storage->setFlags(storage->flags() & ~Qt::ItemIsEditable);
+    m_clients->setItem(row, 12, storage);
     for (int column = 0; column < m_clients->columnCount(); ++column) {
       if (column != 1 && m_clients->item(row, column)->toolTip().isEmpty())
         m_clients->item(row, column)->setToolTip(m_clients->horizontalHeaderItem(column)->toolTip());
@@ -680,19 +885,152 @@ void SettingsTorrentAutomation::removeRule() {
 
 void SettingsTorrentAutomation::refreshActivity() {
   m_activity->clear();
-  m_activity->addItems(TorrentAutomationEngine::instance(qApp)->recentActivity());
+  TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
+  m_activity->addItems(engine->recentActivity());
   if (m_activity->count() == 0) m_activity->addItem(tr("No automation activity has been recorded yet."));
+  m_queue->clear();
+  m_queue->addItems(engine->pendingRetries());
+  if (m_queue->count() == 0) m_queue->addItem(tr("No queued automation items."));
 }
 
 void SettingsTorrentAutomation::runDryTest() {
   TorrentAutomationEngine::instance(qApp)->runDryTest();
 }
 
+void SettingsTorrentAutomation::exportConfiguration() {
+  saveSettings();
+  const QString path = QFileDialog::getSaveFileName(this, tr("Export torrent configuration"),
+                                                     QStringLiteral("rssguard-torrent-configuration.json"),
+                                                     tr("JSON files (*.json)"));
+  if (path.isEmpty()) return;
+  QJsonArray clients;
+  for (const TorrentClientConfig& client : TorrentClientConfig::load(settings())) {
+    clients.append(QJsonObject{{QStringLiteral("id"), client.id},
+                               {QStringLiteral("name"), client.name},
+                               {QStringLiteral("type"), static_cast<int>(client.type)},
+                               {QStringLiteral("baseUrl"), client.baseUrl},
+                               {QStringLiteral("buttonColor"), client.buttonColor},
+                               {QStringLiteral("colorNotificationButtons"), client.colorNotificationButtons},
+                               {QStringLiteral("colorContextMenus"), client.colorContextMenus},
+                               {QStringLiteral("colorSettingsLists"), client.colorSettingsLists},
+                               {QStringLiteral("enabled"), client.enabled},
+                               {QStringLiteral("priority"), client.priority},
+                               {QStringLiteral("useRssGuardProxy"), client.useRssGuardProxy},
+                               {QStringLiteral("isDefault"), client.isDefault},
+                               {QStringLiteral("savePath"), client.savePath},
+                               {QStringLiteral("category"), client.category},
+                               {QStringLiteral("tags"), QJsonArray::fromStringList(client.tags)}});
+  }
+  const QJsonObject automation = QJsonDocument::fromJson(
+    settings()->value(QStringLiteral("TorrentAutomation"), QStringLiteral("configuration")).toByteArray()).object();
+  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-configuration-v1")},
+                         {QStringLiteral("exportedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+                         {QStringLiteral("credentialsIncluded"), false},
+                         {QStringLiteral("clients"), clients},
+                         {QStringLiteral("automation"), automation}};
+  QSaveFile file(path);
+  if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+    QMessageBox::warning(this, tr("Export failed"), tr("The configuration file could not be written."));
+    return;
+  }
+  QMessageBox::information(this, tr("Configuration exported"),
+                           tr("Torrent settings were exported. Usernames, passwords and API tokens were not included."));
+}
+
+void SettingsTorrentAutomation::importConfiguration() {
+  const QString path = QFileDialog::getOpenFileName(this, tr("Import torrent configuration"), QString(),
+                                                     tr("JSON files (*.json)"));
+  if (path.isEmpty()) return;
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    QMessageBox::warning(this, tr("Import failed"), tr("The configuration file could not be read."));
+    return;
+  }
+  QJsonParseError parseError;
+  const QJsonObject root = QJsonDocument::fromJson(file.readAll(), &parseError).object();
+  if (parseError.error != QJsonParseError::NoError ||
+      root.value(QStringLiteral("format")).toString() != QStringLiteral("rssguard-torrent-configuration-v1") ||
+      !root.value(QStringLiteral("automation")).isObject()) {
+    QMessageBox::warning(this, tr("Import failed"), tr("This is not a supported RSS Guard torrent-configuration file."));
+    return;
+  }
+  if (QMessageBox::warning(this, tr("Replace torrent configuration"),
+      tr("Replace the current torrent-client layout and automation rules with this file? Existing credentials are retained only for clients with matching IDs."),
+      QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+
+  const QList<TorrentClientConfig> existing = TorrentClientConfig::load(settings());
+  QList<TorrentClientConfig> imported;
+  for (const QJsonValue& value : root.value(QStringLiteral("clients")).toArray()) {
+    const QJsonObject object = value.toObject();
+    TorrentClientConfig client;
+    client.id = object.value(QStringLiteral("id")).toString();
+    for (const TorrentClientConfig& current : existing)
+      if (current.id == client.id) { client = current; break; }
+    client.id = object.value(QStringLiteral("id")).toString();
+    client.name = object.value(QStringLiteral("name")).toString();
+    client.type = static_cast<TorrentClientType>(qBound(0, object.value(QStringLiteral("type")).toInt(), 6));
+    client.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
+    client.buttonColor = object.value(QStringLiteral("buttonColor")).toString();
+    client.colorNotificationButtons = object.value(QStringLiteral("colorNotificationButtons")).toBool(true);
+    client.colorContextMenus = object.value(QStringLiteral("colorContextMenus")).toBool(true);
+    client.colorSettingsLists = object.value(QStringLiteral("colorSettingsLists")).toBool(true);
+    client.enabled = object.value(QStringLiteral("enabled")).toBool(true);
+    client.priority = object.value(QStringLiteral("priority")).toInt(1);
+    client.useRssGuardProxy = object.value(QStringLiteral("useRssGuardProxy")).toBool(true);
+    client.isDefault = object.value(QStringLiteral("isDefault")).toBool(false);
+    client.savePath = object.value(QStringLiteral("savePath")).toString();
+    client.category = object.value(QStringLiteral("category")).toString();
+    client.tags.clear();
+    for (const QJsonValue& tag : object.value(QStringLiteral("tags")).toArray()) client.tags.append(tag.toString());
+    if (!client.id.isEmpty() && !client.name.isEmpty() && !client.baseUrl.isEmpty()) imported.append(client);
+  }
+  TorrentClientConfig::save(settings(), imported);
+  settings()->setValue(QStringLiteral("TorrentAutomation"), QStringLiteral("configuration"),
+                       QJsonDocument(root.value(QStringLiteral("automation")).toObject()).toJson(QJsonDocument::Compact));
+  loadSettings();
+  dirtifySettings();
+  QMessageBox::information(this, tr("Configuration imported"),
+                           tr("Configuration imported. Enter credentials for any newly imported clients before testing them."));
+}
+
+void SettingsTorrentAutomation::retryQueuedItem() {
+  if (m_queue->currentRow() < 0 || TorrentAutomationEngine::instance(qApp)->pendingRetries().isEmpty()) return;
+  TorrentAutomationEngine::instance(qApp)->retryPending(m_queue->currentRow());
+  refreshActivity();
+}
+
+void SettingsTorrentAutomation::chooseQueuedClient() {
+  if (m_queue->currentRow() < 0 || TorrentAutomationEngine::instance(qApp)->pendingRetries().isEmpty()) return;
+  const QList<TorrentClientConfig> clients = TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(settings()));
+  QStringList names;
+  for (const TorrentClientConfig& client : clients) names.append(client.name);
+  if (names.isEmpty()) return;
+  bool accepted = false;
+  const QString chosen = QInputDialog::getItem(this, tr("Choose torrent client"), tr("Send queued item to:"),
+                                                names, 0, false, &accepted);
+  if (!accepted) return;
+  const int selected = names.indexOf(chosen);
+  if (selected < 0) return;
+  TorrentAutomationEngine::instance(qApp)->sendPendingToClient(m_queue->currentRow(), clients.at(selected).id);
+  refreshActivity();
+}
+
+void SettingsTorrentAutomation::cancelQueuedItem() {
+  if (m_queue->currentRow() < 0 || TorrentAutomationEngine::instance(qApp)->pendingRetries().isEmpty()) return;
+  if (QMessageBox::question(this, tr("Cancel queued automation"),
+                            tr("Remove the selected item from the retry queue? The torrent itself will not be changed.")) != QMessageBox::Yes) return;
+  TorrentAutomationEngine::instance(qApp)->cancelPending(m_queue->currentRow());
+  refreshActivity();
+}
+
 void SettingsTorrentAutomation::updateCleanupControls() {
   const bool enabled = m_cleanup->isChecked();
   const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_seedHoursEnabled, m_ratioEnabled,
                                             m_inactiveHoursEnabled, m_maxRemovalsEnabled, m_cleanupStopGbEnabled,
-                                            m_protectUploading, m_protectUnknownSpeed, m_cleanupBatchPercent};
+                                            m_protectUploading, m_protectUnknownSpeed, m_protectRecentHours,
+                                            m_cleanupGrace, m_smartCleanup, m_minimumCopiesEnabled,
+                                            m_protectedTags, m_protectedTrackers, m_cleanupSchedule,
+                                            m_cleanupBatchPercent};
   for (QWidget* widget : cleanup_widgets) widget->setEnabled(enabled);
   m_seedHours->setEnabled(enabled && m_seedHoursEnabled->isChecked());
   m_ratio->setEnabled(enabled && m_ratioEnabled->isChecked());
@@ -700,6 +1038,10 @@ void SettingsTorrentAutomation::updateCleanupControls() {
   m_maxRemovals->setEnabled(enabled && m_maxRemovalsEnabled->isChecked());
   m_cleanupStopGb->setEnabled(enabled && m_cleanupStopGbEnabled->isChecked());
   m_protectUploadKib->setEnabled(enabled && m_protectUploading->isChecked());
+  m_cleanupGraceHours->setEnabled(enabled && m_cleanupGrace->isChecked());
+  m_minimumCopies->setEnabled(enabled && m_minimumCopiesEnabled->isChecked());
+  m_cleanupScheduleStart->setEnabled(enabled && m_cleanupSchedule->isChecked());
+  m_cleanupScheduleEnd->setEnabled(enabled && m_cleanupSchedule->isChecked());
 }
 
 void SettingsTorrentAutomation::updateCapabilityDisplay() {
