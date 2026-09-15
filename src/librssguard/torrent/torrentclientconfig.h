@@ -55,6 +55,7 @@ struct RSSGUARD_DLLSPEC TorrentClientConfig {
 
   bool isValid(QString* error = nullptr) const;
   static QString typeName(TorrentClientType type);
+  static QString suggestedBaseUrl(TorrentClientType type, const QString& enteredUrl);
   static QList<TorrentClientConfig> enabledInPriorityOrder(const QList<TorrentClientConfig>& clients);
   static QList<TorrentClientConfig> load(Settings* settings);
   static void save(Settings* settings, const QList<TorrentClientConfig>& clients);

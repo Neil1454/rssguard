@@ -242,8 +242,10 @@ void QBittorrentClient::fetchStatus() {
       }
       else {
         const QJsonObject server = response.value(QStringLiteral("server_state")).toObject();
-        status.downloadBytesPerSecond = server.value(QStringLiteral("dl_info_speed")).toVariant().toLongLong();
-        status.uploadBytesPerSecond = server.value(QStringLiteral("up_info_speed")).toVariant().toLongLong();
+        if (server.contains(QStringLiteral("dl_info_speed")))
+          status.downloadBytesPerSecond = server.value(QStringLiteral("dl_info_speed")).toVariant().toLongLong();
+        if (server.contains(QStringLiteral("up_info_speed")))
+          status.uploadBytesPerSecond = server.value(QStringLiteral("up_info_speed")).toVariant().toLongLong();
         if (server.contains(QStringLiteral("free_space_on_disk"))) {
           status.freeBytes = server.value(QStringLiteral("free_space_on_disk")).toVariant().toLongLong();
           status.liveSpace = status.freeBytes >= 0;
@@ -260,8 +262,10 @@ void QBittorrentClient::fetchStatus() {
           item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("added_on")).toVariant().toLongLong());
           item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("completion_on")).toVariant().toLongLong());
           item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("last_activity")).toVariant().toLongLong());
-          item.downloadBytesPerSecond = object.value(QStringLiteral("dlspeed")).toVariant().toLongLong();
-          item.uploadBytesPerSecond = object.value(QStringLiteral("upspeed")).toVariant().toLongLong();
+          if (object.contains(QStringLiteral("dlspeed")))
+            item.downloadBytesPerSecond = object.value(QStringLiteral("dlspeed")).toVariant().toLongLong();
+          if (object.contains(QStringLiteral("upspeed")))
+            item.uploadBytesPerSecond = object.value(QStringLiteral("upspeed")).toVariant().toLongLong();
           const QString state = object.value(QStringLiteral("state")).toString();
           item.managedByAutomation = object.value(QStringLiteral("tags")).toString()
                                                .split(QLatin1Char(','), Qt::SkipEmptyParts)
@@ -412,10 +416,14 @@ void TransmissionClient::fetchStatus() {
           item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("addedDate")).toVariant().toLongLong());
           item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("doneDate")).toVariant().toLongLong());
           item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("activityDate")).toVariant().toLongLong());
-          item.downloadBytesPerSecond = object.value(QStringLiteral("rateDownload")).toVariant().toLongLong();
-          item.uploadBytesPerSecond = object.value(QStringLiteral("rateUpload")).toVariant().toLongLong();
-          status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
-          status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+          if (object.contains(QStringLiteral("rateDownload"))) {
+            item.downloadBytesPerSecond = object.value(QStringLiteral("rateDownload")).toVariant().toLongLong();
+            status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
+          }
+          if (object.contains(QStringLiteral("rateUpload"))) {
+            item.uploadBytesPerSecond = object.value(QStringLiteral("rateUpload")).toVariant().toLongLong();
+            status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+          }
           const int state = object.value(QStringLiteral("status")).toInt();
           for (const QJsonValue& label : object.value(QStringLiteral("labels")).toArray())
             if (label.toString() == QStringLiteral("rssguard-auto")) item.managedByAutomation = true;
@@ -584,10 +592,14 @@ void FloodClient::fetchStatus() {
         item.completed = timestampFromApi(object.value(QStringLiteral("dateFinished")).toVariant().toLongLong());
         const qint64 activeTime = object.value(QStringLiteral("dateActive")).toVariant().toLongLong();
         item.lastActivity = timestampFromApi(activeTime);
-        item.downloadBytesPerSecond = object.value(QStringLiteral("downRate")).toVariant().toLongLong();
-        item.uploadBytesPerSecond = object.value(QStringLiteral("upRate")).toVariant().toLongLong();
-        status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
-        status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+        if (object.contains(QStringLiteral("downRate"))) {
+          item.downloadBytesPerSecond = object.value(QStringLiteral("downRate")).toVariant().toLongLong();
+          status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
+        }
+        if (object.contains(QStringLiteral("upRate"))) {
+          item.uploadBytesPerSecond = object.value(QStringLiteral("upRate")).toVariant().toLongLong();
+          status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+        }
         const QJsonArray states = object.value(QStringLiteral("status")).toArray();
         QStringList stateNames;
         for (const QJsonValue& value : states) stateNames.append(value.toString().toLower());
@@ -981,10 +993,14 @@ void DelugeClient::fetchStatus() {
             item.added = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("time_added")).toVariant().toLongLong());
             item.completed = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("completed_time")).toVariant().toLongLong());
             item.lastActivity = QDateTime::fromSecsSinceEpoch(object.value(QStringLiteral("last_seen_complete")).toVariant().toLongLong());
-            item.downloadBytesPerSecond = object.value(QStringLiteral("download_payload_rate")).toVariant().toLongLong();
-            item.uploadBytesPerSecond = object.value(QStringLiteral("upload_payload_rate")).toVariant().toLongLong();
-            status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
-            status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+            if (object.contains(QStringLiteral("download_payload_rate"))) {
+              item.downloadBytesPerSecond = object.value(QStringLiteral("download_payload_rate")).toVariant().toLongLong();
+              status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
+            }
+            if (object.contains(QStringLiteral("upload_payload_rate"))) {
+              item.uploadBytesPerSecond = object.value(QStringLiteral("upload_payload_rate")).toVariant().toLongLong();
+              status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+            }
             const QString state = object.value(QStringLiteral("state")).toString();
             item.downloading = state.compare(QStringLiteral("Downloading"), Qt::CaseInsensitive) == 0;
             item.seeding = state.compare(QStringLiteral("Seeding"), Qt::CaseInsensitive) == 0;
@@ -1107,14 +1123,18 @@ void RQBitClient::fetchStatus() {
                                           : (stats.value(QStringLiteral("finished")).toBool() ? 1.0 : 0.0);
         const QString state = stats.value(QStringLiteral("state")).toString();
         const QJsonObject live = stats.value(QStringLiteral("live")).toObject();
-        const double downloadRate = live.value(QStringLiteral("download_speed")).toObject()
-                                          .value(QStringLiteral("mbps")).toDouble();
-        const double uploadRate = live.value(QStringLiteral("upload_speed")).toObject()
-                                        .value(QStringLiteral("mbps")).toDouble();
-        item.downloadBytesPerSecond = qint64(downloadRate * 1000000.0 / 8.0);
-        item.uploadBytesPerSecond = qint64(uploadRate * 1000000.0 / 8.0);
-        status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
-        status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+        const QJsonObject downloadSpeed = live.value(QStringLiteral("download_speed")).toObject();
+        const QJsonObject uploadSpeed = live.value(QStringLiteral("upload_speed")).toObject();
+        const double downloadRate = downloadSpeed.value(QStringLiteral("mbps")).toDouble();
+        const double uploadRate = uploadSpeed.value(QStringLiteral("mbps")).toDouble();
+        if (downloadSpeed.contains(QStringLiteral("mbps"))) {
+          item.downloadBytesPerSecond = qint64(downloadRate * 1000000.0 / 8.0);
+          status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
+        }
+        if (uploadSpeed.contains(QStringLiteral("mbps"))) {
+          item.uploadBytesPerSecond = qint64(uploadRate * 1000000.0 / 8.0);
+          status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+        }
         item.downloading = state == QStringLiteral("live") && !stats.value(QStringLiteral("finished")).toBool() &&
                            (downloadRate > 0 || item.progress < 1.0);
         item.seeding = state == QStringLiteral("live") && stats.value(QStringLiteral("finished")).toBool();
@@ -1254,10 +1274,14 @@ void PorlaClient::fetchStatus() {
           item.sizeBytes = object.value(QStringLiteral("size")).toVariant().toLongLong();
           item.progress = object.value(QStringLiteral("progress")).toDouble();
           item.ratio = object.value(QStringLiteral("ratio")).toDouble();
-          item.downloadBytesPerSecond = object.value(QStringLiteral("download_rate")).toVariant().toLongLong();
-          item.uploadBytesPerSecond = object.value(QStringLiteral("upload_rate")).toVariant().toLongLong();
-          status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
-          status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+          if (object.contains(QStringLiteral("download_rate"))) {
+            item.downloadBytesPerSecond = object.value(QStringLiteral("download_rate")).toVariant().toLongLong();
+            status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
+          }
+          if (object.contains(QStringLiteral("upload_rate"))) {
+            item.uploadBytesPerSecond = object.value(QStringLiteral("upload_rate")).toVariant().toLongLong();
+            status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
+          }
           item.downloading = item.progress < 1.0 && object.value(QStringLiteral("download_rate")).toDouble() > 0;
           item.seeding = item.progress >= 1.0;
           status.activeDownloads += item.downloading ? 1 : 0;

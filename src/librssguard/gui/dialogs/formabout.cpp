@@ -142,6 +142,8 @@ void FormAbout::loadLicenseAndInformation() {
 #else
                                  QSL("text")));
 #endif
+  m_ui.m_lblDesc->setText(m_ui.m_lblDesc->text() +
+                          tr("<br/><b>Torrent fork build:</b> %1").arg(QSL(TORRENT_FORK_BUILD)));
   m_ui.m_txtInfo->setText(tr("<body>%5 is a (very) tiny feed reader."
                              "<br><br>This software is distributed under the terms of GNU General "
                              "Public License, version 3."

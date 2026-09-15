@@ -1,15 +1,15 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-55-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-57-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current downloadable test version is **Build 55**, based on RSS Guard **5.2.6 development source**. Build 55 passed the Windows x64 Qt 6 WebEngine compile, packaging and artifact-upload workflow. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 57**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 55 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 57 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -52,7 +52,7 @@ To retain an existing portable profile, close both copies of RSS Guard and copy 
 
 Multiple instances of the same client type are supported. Each instance can have its own name, endpoint, credentials, proxy choice, save path, supported category/labels/tags, enabled state, button order and colour.
 
-The client editor changes its examples, tooltips and enabled fields for the selected client type. **Test connection** checks one client and **Test all enabled** checks all active configurations. See the [complete client setup and compatibility guide](docs/source/features/torrent-clients.md).
+The client editor changes its examples, tooltips and enabled fields for the selected client type. It detects common Web UI addresses and offers a likely API/RPC correction without silently rewriting custom endpoints. **Test connection** checks one client and **Test all enabled** checks all active configurations. See the [complete client setup and compatibility guide](docs/source/features/torrent-clients.md).
 
 ### Notifications and appearance
 
@@ -107,7 +107,7 @@ Non-destructive selected/all-client tests record whether the authenticated API c
 - disk free space and total capacity;
 - torrent listing;
 - aggregate and per-torrent transfer rates;
-- safe torrent removal.
+- whether the adapter exposes a removal API (the non-destructive test cannot prove server-side delete permission).
 
 An exact server-reported capacity is copied into the automation capacity field. Where an API does not expose filesystem totals, a manually configured capacity can be used as an estimate. The capability test never adds or removes a torrent.
 
@@ -141,13 +141,19 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 55 — current** | Approval-based automatic processing; blue/green/amber/red client assessment; transfer-speed-aware balanced routing; percentage free-space targets; persistent configurable retries and failover; duplicate-safe magnet timeout verification; oldest-first upload-aware cleanup; expanded documentation. |
+| **Build 57 — current candidate** | Cleanup-state integrity; independent configurable status retries; capability checks based on actually returned transfer-rate values; explicit removal-permission limitation; common Web UI-to-API URL suggestions; regression tests; visible fork build number. |
+| Build 56 | Incidental documentation workflow run; not a distributed torrent build. |
+| Build 55 | Approval-based automatic processing; blue/green/amber/red client assessment; transfer-speed-aware balanced routing; percentage free-space targets; persistent configurable retries and failover; duplicate-safe magnet timeout verification; oldest-first upload-aware cleanup; expanded documentation. |
 | Build 54 | Intermediate CI run containing the Build 55 feature set; failed Windows compilation and was replaced. It should not be used or distributed. |
 | Build 53 | Synchronized send ticks; capability testing and capacity autofill; configurable cleanup safeguards and forced dry-run testing; proxy test; light/dark switch; clearer tooltips, feed selection and client identity; pressed buttons and processed notification bands. |
 | 09/09/2026 compatibility milestone | Added rQBit, Porla and Deluge; corrected ruTorrent endpoints; improved qBittorrent 5.2, Transmission 3.00/4.x and Flood responses; enabling/disabling, priority, colours, test-all and notification persistence/layout improvements. |
 | 08/09/2026 initial integration | Added the native client configuration, extraction engine, manual context-menu sending, qBittorrent/Transmission/Flood/rTorrent adapters, proxy integration, tests and dedicated Windows portable workflow. |
 
 Build numbers identify this fork's incremental Windows test packages; they do not replace the underlying upstream RSS Guard version number.
+
+The pre-automation rollback point requested during development is **Build 19**, commit
+[`5a22be0f1166debe89595ccae1c92f75e31897a5`](https://github.com/Neil1454/rssguard/commit/5a22be0f1166debe89595ccae1c92f75e31897a5).
+It remains in the feature branch's history, so the source can be checked out at that commit even after later test builds.
 
 ## Documentation
 
@@ -164,7 +170,7 @@ Build numbers identify this fork's incremental Windows test packages; they do no
 
 ## Testing status and reporting problems
 
-Build 55 passed the automated Windows compile and packaging workflow. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 57 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

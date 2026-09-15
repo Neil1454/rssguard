@@ -133,8 +133,10 @@ namespace {
                       tr("The client API returned usable free-space information."));
         addCapability(tr("Torrent listing"), initial.capabilityTorrentList,
                       tr("The client returned its torrent list, including an empty list when no torrents exist."));
-        addCapability(tr("Safe removal API available"), initial.capabilityRemoval,
-                      tr("The adapter and tested status API support removal. No torrent is deleted during the test."));
+        addCapability(tr("Transfer-rate values"), initial.capabilityTransferRates,
+                      tr("The latest status response contained aggregate or per-torrent transfer-rate values."));
+        addCapability(tr("Removal API supported"), initial.capabilityRemoval,
+                      tr("The adapter has a removal operation and listing succeeded. The non-destructive test does not prove server-side removal permission."));
         auto* capabilityWhen = new QLabel(initial.capabilityTested
           ? tr("Last tested: %1").arg(QLocale().toString(initial.capabilityTestedAt.toLocalTime(), QLocale::ShortFormat))
           : tr("Not tested yet. Save the client, then use Test connection."), capabilities);
@@ -156,6 +158,18 @@ namespace {
           TorrentClientConfig candidate = value();
           QString error;
           if (!candidate.isValid(&error)) { QMessageBox::warning(this, tr("Invalid torrent client"), error); return; }
+          const QString suggestion = TorrentClientConfig::suggestedBaseUrl(candidate.type, candidate.baseUrl);
+          if (suggestion != candidate.baseUrl) {
+            QMessageBox prompt(QMessageBox::Question, tr("Suggested client URL"),
+              tr("The entered address looks like a Web UI address. Use this likely API endpoint instead?\n\n%1")
+                .arg(suggestion), QMessageBox::NoButton, this);
+            QPushButton* useSuggestion = prompt.addButton(tr("Use suggested URL"), QMessageBox::AcceptRole);
+            prompt.addButton(tr("Keep entered URL"), QMessageBox::DestructiveRole);
+            prompt.addButton(QMessageBox::Cancel);
+            prompt.exec();
+            if (prompt.clickedButton() == useSuggestion) m_url->setText(suggestion);
+            else if (prompt.standardButton(prompt.clickedButton()) == QMessageBox::Cancel) return;
+          }
           accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -454,7 +468,7 @@ QString SettingsTorrentClients::recordCapabilities(const TorrentClientConfig& te
   dirtifySettings();
   const auto mark = [](bool yes) { return yes ? QStringLiteral("&#10004;") : QStringLiteral("&#10008;"); };
   return tr("<b>%1</b><br>%2 Connection and authentication<br>%3 Live workload status<br>%4 Live free disk space"
-            "<br>%5 Torrent listing<br>%6 Safe removal API<br><br>%7")
+            "<br>%5 Torrent listing<br>%6 Removal API support (permission not tested)<br><br>%7")
     .arg(tested.name.toHtmlEscaped(), mark(connected), mark(liveStatus), mark(freeSpace), mark(torrentList),
          mark(removal), detail.toHtmlEscaped());
 }

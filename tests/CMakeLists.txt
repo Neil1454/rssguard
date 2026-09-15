@@ -78,6 +78,10 @@ if(ENABLE_TESTING)
   add_rssguard_test(test_torrentextractor
     torrent/test_torrentextractor.cpp
   )
+
+  add_rssguard_test(test_torrentclientconfig
+    torrent/test_torrentclientconfig.cpp
+  )
 endif()
 
 if(ENABLE_BENCHMARKS)

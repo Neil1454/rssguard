@@ -239,25 +239,36 @@ void TorrentAutomationEngine::beginBatch() {
   }
   m_statuses.clear();
   m_statuses.resize(m_clients.size());
-  m_queryIndex = 0;
+  m_pendingStatusQueries = m_clients.size();
   m_cleanupCount = 0;
   if (m_clients.isEmpty()) {
     notify(tr("Torrent automation"), tr("No enabled torrent clients participate in automation."), true);
     finishBatch();
     return;
   }
-  queryNextClient();
+  for (int index = 0; index < m_clients.size(); ++index) queryClientStatus(index, 0);
 }
 
-void TorrentAutomationEngine::queryNextClient() {
-  if (m_queryIndex >= m_clients.size()) {
-    processNextJob();
-    return;
-  }
-  const int index = m_queryIndex++;
+void TorrentAutomationEngine::queryClientStatus(int index, int attempt) {
   TorrentClient* client = TorrentClient::create(m_clients.at(index), this);
-  connect(client, &TorrentClient::statusFinished, this, [this, client, index](TorrentClientStatus status) {
+  connect(client, &TorrentClient::statusFinished, this, [this, client, index, attempt](TorrentClientStatus status) {
     const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(index).id);
+    const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
+    if (!status.reachable && m_config.retryEnabled && attempt < maximumRetries &&
+        isTransientFailure(status.detail)) {
+      qint64 delay = qMax(1, m_config.retryInitialSeconds);
+      if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(attempt, 16));
+      delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+      Job statusJob;
+      statusJob.title = m_clients.at(index).name;
+      record(QStringLiteral("status-retry"), statusJob, m_clients.at(index).id,
+             tr("Status check failed; retry %1 of %2 in %3 seconds. %4")
+               .arg(attempt + 1).arg(maximumRetries).arg(delay).arg(status.detail));
+      client->deleteLater();
+      QTimer::singleShot(int(qMin<qint64>(delay * 1000, std::numeric_limits<int>::max())), this,
+                         [this, index, attempt]() { queryClientStatus(index, attempt + 1); });
+      return;
+    }
     if (status.totalBytes <= 0 && policy.configuredCapacityBytes > 0)
       status.totalBytes = policy.configuredCapacityBytes;
     if (status.freeBytes < 0 && policy.configuredCapacityBytes > 0) {
@@ -265,7 +276,7 @@ void TorrentAutomationEngine::queryNextClient() {
     }
     m_statuses[index] = status;
     client->deleteLater();
-    queryNextClient();
+    if (--m_pendingStatusQueries == 0) processNextJob();
   });
   client->fetchStatus();
 }
@@ -528,6 +539,7 @@ void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
       TorrentSendHistory::instance(qApp)->markSent({job.messageId}, config.id);
       m_managed.append(QJsonObject{{QStringLiteral("key"), job.key},
                                    {QStringLiteral("clientId"), config.id},
+                                   {QStringLiteral("infoHash"), magnetInfoHash(job.url)},
                                    {QStringLiteral("sizeBytes"), job.sizeBytes},
                                    {QStringLiteral("added"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}});
       record(QStringLiteral("sent"), job, config.id, message);
@@ -652,6 +664,7 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
   for (int i = 0; i < m_clients.size(); ++i) {
     const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(i).id);
     const TorrentClientStatus& clientStatus = m_statuses.at(i);
+    if (job.attemptedClientIds.contains(m_clients.at(i).id)) continue;
     qint64 cleanupTarget = clientFreeSpaceTarget(i) + job.sizeBytes;
     const qint64 capacity = clientStatus.totalBytes > 0 ? clientStatus.totalBytes : policy.configuredCapacityBytes;
     if (capacity > 0 && m_config.cleanupBatchPercent > 0.0) {
@@ -712,14 +725,40 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
       if (success) {
         ++m_cleanupCount;
         m_statuses[i].freeBytes += victim.sizeBytes;
+        for (int torrentIndex = m_statuses[i].torrents.size() - 1; torrentIndex >= 0; --torrentIndex) {
+          if (m_statuses[i].torrents.at(torrentIndex).hash.compare(victim.hash, Qt::CaseInsensitive) == 0) {
+            m_statuses[i].torrents.removeAt(torrentIndex);
+            break;
+          }
+        }
+        for (int allocationIndex = 0; allocationIndex < m_managed.size(); ++allocationIndex) {
+          const QJsonObject allocation = m_managed.at(allocationIndex).toObject();
+          if (allocation.value(QStringLiteral("clientId")).toString() != m_clients.at(i).id) continue;
+          const QString allocationHash = allocation.value(QStringLiteral("infoHash")).toString();
+          const qint64 allocationSize = allocation.value(QStringLiteral("sizeBytes")).toVariant().toLongLong();
+          if ((!allocationHash.isEmpty() && allocationHash.compare(victim.hash, Qt::CaseInsensitive) == 0) ||
+              (allocationHash.isEmpty() && allocationSize == victim.sizeBytes)) {
+            m_managed.removeAt(allocationIndex);
+            break;
+          }
+        }
         record(QStringLiteral("cleanup"), job, m_clients.at(i).id,
                tr("Removed %1 and recovered approximately %2 GB.").arg(victim.name).arg(victim.sizeBytes / 1000000000.0, 0, 'f', 1));
         notify(tr("Torrent automation cleanup"), tr("Removed “%1” from %2 to make room for “%3”.")
                                                       .arg(victim.name, m_clients.at(i).name, job.title));
       }
-      else notify(tr("Torrent cleanup failed"), message, true);
+      else {
+        m_statuses[i].reachable = false;
+        m_statuses[i].detail = message;
+        record(QStringLiteral("cleanup-failed"), job, m_clients.at(i).id,
+               tr("Cleanup failed on %1; this client will not be tried again during the current attempt. %2")
+                 .arg(m_clients.at(i).name, message));
+        notify(tr("Torrent cleanup failed"), message, true);
+      }
       client->deleteLater();
-      m_jobs.prepend(job);
+      Job continuation = job;
+      if (!success) continuation.attemptedClientIds.append(m_clients.at(i).id);
+      m_jobs.prepend(continuation);
       processNextJob();
     });
     client->removeTorrent(victim.hash, m_config.deleteData);

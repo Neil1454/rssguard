@@ -6,11 +6,12 @@
 - Inspected current `MessagesView` selection/context-menu path, `Message` enclosure fields, settings panels, settings encryption convention, and `BaseNetworkAccessManager` proxy/TLS behavior.
 - Verified adapter request shapes against current upstream qBittorrent WebUI API wiki, Transmission `docs/rpc-spec.md`, Flood route schemas/handlers, and rTorrent/Flood XML-RPC implementation.
 - Added `test_torrentextractor` for enclosure, magnet, direct `.torrent`, false-positive article URL, bulk selection, and duplicate behavior.
+- Added `test_torrentclientconfig` for Transmission, ruTorrent and qBittorrent endpoint suggestions and custom-endpoint preservation.
 - Ran `git diff --check` successfully.
 
 ## Build verification
 
-The dedicated GitHub Actions workflow has successfully compiled and packaged Build 55 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 57 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -56,7 +57,9 @@ Client-specific checks:
 - Client colours: every common colour and the system default persist after restart; notification-button, article-menu and settings-list placement can be enabled independently.
 - Notification send feedback: buttons visibly depress, show an in-progress label, and fully successful article rows turn green; failures and partial successes do not.
 - Send history: a successful destination shows a green tick in both the notification and main article context menu, persists after restart, and updates both locations regardless of where the send began.
-- Capability reliability: one transient status failure is retried; exact server-reported total capacity populates Capacity GB; unavailable filesystem totals retain manual capacity and display a reason.
+- Capability reliability: configured global/per-client status retries and request timeouts are honoured; transfer-rate capability is ticked only when values are returned; exact server-reported total capacity populates Capacity GB; unavailable filesystem totals retain manual capacity and display a reason; removal support is not mistaken for tested delete permission.
+- Cleanup integrity: after each successful removal, the same torrent cannot be selected again and estimated managed capacity falls by the removed allocation; a failed removal tries another eligible client or enters the bounded retry queue.
+- URL assistance: common Transmission Web UI, ruTorrent homepage and qBittorrent `/api/v2` entries offer a corrected endpoint; custom endpoints can be retained.
 - Client identity: automation rows display the configured name, configured colour and underlying client type.
 - Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
 - Manual dry test: evaluates the latest fetched eligible items, writes concise DRY RUN routing/cleanup decisions, and performs no add/remove/delete request.

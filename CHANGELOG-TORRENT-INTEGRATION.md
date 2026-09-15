@@ -2,6 +2,12 @@
 
 ## Torrent automation development build
 
+- Build 57 fixes cleanup bookkeeping so a successfully removed torrent is removed from both the live snapshot and the managed-capacity ledger before another cleanup decision. Failed removals are bounded and cannot repeatedly select the same client in one attempt.
+- Client status checks now honour global/per-client retry counts, request timeouts and backoff independently, so one busy client does not prevent other clients from being assessed.
+- Capability tests only mark transfer speeds when the server actually returns aggregate or per-torrent rate values. Removal is now labelled as adapter/API support rather than a guarantee of server-side permission.
+- Added non-destructive correction prompts for common Transmission Web UI, ruTorrent homepage and qBittorrent API-suffix mistakes, while preserving custom endpoints when no confident correction is available.
+- Added URL-correction regression tests and a visible torrent-fork build number under Help > About RSS Guard.
+
 - Build 55 adds approval-based **Process automatically** actions to new-article notifications and the main article context menu. It assesses every participating client before sending and retains the existing direct client buttons.
 - Added a traffic-light destination assessment: blue is the recommended destination, green is suitable, amber can be manually overridden, and red is unavailable. Every colour is accompanied by text and a reason.
 - Balanced routing now considers priority, active and queued downloads, aggregate download rate, and free-space ratio. Per-client maximum download rate, request timeout, retry count, minimum free space and target-free-space percentage are configurable.

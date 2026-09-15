@@ -46,6 +46,7 @@ namespace {
 
   QString capabilitySummary(const TorrentClientConfig& config,
                             const TorrentClientStatus& status,
+                            bool transferRatesAvailable,
                             bool removalAvailable) {
     QStringList parts;
     parts << (status.reachable ? QObject::tr("connection and workload verified")
@@ -59,12 +60,32 @@ namespace {
       parts << QObject::tr("disk space is not exposed by this portable API; configured capacity is required");
     }
     else parts << QObject::tr("disk-space request was unavailable");
-    parts << (status.reachable ? QObject::tr("per-torrent transfer-rate monitoring available")
-                               : QObject::tr("transfer-rate monitoring unavailable"));
-    parts << (removalAvailable ? QObject::tr("removal API available (not destructively tested)")
-                               : QObject::tr("safe removal unavailable"));
+    parts << (transferRatesAvailable ? QObject::tr("transfer-rate values reported")
+                                     : QObject::tr("transfer-rate values were not reported"));
+    parts << (removalAvailable ? QObject::tr("removal API supported by the adapter; server permission not destructively tested")
+                               : QObject::tr("removal API unavailable"));
     if (!status.detail.isEmpty()) parts << status.detail;
     return parts.join(QStringLiteral("; "));
+  }
+
+  bool hasTransferRateValues(const TorrentClientStatus& status) {
+    if (status.downloadBytesPerSecond >= 0 || status.uploadBytesPerSecond >= 0) return true;
+    return std::any_of(status.torrents.cbegin(), status.torrents.cend(), [](const TorrentRemoteItem& item) {
+      return item.downloadBytesPerSecond >= 0 || item.uploadBytesPerSecond >= 0;
+    });
+  }
+
+  bool transientStatusFailure(const QString& message) {
+    const QString lower = message.toLower();
+    const QStringList markers{QStringLiteral("timeout"), QStringLiteral("timed out"),
+                              QStringLiteral("temporarily"), QStringLiteral("unavailable"),
+                              QStringLiteral("connection refused"), QStringLiteral("connection reset"),
+                              QStringLiteral("host not found"), QStringLiteral("http 429"),
+                              QStringLiteral("http 502"), QStringLiteral("http 503"),
+                              QStringLiteral("http 504")};
+    return std::any_of(markers.cbegin(), markers.cend(), [&lower](const QString& marker) {
+      return lower.contains(marker);
+    });
   }
 }
 
@@ -196,13 +217,13 @@ void SettingsTorrentAutomation::loadUi() {
   m_capSpace = new QCheckBox(tr("Disk space"), capabilityBox);
   m_capList = new QCheckBox(tr("Torrent list"), capabilityBox);
   m_capRates = new QCheckBox(tr("Transfer speeds"), capabilityBox);
-  m_capRemoval = new QCheckBox(tr("Safe removal"), capabilityBox);
+  m_capRemoval = new QCheckBox(tr("Removal API"), capabilityBox);
   m_capConnected->setToolTip(tr("The latest test successfully connected and authenticated with the client."));
   m_capStatus->setToolTip(tr("The latest test returned live counts for active, queued and seeding torrents."));
   m_capSpace->setToolTip(tr("The latest test returned live free disk space from the client API."));
   m_capList->setToolTip(tr("The latest test returned the torrent list, including a valid empty list."));
-  m_capRates->setToolTip(tr("The adapter reports transfer rates used for busy-client routing and active-upload cleanup protection."));
-  m_capRemoval->setToolTip(tr("The adapter supports safe removal and the status/list test succeeded. Testing never removes a torrent."));
+  m_capRates->setToolTip(tr("The latest status response contained transfer-rate values used for busy-client routing and active-upload cleanup protection."));
+  m_capRemoval->setToolTip(tr("The adapter has a removal operation and listing succeeded. This non-destructive test does not prove that the server account has removal permission."));
   for (QCheckBox* box : {m_capConnected, m_capStatus, m_capSpace, m_capList, m_capRates, m_capRemoval}) {
     box->setEnabled(false); capabilityLayout->addWidget(box);
   }
@@ -505,7 +526,7 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
     cleanup->setCheckState(cleanupSupported && policy.allowCleanup ? Qt::Checked : Qt::Unchecked);
     if (!cleanupSupported) {
       cleanup->setFlags(cleanup->flags() & ~Qt::ItemIsEnabled);
-      cleanup->setToolTip(tr("Disabled until a capability test confirms both torrent listing and safe removal for this client."));
+      cleanup->setToolTip(tr("Disabled until a capability test confirms torrent listing and adapter removal-API support. Server-side permission is not destructively tested."));
     }
     m_clients->setItem(row, 0, use); m_clients->setItem(row, 1, name);
     auto* clientCell = new QWidget(m_clients);
@@ -756,10 +777,14 @@ void SettingsTorrentAutomation::storeCapabilityResult(const TorrentClientConfig&
 void SettingsTorrentAutomation::testSelectedClient() {
   const int row = m_clients->currentRow();
   if (row < 0 || row >= m_clientConfigs.size()) return;
-  const TorrentClientConfig config = m_clientConfigs.at(row);
+  TorrentClientConfig config = m_clientConfigs.at(row);
+  const TorrentAutomationClientPolicy policy = m_config.policyFor(config.id);
+  config.requestTimeoutSeconds = policy.requestTimeoutSeconds > 0
+                                   ? policy.requestTimeoutSeconds : m_config.requestTimeoutSeconds;
+  const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
   m_testSelected->setEnabled(false); m_testAll->setEnabled(false);
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::testFinished, this, [this, client, config](bool success, const QString& message) {
+  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries](bool success, const QString& message) {
     if (!success || !client->supportsLiveStatus()) {
       storeCapabilityResult(config, success, false, false, false, false, false, -1, message);
       QMessageBox::information(this, tr("Automation capability test"),
@@ -767,15 +792,21 @@ void SettingsTorrentAutomation::testSelectedClient() {
       client->deleteLater(); m_testAll->setEnabled(true); refreshClientPolicies(); return;
     }
     auto attempts = std::make_shared<int>(0);
-    connect(client, &TorrentClient::statusFinished, this, [this, client, config, attempts](const TorrentClientStatus& status) {
-      if (!status.reachable && (*attempts)++ == 0) {
-        QTimer::singleShot(500, client, [client]() { client->fetchStatus(); });
+    connect(client, &TorrentClient::statusFinished, this, [this, client, config, attempts, maximumRetries](const TorrentClientStatus& status) {
+      if (!status.reachable && m_config.retryEnabled && *attempts < maximumRetries &&
+          transientStatusFailure(status.detail)) {
+        qint64 delay = qMax(1, m_config.retryInitialSeconds);
+        if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(*attempts, 16));
+        delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+        ++*attempts;
+        QTimer::singleShot(int(delay * 1000), client, [client]() { client->fetchStatus(); });
         return;
       }
       const bool live = status.reachable;
       const bool removal = live && client->supportsRemoval();
-      storeCapabilityResult(config, true, live, live && status.liveSpace, live, live,
-                            removal, status.totalBytes, capabilitySummary(config, status, removal));
+      const bool transferRates = live && hasTransferRateValues(status);
+      storeCapabilityResult(config, true, live, live && status.liveSpace, live, transferRates,
+                            removal, status.totalBytes, capabilitySummary(config, status, transferRates, removal));
       QMessageBox::information(this, tr("Automation capability test"),
         live ? tr("Capability test completed. The detected features are shown as ticks under Clients and limits.") : status.detail);
       client->deleteLater(); m_testAll->setEnabled(true); refreshClientPolicies();
@@ -803,9 +834,13 @@ void SettingsTorrentAutomation::testNextClient() {
     result.setInformativeText(m_testResults.join(QStringLiteral("<br>"))); result.exec();
     m_testAll->setEnabled(true); refreshClientPolicies(); return;
   }
-  const TorrentClientConfig config = m_testQueue.takeFirst();
+  TorrentClientConfig config = m_testQueue.takeFirst();
+  const TorrentAutomationClientPolicy policy = m_config.policyFor(config.id);
+  config.requestTimeoutSeconds = policy.requestTimeoutSeconds > 0
+                                   ? policy.requestTimeoutSeconds : m_config.requestTimeoutSeconds;
+  const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::testFinished, this, [this, client, config](bool success, const QString& message) {
+  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries](bool success, const QString& message) {
     if (!success || !client->supportsLiveStatus()) {
       if (!success) ++m_testFailures;
       storeCapabilityResult(config, success, false, false, false, false, false, -1, message);
@@ -813,16 +848,22 @@ void SettingsTorrentAutomation::testNextClient() {
       client->deleteLater(); testNextClient(); return;
     }
     auto attempts = std::make_shared<int>(0);
-    connect(client, &TorrentClient::statusFinished, this, [this, client, config, attempts](const TorrentClientStatus& status) {
-      if (!status.reachable && (*attempts)++ == 0) {
-        QTimer::singleShot(500, client, [client]() { client->fetchStatus(); });
+    connect(client, &TorrentClient::statusFinished, this, [this, client, config, attempts, maximumRetries](const TorrentClientStatus& status) {
+      if (!status.reachable && m_config.retryEnabled && *attempts < maximumRetries &&
+          transientStatusFailure(status.detail)) {
+        qint64 delay = qMax(1, m_config.retryInitialSeconds);
+        if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(*attempts, 16));
+        delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+        ++*attempts;
+        QTimer::singleShot(int(delay * 1000), client, [client]() { client->fetchStatus(); });
         return;
       }
       if (!status.reachable) ++m_testFailures;
       const bool removal = status.reachable && client->supportsRemoval();
+      const bool transferRates = status.reachable && hasTransferRateValues(status);
       storeCapabilityResult(config, true, status.reachable, status.reachable && status.liveSpace,
-                            status.reachable, status.reachable, removal, status.totalBytes,
-                            capabilitySummary(config, status, removal));
+                            status.reachable, transferRates, removal, status.totalBytes,
+                            capabilitySummary(config, status, transferRates, removal));
       m_testResults.append(tr("%1 %2 — %3").arg(status.reachable ? QStringLiteral("✓") : QStringLiteral("✗"),
                                                 config.name, status.detail));
       client->deleteLater(); testNextClient();

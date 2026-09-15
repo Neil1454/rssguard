@@ -731,6 +731,7 @@ endif()
 target_compile_definitions(rssguard
   PRIVATE
   RSSGUARD_DLLSPEC=Q_DECL_EXPORT
+  TORRENT_FORK_BUILD="57"
   RSSGUARD_LIBDIR="${CMAKE_INSTALL_LIBDIR}"
 )
 

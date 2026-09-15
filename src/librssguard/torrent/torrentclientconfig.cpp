@@ -52,6 +52,39 @@ QString TorrentClientConfig::typeName(TorrentClientType type) {
   return QStringLiteral("Unknown");
 }
 
+QString TorrentClientConfig::suggestedBaseUrl(TorrentClientType type, const QString& enteredUrl) {
+  QUrl url(enteredUrl.trimmed());
+  if (!url.isValid() || url.host().isEmpty()) return enteredUrl.trimmed();
+  QString path = url.path();
+  while (path.size() > 1 && path.endsWith(QLatin1Char('/'))) path.chop(1);
+
+  switch (type) {
+    case TorrentClientType::Transmission:
+      if (path.endsWith(QStringLiteral("/transmission/web"), Qt::CaseInsensitive)) {
+        path.chop(3);
+        path += QStringLiteral("rpc");
+      }
+      else if (path.isEmpty() || path == QStringLiteral("/")) path = QStringLiteral("/transmission/rpc");
+      else if (path.endsWith(QStringLiteral("/transmission"), Qt::CaseInsensitive)) path += QStringLiteral("/rpc");
+      break;
+    case TorrentClientType::RTorrent:
+      if (path.isEmpty() || path == QStringLiteral("/")) path = QStringLiteral("/plugins/httprpc/action.php");
+      else if (path.endsWith(QStringLiteral("/rutorrent"), Qt::CaseInsensitive))
+        path += QStringLiteral("/plugins/httprpc/action.php");
+      break;
+    case TorrentClientType::QBittorrent:
+      if (path.endsWith(QStringLiteral("/api/v2"), Qt::CaseInsensitive)) path.chop(7);
+      break;
+    case TorrentClientType::Flood:
+    case TorrentClientType::Deluge:
+    case TorrentClientType::RQBit:
+    case TorrentClientType::Porla:
+      break;
+  }
+  url.setPath(path);
+  return url.toString(QUrl::FullyEncoded);
+}
+
 QList<TorrentClientConfig> TorrentClientConfig::enabledInPriorityOrder(const QList<TorrentClientConfig>& clients) {
   QList<TorrentClientConfig> enabled;
   for (const TorrentClientConfig& client : clients) if (client.enabled) enabled.append(client);

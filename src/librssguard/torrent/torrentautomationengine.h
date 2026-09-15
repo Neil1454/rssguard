@@ -63,7 +63,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
                  bool forceEnabled = false);
     bool ruleMatches(const TorrentAutomationRule& rule, const QString& feedId, const Message& message) const;
     void beginBatch();
-    void queryNextClient();
+    void queryClientStatus(int index, int attempt);
     void processNextJob();
     QList<int> eligibleClientIndexes(const Job& job) const;
     int selectClient(const QList<int>& eligible);
@@ -93,7 +93,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QStringList m_processed;
     QJsonArray m_history;
     QJsonArray m_managed;
-    int m_queryIndex = 0;
+    int m_pendingStatusQueries = 0;
     int m_cleanupCount = 0;
     bool m_busy = false;
     bool m_forcedDryRun = false;
