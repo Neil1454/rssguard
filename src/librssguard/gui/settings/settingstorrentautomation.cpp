@@ -788,7 +788,7 @@ void SettingsTorrentAutomation::testSelectedClient() {
     if (!success || !client->supportsLiveStatus()) {
       storeCapabilityResult(config, success, false, false, false, false, false, -1, message);
       QMessageBox::information(this, tr("Automation capability test"),
-        success ? tr("Connected successfully. This adapter can send torrents, but live workload, disk-space, listing and safe-removal monitoring are not available.") : message);
+        success ? tr("Connected successfully. This adapter can send torrents, but live workload, disk-space, listing and removal-API monitoring are not available.") : message);
       client->deleteLater(); m_testAll->setEnabled(true); refreshClientPolicies(); return;
     }
     auto attempts = std::make_shared<int>(0);

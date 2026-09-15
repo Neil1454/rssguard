@@ -33,6 +33,9 @@ void TestTorrentClientConfig::preservesCustomEndpoint() {
   QCOMPARE(TorrentClientConfig::suggestedBaseUrl(TorrentClientType::RTorrent,
                                                   QStringLiteral("https://seed.example/plugins/rpc/rpc.php")),
            QStringLiteral("https://seed.example/plugins/rpc/rpc.php"));
+  QCOMPARE(TorrentClientConfig::suggestedBaseUrl(TorrentClientType::Flood,
+                                                  QStringLiteral("https://seed.example/custom/")),
+           QStringLiteral("https://seed.example/custom/"));
 }
 
 void TestTorrentClientConfig::stripsQBittorrentApiSuffix() {
