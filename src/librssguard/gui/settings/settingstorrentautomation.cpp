@@ -784,7 +784,16 @@ void SettingsTorrentAutomation::testSelectedClient() {
   const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
   m_testSelected->setEnabled(false); m_testAll->setEnabled(false);
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries](bool success, const QString& message) {
+  auto connectionAttempts = std::make_shared<int>(0);
+  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries, connectionAttempts](bool success, const QString& message) {
+    if (!success && m_config.retryEnabled && *connectionAttempts < maximumRetries && transientStatusFailure(message)) {
+      qint64 delay = qMax(1, m_config.retryInitialSeconds);
+      if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(*connectionAttempts, 16));
+      delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+      ++*connectionAttempts;
+      QTimer::singleShot(int(delay * 1000), client, [client]() { client->testConnection(); });
+      return;
+    }
     if (!success || !client->supportsLiveStatus()) {
       storeCapabilityResult(config, success, false, false, false, false, false, -1, message);
       QMessageBox::information(this, tr("Automation capability test"),
@@ -840,7 +849,16 @@ void SettingsTorrentAutomation::testNextClient() {
                                    ? policy.requestTimeoutSeconds : m_config.requestTimeoutSeconds;
   const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
   TorrentClient* client = TorrentClient::create(config, this);
-  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries](bool success, const QString& message) {
+  auto connectionAttempts = std::make_shared<int>(0);
+  connect(client, &TorrentClient::testFinished, this, [this, client, config, maximumRetries, connectionAttempts](bool success, const QString& message) {
+    if (!success && m_config.retryEnabled && *connectionAttempts < maximumRetries && transientStatusFailure(message)) {
+      qint64 delay = qMax(1, m_config.retryInitialSeconds);
+      if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(*connectionAttempts, 16));
+      delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+      ++*connectionAttempts;
+      QTimer::singleShot(int(delay * 1000), client, [client]() { client->testConnection(); });
+      return;
+    }
     if (!success || !client->supportsLiveStatus()) {
       if (!success) ++m_testFailures;
       storeCapabilityResult(config, success, false, false, false, false, false, -1, message);
