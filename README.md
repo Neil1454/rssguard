@@ -7,9 +7,9 @@
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 62**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 63**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 62 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 63 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -156,7 +156,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 62 — current candidate** | Adds switchable MiB/GiB/TiB storage display/input, explicit unit-suffixed values such as 1.8 TiB, suffix-aware MiB/s/GiB/s/TiB/s rate limits and validation that prevents malformed values becoming zero. |
+| **Build 63 — current candidate** | Adds a dedicated colour-coded Simple dry-run results tab showing concise would-send, would-delete, would-keep, wait/retry, blocked and skipped outcomes while retaining complete explanations in Activity and tooltips. When no new batch exists, dry tests safely use a labelled sample of previously received articles. |
+| **Build 62** | Adds switchable MiB/GiB/TiB storage display/input, explicit unit-suffixed values such as 1.8 TiB, suffix-aware MiB/s/GiB/s/TiB/s rate limits and validation that prevents malformed values becoming zero. |
 | Build 61 | Repairs the Clients and limits table with one DPI-aware client label, non-overlapping colour swatches, font-derived row heights and content-sized limit columns; also corrects the visible About build number. |
 | Build 60 | Full read-only dry-run trace: rule and size result, every client assessment, exact routing/fallback decision, every proposed removal and its matched cleanup conditions, every protected torrent and safeguard reason, multi-removal capacity planning, and no queue/safety-state mutation. |
 | Build 59 | Live-readiness audit; fully applied per-torrent minimum/maximum rule sizes; rule duplicate/reordering controls; retry-all/cancel-all queue actions; credential-free activity export and safe history clearing. |
@@ -190,7 +191,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 62 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 63 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

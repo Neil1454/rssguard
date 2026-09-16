@@ -37,6 +37,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     void removeRule();
     void refreshRules();
     void refreshActivity();
+    void refreshSimpleActivity();
     void updateCleanupControls();
     void updateCapabilityDisplay();
     void testSelectedClient();
@@ -90,7 +91,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QPushButton *m_testSelected = nullptr, *m_testAll = nullptr, *m_runDryTest = nullptr;
     QStringList m_testResults;
     int m_testFailures = 0;
-    QListWidget *m_rules = nullptr, *m_activity = nullptr;
+    QListWidget *m_rules = nullptr, *m_activity = nullptr, *m_simpleActivity = nullptr;
     QListWidget* m_queue = nullptr;
     QPushButton *m_editRule = nullptr, *m_removeRule = nullptr;
     QCheckBox *m_cleanup = nullptr, *m_deleteData = nullptr, *m_confirmCleanup = nullptr;

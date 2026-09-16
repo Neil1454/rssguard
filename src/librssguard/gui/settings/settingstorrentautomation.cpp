@@ -491,6 +491,33 @@ void SettingsTorrentAutomation::loadUi() {
   const int cleanupTab = tabs->addTab(cleanupPage, tr("Safe cleanup"));
   tabs->setTabToolTip(cleanupTab, tr("Optionally remove only completed torrents marked as managed by RSS Guard, subject to every safety threshold."));
 
+  auto* simplePage = new QWidget(tabs);
+  auto* simpleLayout = new QVBoxLayout(simplePage);
+  auto* simpleIntro = new QLabel(
+    tr("<b>Simple dry-run results</b><br>Only final, user-relevant outcomes are shown here. "
+       "Hover over a result—or use Activity—for the complete explanation."), simplePage);
+  simpleIntro->setWordWrap(true);
+  auto* simpleLegend = new QLabel(
+    tr("<span style='color:#1976d2'><b>&#9679; WOULD SEND</b></span>&nbsp;&nbsp; "
+       "<span style='color:#7b1fa2'><b>&#9679; WOULD DELETE</b></span>&nbsp;&nbsp; "
+       "<span style='color:#2e7d32'><b>&#9679; WOULD KEEP</b></span>&nbsp;&nbsp; "
+       "<span style='color:#c77700'><b>&#9679; WOULD WAIT / RETRY</b></span>&nbsp;&nbsp; "
+       "<span style='color:#c62828'><b>&#9679; BLOCKED</b></span>&nbsp;&nbsp; "
+       "<span style='color:#607d8b'><b>&#9679; SKIPPED</b></span>"), simplePage);
+  simpleLegend->setWordWrap(true);
+  m_simpleActivity = new QListWidget(simplePage);
+  m_simpleActivity->setWordWrap(true);
+  m_simpleActivity->setSpacing(4);
+  m_simpleActivity->setToolTip(tr("A concise colour-coded summary of dry-run outcomes. No live action is performed by these entries."));
+  auto* simpleRefresh = new QPushButton(tr("Refresh simple results"), simplePage);
+  simpleLayout->addWidget(simpleIntro);
+  simpleLayout->addWidget(simpleLegend);
+  simpleLayout->addWidget(m_simpleActivity, 1);
+  auto* simpleButtons = new QHBoxLayout(); simpleButtons->addStretch(); simpleButtons->addWidget(simpleRefresh);
+  simpleLayout->addLayout(simpleButtons);
+  const int simpleTab = tabs->addTab(simplePage, tr("Simple"));
+  tabs->setTabToolTip(simpleTab, tr("See clear colour-coded outcomes from dry runs without the detailed diagnostic log."));
+
   auto* activityPage = new QWidget(tabs);
   auto* activityLayout = new QVBoxLayout(activityPage);
   m_activity = new QListWidget(activityPage);
@@ -568,6 +595,7 @@ void SettingsTorrentAutomation::loadUi() {
     moveUp->setEnabled(row > 0); moveDown->setEnabled(row >= 0 && row + 1 < m_config.rules.size());
   });
   connect(refresh, &QPushButton::clicked, this, &SettingsTorrentAutomation::refreshActivity);
+  connect(simpleRefresh, &QPushButton::clicked, this, &SettingsTorrentAutomation::refreshSimpleActivity);
   connect(m_cleanup, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
   for (QCheckBox* option : {m_seedHoursEnabled, m_ratioEnabled, m_inactiveHoursEnabled,
                              m_maxRemovalsEnabled, m_cleanupStopGbEnabled})
@@ -1069,6 +1097,90 @@ void SettingsTorrentAutomation::refreshActivity() {
   m_queue->clear();
   m_queue->addItems(engine->pendingRetries());
   if (m_queue->count() == 0) m_queue->addItem(tr("No queued automation items."));
+  refreshSimpleActivity();
+}
+
+void SettingsTorrentAutomation::refreshSimpleActivity() {
+  if (!m_simpleActivity) return;
+  m_simpleActivity->clear();
+  const QJsonArray history = TorrentAutomationEngine::instance(qApp)->activityHistory();
+  const int limit = qBound(50, m_config.historyLimit, 5000);
+  int shown = 0;
+  for (int index = history.size() - 1; index >= 0 && shown < limit; --index) {
+    const QJsonObject event = history.at(index).toObject();
+    const QString state = event.value(QStringLiteral("state")).toString();
+    if (!state.startsWith(QStringLiteral("DRY RUN"))) continue;
+    if (state == QStringLiteral("DRY RUN — ITEM") || state == QStringLiteral("DRY RUN — CLIENT") ||
+        state == QStringLiteral("DRY RUN — CLEANUP TARGET")) continue;
+
+    const QString title = event.value(QStringLiteral("title")).toString();
+    const QString detail = event.value(QStringLiteral("detail")).toString();
+    const QString clientId = event.value(QStringLiteral("clientId")).toString();
+    QString clientName;
+    for (const TorrentClientConfig& client : std::as_const(m_clientConfigs))
+      if (client.id == clientId) { clientName = client.name; break; }
+
+    QString action, summary;
+    QColor foreground, background;
+    if (state == QStringLiteral("DRY RUN — WOULD REMOVE")) {
+      action = tr("WOULD DELETE"); foreground = QColor(QStringLiteral("#6A1B9A")); background = QColor(QStringLiteral("#F3E5F5"));
+      QRegularExpressionMatch match = QRegularExpression(
+        QStringLiteral("Would remove [“\"](.+?)[”\"] from (.+?)(?: and delete its downloaded data| but keep its downloaded data)?; size ([^;]+); (.+?)\\. Estimated free space"),
+        QRegularExpression::CaseInsensitiveOption).match(detail);
+      summary = tr("%1%2").arg(match.hasMatch() ? match.captured(1) : (title.isEmpty() ? tr("Torrent") : title),
+                                clientName.isEmpty() ? QString() : tr(" — %1").arg(clientName));
+      if (match.hasMatch()) summary += tr(" — %1 • %2").arg(match.captured(3), match.captured(4));
+      else summary += tr(" • %1").arg(detail.section(QStringLiteral(". No changes"), 0, 0));
+    }
+    else if (state == QStringLiteral("DRY RUN — PROTECTED")) {
+      action = tr("WOULD KEEP"); foreground = QColor(QStringLiteral("#1B5E20")); background = QColor(QStringLiteral("#E8F5E9"));
+      summary = detail.section(QStringLiteral(". "), 0, 0);
+    }
+    else if (state == QStringLiteral("DRY RUN — CLEANUP INSUFFICIENT") ||
+             (state == QStringLiteral("DRY RUN — FINAL") && detail.contains(tr("No client"), Qt::CaseInsensitive))) {
+      action = tr("BLOCKED"); foreground = QColor(QStringLiteral("#B71C1C")); background = QColor(QStringLiteral("#FFEBEE"));
+      summary = detail.section(QStringLiteral(". "), 0, 0);
+    }
+    else if (state == QStringLiteral("DRY RUN — HISTORICAL SAMPLE")) {
+      action = tr("HISTORICAL SAMPLE"); foreground = QColor(QStringLiteral("#455A64")); background = QColor(QStringLiteral("#ECEFF1"));
+      summary = detail.section(QStringLiteral(". "), 0, 0);
+    }
+    else if (state == QStringLiteral("DRY RUN — NO TORRENT") || state == QStringLiteral("DRY RUN — NO RULE") ||
+             state == QStringLiteral("DRY RUN — DUPLICATE")) {
+      action = tr("SKIPPED"); foreground = QColor(QStringLiteral("#455A64")); background = QColor(QStringLiteral("#ECEFF1"));
+      summary = title.isEmpty() ? detail.section(QStringLiteral(". "), 0, 0)
+                                : tr("%1 • %2").arg(title, detail.section(QStringLiteral(". "), 0, 0));
+    }
+    else if (state == QStringLiteral("DRY RUN — STATUS RETRY") || state == QStringLiteral("DRY RUN — SCHEDULE") ||
+             state == QStringLiteral("DRY RUN — CLEANUP") || state == QStringLiteral("DRY RUN — WOULD MARK") ||
+             state == QStringLiteral("DRY RUN — GRACE WAIT") || state == QStringLiteral("DRY RUN — RETRY")) {
+      action = tr("WOULD WAIT / RETRY"); foreground = QColor(QStringLiteral("#8A5200")); background = QColor(QStringLiteral("#FFF3D6"));
+      summary = detail.section(QStringLiteral(". "), 0, 0);
+    }
+    else if (state == QStringLiteral("DRY RUN — FINAL")) {
+      // A successful final cleanup result is already represented by its individual delete rows.
+      continue;
+    }
+    else if (state == QStringLiteral("DRY RUN")) {
+      action = tr("WOULD SEND"); foreground = QColor(QStringLiteral("#0D47A1")); background = QColor(QStringLiteral("#E3F2FD"));
+      summary = tr("%1%2").arg(title.isEmpty() ? tr("Torrent") : title,
+                                clientName.isEmpty() ? QString() : tr(" → %1").arg(clientName));
+      const QRegularExpressionMatch rule = QRegularExpression(QStringLiteral("Rule: ([^.]+)\\." )).match(detail);
+      if (rule.hasMatch()) summary += tr(" • matched rule: %1").arg(rule.captured(1));
+    }
+    else continue;
+
+    auto* item = new QListWidgetItem(QStringLiteral("●  %1     %2").arg(action, summary), m_simpleActivity);
+    QFont itemFont = item->font(); itemFont.setBold(true); item->setFont(itemFont);
+    item->setForeground(foreground); item->setBackground(background);
+    item->setToolTip(tr("%1\n\nFull explanation: %2").arg(state, detail));
+    item->setSizeHint(QSize(0, qMax(34, fontMetrics().lineSpacing() * 2)));
+    ++shown;
+  }
+  if (m_simpleActivity->count() == 0) {
+    auto* empty = new QListWidgetItem(tr("No dry-run outcomes yet. Use “Run dry test now”, then return here to review the results."), m_simpleActivity);
+    empty->setForeground(QColor(QStringLiteral("#455A64")));
+  }
 }
 
 void SettingsTorrentAutomation::runDryTest() {

@@ -1,5 +1,13 @@
 # Torrent integration changelog
 
+## Build 63
+
+- Added a dedicated **Simple** dry-run results tab with bold, colour-coded outcome rows.
+- Separates would-send, would-delete, would-keep, wait/retry, blocked and skipped results from diagnostic activity.
+- Deletion results identify the torrent, client, estimated recovered size and the cleanup-rule reason.
+- Preserved the complete underlying explanation in row tooltips and the Activity audit trail.
+- Dry tests now fall back to a clearly labelled sample of previously received RSS articles when no newly fetched batch is available, including already processed items for read-only simulation.
+
 ## Torrent automation development build
 
 - Build 62 adds a persistent MiB/GiB/TiB selector to **Clients and limits**. Changing the unit converts the displayed minimum-free-space and capacity values without changing their stored byte values.

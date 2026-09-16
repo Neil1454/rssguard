@@ -3,7 +3,9 @@
 #include "torrent/torrentautomationengine.h"
 
 #include "core/message.h"
+#include "core/messagesmodel.h"
 #include "miscellaneous/application.h"
+#include "miscellaneous/feedreader.h"
 #include "miscellaneous/settings.h"
 #include "miscellaneous/notification.h"
 #include "services/abstract/feed.h"
@@ -116,10 +118,38 @@ void TorrentAutomationEngine::runDryTest() {
     return;
   }
   if (m_lastArticles.isEmpty()) {
+    QHash<Feed*, QList<Message>> historical;
+    MessagesModel* model = qApp->feedReader() == nullptr ? nullptr : qApp->feedReader()->messagesModel();
+    if (model != nullptr) {
+      QList<Message> fallback;
+      for (const Message& message : std::as_const(model->messages())) {
+        if (fallback.size() < 25) fallback.append(message);
+        if (TorrentExtractor::extract(message).isEmpty()) continue;
+        Feed* feed = model->feedById(message.m_feedId);
+        historical[feed].append(message);
+        int selected = 0;
+        for (auto it = historical.constBegin(); it != historical.constEnd(); ++it) selected += it.value().size();
+        if (selected >= 25) break;
+      }
+      if (historical.isEmpty()) {
+        for (const Message& message : std::as_const(fallback))
+          historical[model->feedById(message.m_feedId)].append(message);
+      }
+    }
+    if (!historical.isEmpty()) {
+      Job summary;
+      summary.title = tr("Historical RSS sample");
+      int count = 0;
+      for (auto it = historical.constBegin(); it != historical.constEnd(); ++it) count += it.value().size();
+      record(QStringLiteral("DRY RUN — HISTORICAL SAMPLE"), summary, {},
+             tr("No newly fetched items were available, so this test is using %1 previously received RSS item(s). Already processed items may be included for simulation only; nothing will be sent, removed, re-queued or re-marked.").arg(count));
+      enqueue(historical, true);
+      return;
+    }
     Job summary;
     summary.title = tr("Manual dry run");
     record(QStringLiteral("DRY RUN"), summary, {},
-           tr("No newly fetched RSS items are available. Refresh the feeds, then run the test again."));
+           tr("No newly fetched or previously loaded RSS items are available. Open a feed containing articles, then run the test again."));
     return;
   }
   enqueue(m_lastArticles, true);
