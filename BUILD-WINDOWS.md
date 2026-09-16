@@ -10,7 +10,7 @@ The target matching the normal modern RSS Guard portable package is **Qt 6 + Web
 4. Extract the downloaded ZIP, then extract the `.7z` inside it into a new folder.
 5. Run `rssguard.exe`. Do not extract over an existing RSS Guard folder.
 
-The workflow runs when the build-trigger file changes on `feature/torrent-automation` and can also be started manually. It uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. Build 58 uses the temporary package-version tag `5.2.6-torrent-build58`. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
+The workflow runs when the build-trigger file changes on `feature/torrent-automation` and can also be started manually. It uses the current upstream `build-windows.ps1` and `package-windows.ps1`, including recursive submodules, Qt deployment, OpenSSL, WebEngine, plugins, article extractor, ICU, and libmpv. Build 59 uses the temporary package-version tag `5.2.6-torrent-build59`. The resulting test binaries are unsigned; Windows may show a SmartScreen warning.
 
 Only the Windows 10/11 x64 Qt 6 WebEngine portable package is required for this fork. No custom installer, Linux package, or macOS package is currently produced.
 

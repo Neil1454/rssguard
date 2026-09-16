@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 58 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 59 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -95,6 +95,10 @@ Client-specific checks:
 - Cleanup grace: verify the first pass only marks a candidate, the later pass rechecks current conditions, and a newly protected or active torrent is not removed.
 - Configuration transfer: export JSON, confirm no username/password/token fields are present, import it into a clean profile, and verify rules/layout while entering credentials separately.
 - Rule dry test: refresh feeds, run **Test rules against latest items**, and confirm Activity identifies the matching rule without an add/remove/delete request.
+- Rule size and order: configure minimum/maximum sizes, including two torrent links in one article, and verify each extracted torrent uses the first matching enabled rule; duplicate and reorder rules and confirm the visible order persists.
+- Readiness audit: verify blocking issues, warnings and passed checks for untested/stale clients, missing capacity, invalid imported rules, queued work and dangerous cleanup combinations.
+- Queue bulk controls: retry all queued items through normal limits, cancel all without changing existing torrents, and confirm old scheduled timers cannot reinsert cancelled work.
+- Activity reporting: export history and queued summaries to JSON, confirm no stored credentials/tokens appear, then clear history without clearing allocations, processed-link protection or queued work.
 
 ## Release gate
 

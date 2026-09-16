@@ -44,6 +44,7 @@ Successful destinations are saved per article and client. Green ticks are synchr
 - Temporarily isolates repeatedly failing clients and requires consecutive successful recovery checks before automatic reuse.
 - Adds smart two-stage cleanup with a grace/recheck period, recent-upload history, protected tags/trackers, optional minimum completed-copy retention, and a separate cleanup schedule.
 - Exports and imports the non-secret torrent configuration as JSON; passwords and tokens are deliberately excluded.
+- Audits readiness before live automation, completes per-torrent size-aware rule matching with explicit rule ordering, adds queue-wide retry/cancel actions, and exports or clears decision history independently of safety state.
 
 Safe marked cleanup is capability-gated per client. It is offered only after the authenticated adapter can list torrents and exposes its supported removal operation. rTorrent can remove the torrent entry but deliberately refuses downloaded-data deletion; servers that cannot prove RSS Guard ownership remain routing-only.
 

@@ -2,6 +2,11 @@
 
 ## Torrent automation development build
 
+- Build 59 adds a readiness audit that separates blocking configuration problems, warnings and passed checks before dry-run mode is disabled.
+- Completed RSS rule size handling: minimum/maximum sizes are editable and enforced per extracted torrent, including multiple torrent links within one article. Rules can now be duplicated and moved up/down to control first-match ordering.
+- Added retry-all and cancel-all controls for the persistent queue. Retried work still passes through normal client limits and safety checks; cancellation does not change existing torrents.
+- Added credential-free JSON activity export and safe history clearing. Clearing history preserves processed-item protection, managed allocations and queued work.
+
 - Build 58 adds periodic and per-routing reconciliation of RSS Guard's managed ledger against reachable client torrent lists. Actual sizes and remaining-download reservations are refreshed, externally removed entries are discarded, and matching owned hashes are rediscovered conservatively.
 - Added explicit storage-source reporting in **Clients and limits**: live free space, reconciled capacity estimate, managed-ledger estimate, or unknown. Unfinished managed downloads can reserve their remaining bytes to prevent over-allocation.
 - Added cross-client magnet info-hash duplicate prevention for unattended automation. Direct named-client actions remain available when a deliberate additional copy is wanted.

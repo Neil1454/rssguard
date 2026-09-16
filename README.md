@@ -1,15 +1,15 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-58-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-59-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 58**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 59**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 58 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 59 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -70,6 +70,7 @@ Open **Tools > Settings > Torrent automation**. Automation is **disabled by defa
 
 - Processes newly fetched torrent entries without requiring a direct client-button click.
 - Ordered rules can match feeds already configured in RSS Guard, required/excluded text, title regular expressions, size limits and allowed client pools.
+- Rules can be duplicated and moved up or down explicitly. Minimum and maximum torrent sizes are applied per extracted torrent, including multiple links in one article.
 - Routing strategies include priority order, least busy, most free space, round robin, priority-biased distribution and balanced routing.
 - Balanced routing considers priority, free-space ratio, active downloads, queued downloads and aggregate download speed.
 - Per-client controls include maximum active downloads, maximum managed torrents, minimum free space, target free-space percentage, fallback capacity, maximum aggregate download speed, request timeout, retry count and cleanup permission.
@@ -97,6 +98,7 @@ Every colour is accompanied by a written status and reason, so the decision does
 - Authentication and invalid-configuration errors are not repeatedly retried.
 - Repeatedly failing clients enter a configurable circuit-breaker cooldown and must pass consecutive recovery checks before receiving automatic work again.
 - The Activity page exposes the persistent queue, including its reason and next-attempt time, with retry-now, choose-client and cancel controls.
+- Queue-wide retry/cancel actions are available, and decision history can be exported as a credential-free diagnostic report or cleared without altering managed allocations and duplicate protection.
 - After an ambiguous magnet timeout, RSS Guard checks the magnet info hash on the original client before any failover, preventing an unnecessary duplicate send.
 - An ambiguous direct `.torrent` URL cannot always be verified reliably. RSS Guard reports that it may already have succeeded instead of blindly resending it.
 
@@ -138,6 +140,8 @@ Use **Run dry test now** to assess recent eligible RSS entries against live clie
 
 Torrent-client layout and automation rules can be exported to JSON and imported on another machine. Credentials and tokens are deliberately excluded; credentials already stored for matching client IDs are retained.
 
+Before disabling dry run, **Check readiness for live automation** audits participating clients, capability-test age, storage information, rule validity, queued work and destructive cleanup safeguards. Blocking issues, warnings and passed checks are reported separately.
+
 ## Network and privacy behaviour
 
 Torrent links are sent directly from RSS Guard to the configured torrent-client API. A browser login session or browser cookies are not used, except for API session cookies obtained by RSS Guard itself when a client protocol requires them.
@@ -152,7 +156,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 58 — current candidate** | Live ledger reconciliation and unfinished-space reservations; global duplicate checks; circuit breaker with verified recovery; persistent queue controls; scheduled routing/cleanup; protected tags/trackers/copies/recent uploads; two-stage smart cleanup; rule dry testing; storage-source visibility; credential-free configuration export/import. |
+| **Build 59 — current candidate** | Live-readiness audit; fully applied per-torrent minimum/maximum rule sizes; rule duplicate/reordering controls; retry-all/cancel-all queue actions; credential-free activity export and safe history clearing. |
+| Build 58 — rollback candidate | Live ledger reconciliation and unfinished-space reservations; global duplicate checks; circuit breaker with verified recovery; persistent queue controls; scheduled routing/cleanup; protected tags/trackers/copies/recent uploads; two-stage smart cleanup; rule dry testing; storage-source visibility; credential-free configuration export/import. |
 | Build 57 — rollback candidate | Cleanup-state integrity; independent configurable status retries; capability checks based on actually returned transfer-rate values; explicit removal-permission limitation; common Web UI-to-API URL suggestions; regression tests; visible fork build number. |
 | Build 56 | Incidental documentation workflow run; not a distributed torrent build. |
 | Build 55 | Approval-based automatic processing; blue/green/amber/red client assessment; transfer-speed-aware balanced routing; percentage free-space targets; persistent configurable retries and failover; duplicate-safe magnet timeout verification; oldest-first upload-aware cleanup; expanded documentation. |
@@ -182,7 +187,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 58 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 59 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

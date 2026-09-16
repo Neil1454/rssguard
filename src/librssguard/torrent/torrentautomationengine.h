@@ -33,11 +33,15 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
 
     bool busy() const;
     QStringList recentActivity() const;
+    QJsonArray activityHistory() const;
     QStringList pendingRetries() const;
     void runDryTest();
     void retryPending(int index);
+    void retryAllPending();
     void sendPendingToClient(int index, const QString& clientId);
     void cancelPending(int index);
+    void cancelAllPending();
+    void clearActivityHistory();
 
   signals:
     void activityAdded(const QString& text);
@@ -67,7 +71,10 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
                  bool forceDryRun = false,
                  bool manualApproval = false,
                  bool forceEnabled = false);
-    bool ruleMatches(const TorrentAutomationRule& rule, const QString& feedId, const Message& message) const;
+    bool ruleMatches(const TorrentAutomationRule& rule,
+                     const QString& feedId,
+                     const Message& message,
+                     qint64 torrentSize) const;
     void beginBatch();
     void queryClientStatus(int index, int attempt);
     void processNextJob();

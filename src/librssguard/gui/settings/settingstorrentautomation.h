@@ -31,6 +31,9 @@ class SettingsTorrentAutomation final : public SettingsPanel {
   private slots:
     void addRule();
     void editRule();
+    void duplicateRule();
+    void moveRuleUp();
+    void moveRuleDown();
     void removeRule();
     void refreshRules();
     void refreshActivity();
@@ -40,11 +43,16 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     void testAllClients();
     void testNextClient();
     void runDryTest();
+    void runReadinessAudit();
     void exportConfiguration();
     void importConfiguration();
     void retryQueuedItem();
+    void retryAllQueuedItems();
     void chooseQueuedClient();
     void cancelQueuedItem();
+    void cancelAllQueuedItems();
+    void exportActivity();
+    void clearActivity();
 
   private:
     TorrentAutomationRule editRuleDialog(const TorrentAutomationRule& initial, bool* accepted);

@@ -155,8 +155,12 @@ void SettingsTorrentAutomation::loadUi() {
   generalForm->addRow(tr("Assumed size when unknown:"), m_unknownSizeGb);
   generalLayout->addLayout(generalForm);
   m_runDryTest = new QPushButton(tr("Run dry test now"), general);
+  auto* readinessAudit = new QPushButton(tr("Check readiness for live automation"), general);
   m_runDryTest->setToolTip(tr("Re-evaluate the most recently fetched RSS items using live client status. Nothing is sent, removed or deleted."));
-  generalLayout->addWidget(m_runDryTest, 0, Qt::AlignRight);
+  readinessAudit->setToolTip(tr("Inspect client tests, storage information, rules, retry protection and cleanup safeguards before disabling Dry run."));
+  auto* validationButtons = new QHBoxLayout(); validationButtons->addStretch();
+  validationButtons->addWidget(readinessAudit); validationButtons->addWidget(m_runDryTest);
+  generalLayout->addLayout(validationButtons);
   auto* configurationButtons = new QHBoxLayout();
   auto* exportConfiguration = new QPushButton(tr("Export torrent configuration"), general);
   auto* importConfiguration = new QPushButton(tr("Import torrent configuration"), general);
@@ -313,13 +317,22 @@ void SettingsTorrentAutomation::loadUi() {
   auto* ruleButtons = new QHBoxLayout();
   auto* add = new QPushButton(tr("Add rule"), rulesPage);
   m_editRule = new QPushButton(tr("Edit"), rulesPage);
+  auto* duplicate = new QPushButton(tr("Duplicate"), rulesPage);
+  auto* moveUp = new QPushButton(tr("Move up"), rulesPage);
+  auto* moveDown = new QPushButton(tr("Move down"), rulesPage);
   m_removeRule = new QPushButton(tr("Remove"), rulesPage);
   auto* testRules = new QPushButton(tr("Test rules against latest items"), rulesPage);
+  for (QPushButton* button : {m_editRule, duplicate, moveUp, moveDown, m_removeRule}) button->setEnabled(false);
   add->setToolTip(tr("Create a rule using feeds already configured in RSS Guard, text filters, and allowed clients."));
   m_editRule->setToolTip(tr("Edit the selected automation rule."));
+  duplicate->setToolTip(tr("Copy the selected rule so a similar rule can be configured quickly."));
+  moveUp->setToolTip(tr("Move the selected rule earlier. The first matching enabled rule wins."));
+  moveDown->setToolTip(tr("Move the selected rule later. The first matching enabled rule wins."));
   m_removeRule->setToolTip(tr("Remove the selected automation rule."));
   testRules->setToolTip(tr("Run a dry explanation against the most recently fetched items. Matching, routing and cleanup decisions appear in Activity without changing a client."));
-  ruleButtons->addWidget(add); ruleButtons->addWidget(m_editRule); ruleButtons->addWidget(m_removeRule); ruleButtons->addStretch(); ruleButtons->addWidget(testRules);
+  ruleButtons->addWidget(add); ruleButtons->addWidget(m_editRule); ruleButtons->addWidget(duplicate);
+  ruleButtons->addWidget(moveUp); ruleButtons->addWidget(moveDown); ruleButtons->addWidget(m_removeRule);
+  ruleButtons->addStretch(); ruleButtons->addWidget(testRules);
   rulesLayout->addLayout(ruleButtons);
   const int rulesTab = tabs->addTab(rulesPage, tr("RSS rules"));
   tabs->setTabToolTip(rulesTab, tr("Control which incoming RSS items qualify and which clients they may use."));
@@ -428,17 +441,23 @@ void SettingsTorrentAutomation::loadUi() {
   m_queue->setToolTip(tr("Persistent items waiting for a retry, maintenance window or healthy destination."));
   auto* refresh = new QPushButton(tr("Refresh activity"), activityPage);
   auto* retryQueued = new QPushButton(tr("Retry selected now"), activityPage);
+  auto* retryAllQueued = new QPushButton(tr("Retry all now"), activityPage);
   auto* chooseQueued = new QPushButton(tr("Choose client and send"), activityPage);
   auto* cancelQueued = new QPushButton(tr("Cancel selected"), activityPage);
+  auto* cancelAllQueued = new QPushButton(tr("Cancel all"), activityPage);
+  auto* exportActivityButton = new QPushButton(tr("Export activity"), activityPage);
+  auto* clearActivityButton = new QPushButton(tr("Clear activity"), activityPage);
   m_activity->setToolTip(tr("Newest recorded routing, retry, failure, dry-run and cleanup decisions appear at the top."));
   refresh->setToolTip(tr("Reload the latest automation events from the in-memory activity history."));
   activityLayout->addWidget(new QLabel(tr("Pending automation queue:"), activityPage));
   activityLayout->addWidget(m_queue, 1);
-  auto* queueButtons = new QHBoxLayout(); queueButtons->addWidget(retryQueued); queueButtons->addWidget(chooseQueued); queueButtons->addWidget(cancelQueued); queueButtons->addStretch();
+  auto* queueButtons = new QHBoxLayout(); queueButtons->addWidget(retryQueued); queueButtons->addWidget(retryAllQueued);
+  queueButtons->addWidget(chooseQueued); queueButtons->addWidget(cancelQueued); queueButtons->addWidget(cancelAllQueued); queueButtons->addStretch();
   activityLayout->addLayout(queueButtons);
   activityLayout->addWidget(new QLabel(tr("Decision history:"), activityPage));
   activityLayout->addWidget(m_activity, 2);
-  activityLayout->addWidget(refresh, 0, Qt::AlignRight);
+  auto* activityButtons = new QHBoxLayout(); activityButtons->addStretch(); activityButtons->addWidget(exportActivityButton);
+  activityButtons->addWidget(clearActivityButton); activityButtons->addWidget(refresh); activityLayout->addLayout(activityButtons);
   const int activityTab = tabs->addTab(activityPage, tr("Activity"));
   tabs->setTabToolTip(activityTab, tr("Review what automation decided and why. Dry-run decisions are recorded here too."));
 
@@ -471,6 +490,9 @@ void SettingsTorrentAutomation::loadUi() {
   connect(m_testAll, &QPushButton::clicked, this, &SettingsTorrentAutomation::testAllClients);
   connect(add, &QPushButton::clicked, this, &SettingsTorrentAutomation::addRule);
   connect(m_editRule, &QPushButton::clicked, this, &SettingsTorrentAutomation::editRule);
+  connect(duplicate, &QPushButton::clicked, this, &SettingsTorrentAutomation::duplicateRule);
+  connect(moveUp, &QPushButton::clicked, this, &SettingsTorrentAutomation::moveRuleUp);
+  connect(moveDown, &QPushButton::clicked, this, &SettingsTorrentAutomation::moveRuleDown);
   connect(m_removeRule, &QPushButton::clicked, this, &SettingsTorrentAutomation::removeRule);
   connect(m_rules, &QListWidget::itemDoubleClicked, this, [this]() { editRule(); });
   connect(m_rules, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
@@ -480,7 +502,11 @@ void SettingsTorrentAutomation::loadUi() {
       dirtifySettings();
     }
   });
-  connect(m_rules, &QListWidget::currentRowChanged, this, [this](int row) { m_editRule->setEnabled(row >= 0); m_removeRule->setEnabled(row >= 0); });
+  connect(m_rules, &QListWidget::currentRowChanged, this,
+          [this, duplicate, moveUp, moveDown](int row) {
+    m_editRule->setEnabled(row >= 0); m_removeRule->setEnabled(row >= 0); duplicate->setEnabled(row >= 0);
+    moveUp->setEnabled(row > 0); moveDown->setEnabled(row >= 0 && row + 1 < m_config.rules.size());
+  });
   connect(refresh, &QPushButton::clicked, this, &SettingsTorrentAutomation::refreshActivity);
   connect(m_cleanup, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
   for (QCheckBox* option : {m_seedHoursEnabled, m_ratioEnabled, m_inactiveHoursEnabled,
@@ -504,12 +530,17 @@ void SettingsTorrentAutomation::loadUi() {
   connect(m_schedule, &QCheckBox::toggled, this, updateMaintenanceControls);
   updateMaintenanceControls();
   connect(m_runDryTest, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
+  connect(readinessAudit, &QPushButton::clicked, this, &SettingsTorrentAutomation::runReadinessAudit);
   connect(testRules, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
   connect(exportConfiguration, &QPushButton::clicked, this, &SettingsTorrentAutomation::exportConfiguration);
   connect(importConfiguration, &QPushButton::clicked, this, &SettingsTorrentAutomation::importConfiguration);
   connect(retryQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::retryQueuedItem);
+  connect(retryAllQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::retryAllQueuedItems);
   connect(chooseQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::chooseQueuedClient);
   connect(cancelQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::cancelQueuedItem);
+  connect(cancelAllQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::cancelAllQueuedItems);
+  connect(exportActivityButton, &QPushButton::clicked, this, &SettingsTorrentAutomation::exportActivity);
+  connect(clearActivityButton, &QPushButton::clicked, this, &SettingsTorrentAutomation::clearActivity);
   connect(TorrentAutomationEngine::instance(qApp), &TorrentAutomationEngine::activityAdded,
           this, [this]() { refreshActivity(); });
   connect(m_cleanup, &QCheckBox::clicked, this, [this](bool checked) {
@@ -775,7 +806,12 @@ void SettingsTorrentAutomation::refreshRules() {
   for (const TorrentAutomationRule& rule : std::as_const(m_config.rules)) {
     auto* item = new QListWidgetItem(rule.name.isEmpty() ? tr("Unnamed rule") : rule.name, m_rules);
     item->setCheckState(rule.enabled ? Qt::Checked : Qt::Unchecked);
-    item->setToolTip(rule.titleRegularExpression.isEmpty() ? tr("All matching feed items") : rule.titleRegularExpression);
+    QStringList conditions;
+    if (!rule.titleRegularExpression.isEmpty()) conditions.append(tr("Title pattern: %1").arg(rule.titleRegularExpression));
+    if (rule.minimumSizeBytes > 0) conditions.append(tr("Minimum: %1 GB").arg(rule.minimumSizeBytes / GiB, 0, 'f', 2));
+    if (rule.maximumSizeBytes > 0) conditions.append(tr("Maximum: %1 GB").arg(rule.maximumSizeBytes / GiB, 0, 'f', 2));
+    item->setToolTip(conditions.isEmpty() ? tr("All items matching the selected feeds and text filters")
+                                          : conditions.join(QLatin1Char('\n')));
   }
   m_editRule->setEnabled(m_rules->currentRow() >= 0);
   m_removeRule->setEnabled(m_rules->currentRow() >= 0);
@@ -806,6 +842,12 @@ TorrentAutomationRule SettingsTorrentAutomation::editRuleDialog(const TorrentAut
   auto* excluded = new QLineEdit(initial.excludedText, &dialog);
   auto* regex = new QLineEdit(initial.titleRegularExpression, &dialog);
   regex->setPlaceholderText(tr("Optional regular expression matched against the article title"));
+  auto* minimumSize = new QDoubleSpinBox(&dialog);
+  minimumSize->setRange(0.0, 1000000.0); minimumSize->setDecimals(2); minimumSize->setSuffix(tr(" GB"));
+  minimumSize->setSpecialValueText(tr("No minimum")); minimumSize->setValue(initial.minimumSizeBytes / GiB);
+  auto* maximumSize = new QDoubleSpinBox(&dialog);
+  maximumSize->setRange(0.0, 1000000.0); maximumSize->setDecimals(2); maximumSize->setSuffix(tr(" GB"));
+  maximumSize->setSpecialValueText(tr("No maximum")); maximumSize->setValue(initial.maximumSizeBytes / GiB);
   auto* clientList = new QListWidget(&dialog);
   for (const TorrentClientConfig& client : TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(settings()))) {
     auto* item = new QListWidgetItem(client.name, clientList);
@@ -819,13 +861,17 @@ TorrentAutomationRule SettingsTorrentAutomation::editRuleDialog(const TorrentAut
   required->setToolTip(tr("Case-insensitive text that must appear in the article title or content. Leave empty for no required text."));
   excluded->setToolTip(tr("Reject an article when this case-insensitive text appears in its title or content."));
   regex->setToolTip(tr("Optional case-insensitive regular expression matched against the article title. Invalid patterns never match."));
+  minimumSize->setToolTip(tr("Only match torrents at least this large. Zero disables the minimum. Unknown sizes use the configured assumed size."));
+  maximumSize->setToolTip(tr("Only match torrents no larger than this value. Zero disables the maximum. Unknown sizes use the configured assumed size."));
   clientList->setToolTip(tr("Select which torrent clients this rule may use. If all are selected, any participating eligible client may be chosen."));
   form->addRow(enabled); form->addRow(tr("Rule name:"), name); form->addRow(allFeeds); form->addRow(tr("Selected feeds:"), feeds);
   form->addRow(tr("Title/content must contain:"), required); form->addRow(tr("Must not contain:"), excluded);
-  form->addRow(tr("Title pattern:"), regex); form->addRow(tr("Allowed clients:"), clientList);
+  form->addRow(tr("Title pattern:"), regex); form->addRow(tr("Minimum torrent size:"), minimumSize);
+  form->addRow(tr("Maximum torrent size:"), maximumSize); form->addRow(tr("Allowed clients:"), clientList);
   layout->addLayout(form);
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-  connect(buttons, &QDialogButtonBox::accepted, &dialog, [&dialog, name, allFeeds, feeds, regex]() {
+  connect(buttons, &QDialogButtonBox::accepted, &dialog,
+          [&dialog, name, allFeeds, feeds, regex, minimumSize, maximumSize]() {
     if (name->text().trimmed().isEmpty()) {
       QMessageBox::warning(&dialog, tr("Incomplete automation rule"), tr("Enter a rule name.")); return;
     }
@@ -839,6 +885,10 @@ TorrentAutomationRule SettingsTorrentAutomation::editRuleDialog(const TorrentAut
     const QRegularExpression expression(regex->text());
     if (!regex->text().trimmed().isEmpty() && !expression.isValid()) {
       QMessageBox::warning(&dialog, tr("Invalid title pattern"), expression.errorString()); return;
+    }
+    if (maximumSize->value() > 0.0 && minimumSize->value() > maximumSize->value()) {
+      QMessageBox::warning(&dialog, tr("Invalid torrent size range"),
+                           tr("The maximum torrent size must be zero or at least the minimum size.")); return;
     }
     dialog.accept();
   });
@@ -855,7 +905,10 @@ TorrentAutomationRule SettingsTorrentAutomation::editRuleDialog(const TorrentAut
       if (feeds->item(i)->checkState() == Qt::Checked) result.feedIds.append(feeds->item(i)->data(Qt::UserRole).toString());
   }
   result.requiredText = required->text().trimmed(); result.excludedText = excluded->text().trimmed();
-  result.titleRegularExpression = regex->text().trimmed(); result.clientIds.clear();
+  result.titleRegularExpression = regex->text().trimmed();
+  result.minimumSizeBytes = qint64(minimumSize->value() * GiB);
+  result.maximumSizeBytes = qint64(maximumSize->value() * GiB);
+  result.clientIds.clear();
   for (int i = 0; i < clientList->count(); ++i) if (clientList->item(i)->checkState() == Qt::Checked)
     result.clientIds.append(clientList->item(i)->data(Qt::UserRole).toString());
   return result;
@@ -877,6 +930,27 @@ void SettingsTorrentAutomation::editRule() {
   m_config.rules[row] = rule; refreshRules(); m_rules->setCurrentRow(row); dirtifySettings();
 }
 
+void SettingsTorrentAutomation::duplicateRule() {
+  const int row = m_rules->currentRow(); if (row < 0 || row >= m_config.rules.size()) return;
+  TorrentAutomationRule copy = m_config.rules.at(row);
+  copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  copy.name = tr("%1 (copy)").arg(copy.name);
+  m_config.rules.insert(row + 1, copy);
+  refreshRules(); m_rules->setCurrentRow(row + 1); dirtifySettings();
+}
+
+void SettingsTorrentAutomation::moveRuleUp() {
+  const int row = m_rules->currentRow(); if (row <= 0 || row >= m_config.rules.size()) return;
+  m_config.rules.swapItemsAt(row, row - 1);
+  refreshRules(); m_rules->setCurrentRow(row - 1); dirtifySettings();
+}
+
+void SettingsTorrentAutomation::moveRuleDown() {
+  const int row = m_rules->currentRow(); if (row < 0 || row + 1 >= m_config.rules.size()) return;
+  m_config.rules.swapItemsAt(row, row + 1);
+  refreshRules(); m_rules->setCurrentRow(row + 1); dirtifySettings();
+}
+
 void SettingsTorrentAutomation::removeRule() {
   const int row = m_rules->currentRow(); if (row < 0) return;
   if (QMessageBox::question(this, tr("Remove automation rule"), tr("Remove “%1”?").arg(m_config.rules.at(row).name)) != QMessageBox::Yes) return;
@@ -895,6 +969,73 @@ void SettingsTorrentAutomation::refreshActivity() {
 
 void SettingsTorrentAutomation::runDryTest() {
   TorrentAutomationEngine::instance(qApp)->runDryTest();
+}
+
+void SettingsTorrentAutomation::runReadinessAudit() {
+  saveSettings();
+  m_config = TorrentAutomationConfig::load(settings());
+  const QList<TorrentClientConfig> allClients = TorrentClientConfig::load(settings());
+  QStringList errors, warnings, passed, participatingIds;
+  for (const TorrentClientConfig& client : allClients) {
+    const TorrentAutomationClientPolicy policy = m_config.policyFor(client.id);
+    if (!client.enabled || !policy.enabled) continue;
+    participatingIds.append(client.id);
+    if (!client.capabilityTested || !client.capabilityConnected)
+      errors.append(tr("%1 has not passed a capability test.").arg(client.name));
+    else {
+      passed.append(tr("%1 has a saved successful capability test.").arg(client.name));
+      if (client.capabilityTestedAt.isValid() && client.capabilityTestedAt.daysTo(QDateTime::currentDateTimeUtc()) > 30)
+        warnings.append(tr("%1's capability test is more than 30 days old.").arg(client.name));
+    }
+    if (!client.capabilityFreeSpace && policy.configuredCapacityBytes <= 0)
+      warnings.append(tr("%1 has neither live disk space nor a configured fallback capacity.").arg(client.name));
+    if (policy.allowCleanup && (!client.capabilityTorrentList || !client.capabilityRemoval))
+      errors.append(tr("%1 permits cleanup without confirmed listing and removal capabilities.").arg(client.name));
+  }
+  if (participatingIds.isEmpty()) errors.append(tr("No enabled torrent client participates in automation."));
+
+  int enabledRules = 0;
+  for (const TorrentAutomationRule& rule : std::as_const(m_config.rules)) {
+    if (!rule.enabled) continue;
+    ++enabledRules;
+    const QRegularExpression expression(rule.titleRegularExpression);
+    if (!rule.titleRegularExpression.isEmpty() && !expression.isValid())
+      errors.append(tr("Rule “%1” contains an invalid title pattern.").arg(rule.name));
+    if (rule.maximumSizeBytes > 0 && rule.minimumSizeBytes > rule.maximumSizeBytes)
+      errors.append(tr("Rule “%1” has an invalid torrent-size range.").arg(rule.name));
+    for (const QString& clientId : rule.clientIds)
+      if (!participatingIds.contains(clientId))
+        warnings.append(tr("Rule “%1” references a client that is not currently participating.").arg(rule.name));
+  }
+  if (m_config.rules.isEmpty()) warnings.append(tr("No RSS rules are configured, so every recognised torrent item is eligible."));
+  else if (enabledRules == 0) errors.append(tr("All RSS rules are disabled; no unattended item can match."));
+
+  if (m_config.dryRun) passed.append(tr("Dry run is enabled, so sends and cleanup changes are simulated."));
+  else warnings.append(tr("Dry run is disabled; matching RSS items can be sent immediately."));
+  if (m_config.cleanupEnabled) {
+    if (m_config.deleteData) warnings.append(tr("Cleanup can permanently delete downloaded data."));
+    if (!m_config.cleanupRequireConfirmation) warnings.append(tr("Per-removal confirmation is disabled."));
+    if (!m_config.cleanupGraceEnabled) warnings.append(tr("The cleanup grace period is disabled."));
+    if (!m_config.maximumRemovalsEnabled) warnings.append(tr("The user-defined removal limit is disabled; the internal limit of 25 still applies."));
+    if (!m_config.minimumSeedHoursEnabled && !m_config.minimumRatioEnabled && !m_config.minimumInactiveHoursEnabled)
+      warnings.append(tr("All age, ratio and inactivity cleanup filters are disabled."));
+  }
+  const int queued = TorrentAutomationEngine::instance(qApp)->pendingRetries().size();
+  if (queued > 0) warnings.append(tr("%1 automation item(s) are currently queued.").arg(queued));
+
+  QMessageBox report(this);
+  report.setWindowTitle(tr("Torrent automation readiness"));
+  report.setIcon(errors.isEmpty() ? (warnings.isEmpty() ? QMessageBox::Information : QMessageBox::Warning)
+                                  : QMessageBox::Critical);
+  report.setText(errors.isEmpty() ? (warnings.isEmpty() ? tr("Ready for live automation.")
+                                                        : tr("Usable, but review the warnings before going live."))
+                                  : tr("Not ready for unattended live automation."));
+  QStringList detail;
+  if (!errors.isEmpty()) detail << tr("BLOCKING ISSUES:") << errors;
+  if (!warnings.isEmpty()) detail << QString() << tr("WARNINGS:") << warnings;
+  if (!passed.isEmpty()) detail << QString() << tr("PASSED:") << passed;
+  report.setDetailedText(detail.join(QLatin1Char('\n')));
+  report.exec();
 }
 
 void SettingsTorrentAutomation::exportConfiguration() {
@@ -999,6 +1140,14 @@ void SettingsTorrentAutomation::retryQueuedItem() {
   refreshActivity();
 }
 
+void SettingsTorrentAutomation::retryAllQueuedItems() {
+  TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
+  if (engine->pendingRetries().isEmpty()) return;
+  if (QMessageBox::question(this, tr("Retry all queued automation"),
+                            tr("Retry every queued item now? Normal client limits and safety checks still apply.")) != QMessageBox::Yes) return;
+  engine->retryAllPending(); refreshActivity();
+}
+
 void SettingsTorrentAutomation::chooseQueuedClient() {
   if (m_queue->currentRow() < 0 || TorrentAutomationEngine::instance(qApp)->pendingRetries().isEmpty()) return;
   const QList<TorrentClientConfig> clients = TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(settings()));
@@ -1021,6 +1170,40 @@ void SettingsTorrentAutomation::cancelQueuedItem() {
                             tr("Remove the selected item from the retry queue? The torrent itself will not be changed.")) != QMessageBox::Yes) return;
   TorrentAutomationEngine::instance(qApp)->cancelPending(m_queue->currentRow());
   refreshActivity();
+}
+
+void SettingsTorrentAutomation::cancelAllQueuedItems() {
+  TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
+  if (engine->pendingRetries().isEmpty()) return;
+  if (QMessageBox::warning(this, tr("Cancel all queued automation"),
+                           tr("Remove every item from the persistent automation queue? Existing torrents are not changed."),
+                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+  engine->cancelAllPending(); refreshActivity();
+}
+
+void SettingsTorrentAutomation::exportActivity() {
+  const QString path = QFileDialog::getSaveFileName(this, tr("Export torrent automation activity"),
+                                                     QStringLiteral("rssguard-torrent-activity.json"),
+                                                     tr("JSON files (*.json)"));
+  if (path.isEmpty()) return;
+  TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
+  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-activity-v1")},
+                         {QStringLiteral("exportedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+                         {QStringLiteral("history"), engine->activityHistory()},
+                         {QStringLiteral("pendingQueue"), QJsonArray::fromStringList(engine->pendingRetries())}};
+  QSaveFile file(path);
+  if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+    QMessageBox::warning(this, tr("Activity export failed"), tr("The activity file could not be written.")); return;
+  }
+  QMessageBox::information(this, tr("Activity exported"),
+                           tr("The report contains automation decisions and may include torrent titles, URLs and client identifiers. It contains no stored passwords or tokens."));
+}
+
+void SettingsTorrentAutomation::clearActivity() {
+  if (TorrentAutomationEngine::instance(qApp)->activityHistory().isEmpty()) return;
+  if (QMessageBox::question(this, tr("Clear torrent automation activity"),
+                            tr("Permanently clear the retained decision history? Processed-item protection, managed allocations and the pending queue are not changed.")) != QMessageBox::Yes) return;
+  TorrentAutomationEngine::instance(qApp)->clearActivityHistory(); refreshActivity();
 }
 
 void SettingsTorrentAutomation::updateCleanupControls() {

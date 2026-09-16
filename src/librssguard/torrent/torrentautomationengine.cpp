@@ -155,6 +155,8 @@ QStringList TorrentAutomationEngine::recentActivity() const {
   return result;
 }
 
+QJsonArray TorrentAutomationEngine::activityHistory() const { return m_history; }
+
 QStringList TorrentAutomationEngine::pendingRetries() const {
   QStringList result;
   for (const Job& job : m_deferredJobs) {
@@ -172,6 +174,19 @@ void TorrentAutomationEngine::retryPending(int index) {
   Job job = m_deferredJobs.takeAt(index);
   job.nextAttempt = {};
   m_jobs.enqueue(job);
+  saveRuntime();
+  if (!m_busy) beginBatch();
+}
+
+void TorrentAutomationEngine::retryAllPending() {
+  if (m_deferredJobs.isEmpty()) return;
+  const QList<Job> pending = m_deferredJobs;
+  m_deferredJobs.clear();
+  for (Job job : pending) {
+    job.nextAttempt = {};
+    job.queueReason.clear();
+    m_jobs.enqueue(job);
+  }
   saveRuntime();
   if (!m_busy) beginBatch();
 }
@@ -197,6 +212,21 @@ void TorrentAutomationEngine::cancelPending(int index) {
   saveRuntime();
 }
 
+void TorrentAutomationEngine::cancelAllPending() {
+  if (m_deferredJobs.isEmpty()) return;
+  const QList<Job> pending = m_deferredJobs;
+  m_deferredJobs.clear();
+  for (const Job& job : pending)
+    record(QStringLiteral("cancelled"), job, {}, tr("Queued retry cancelled by the user."));
+  saveRuntime();
+}
+
+void TorrentAutomationEngine::clearActivityHistory() {
+  m_history = {};
+  saveRuntime();
+  emit activityAdded(QString());
+}
+
 QString TorrentAutomationEngine::jobKey(const QString& url) const {
   QString normalized = url.trimmed();
   if (normalized.startsWith(QStringLiteral("magnet:"), Qt::CaseInsensitive)) normalized = normalized.toLower();
@@ -205,7 +235,8 @@ QString TorrentAutomationEngine::jobKey(const QString& url) const {
 
 bool TorrentAutomationEngine::ruleMatches(const TorrentAutomationRule& rule,
                                            const QString& feedId,
-                                           const Message& message) const {
+                                           const Message& message,
+                                           qint64 torrentSize) const {
   if (!rule.enabled || (!rule.feedIds.isEmpty() && !rule.feedIds.contains(feedId))) return false;
   const QString searchable = message.m_title + QLatin1Char('\n') + message.m_contents;
   if (!rule.requiredText.isEmpty() && !searchable.contains(rule.requiredText, Qt::CaseInsensitive)) return false;
@@ -214,6 +245,8 @@ bool TorrentAutomationEngine::ruleMatches(const TorrentAutomationRule& rule,
     const QRegularExpression expression(rule.titleRegularExpression, QRegularExpression::CaseInsensitiveOption);
     if (!expression.isValid() || !expression.match(message.m_title).hasMatch()) return false;
   }
+  if (rule.minimumSizeBytes > 0 && torrentSize < rule.minimumSizeBytes) return false;
+  if (rule.maximumSizeBytes > 0 && torrentSize > rule.maximumSizeBytes) return false;
   return true;
 }
 
@@ -234,19 +267,20 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
     for (const Message& message : feedIt.value()) {
       const QString messageFeedId = feedId.isEmpty() ? message.m_feedCustomId : feedId;
       if (manualApproval && TorrentSendHistory::instance(qApp)->wasSentToAnyClient(message.m_id)) continue;
-      QStringList allowed;
-      bool matched = m_config.rules.isEmpty();
-      QString matchedRule = m_config.rules.isEmpty() ? tr("No rules configured") : QString();
-      for (const TorrentAutomationRule& rule : std::as_const(m_config.rules)) {
-        if (ruleMatches(rule, messageFeedId, message)) {
-          matched = true;
-          allowed = rule.clientIds;
-          matchedRule = rule.name;
-          break;
-        }
-      }
-      if (!matched) continue;
       for (const QString& url : TorrentExtractor::extract(message)) {
+        const qint64 size = torrentSizeHint(url, m_config.unknownTorrentSizeBytes);
+        QStringList allowed;
+        bool matched = m_config.rules.isEmpty();
+        QString matchedRule = m_config.rules.isEmpty() ? tr("No rules configured") : QString();
+        for (const TorrentAutomationRule& rule : std::as_const(m_config.rules)) {
+          if (ruleMatches(rule, messageFeedId, message, size)) {
+            matched = true;
+            allowed = rule.clientIds;
+            matchedRule = rule.name;
+            break;
+          }
+        }
+        if (!matched) continue;
         Job job;
         job.key = jobKey(url);
         job.title = message.m_title;
@@ -255,7 +289,7 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
         job.ruleName = matchedRule;
         job.messageId = message.m_id;
         job.allowedClientIds = allowed;
-        job.sizeBytes = torrentSizeHint(url, m_config.unknownTorrentSizeBytes);
+        job.sizeBytes = size;
         job.manualApproval = manualApproval;
         if (!wasProcessed(job.key)) m_jobs.enqueue(job);
       }

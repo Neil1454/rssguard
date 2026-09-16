@@ -16,6 +16,8 @@ Removal API support is capability-reported rather than assumed. The test is deli
 
 Rules are checked from top to bottom and can match selected feeds, required/excluded text and a title regular expression. The rule editor lists feeds already added to RSS Guard and stores their internal IDs automatically; users do not enter feed URLs or IDs. A rule can restrict the destination pool. With no rules, all new articles containing a recognised torrent link are eligible.
 
+Rules can also set minimum and maximum torrent sizes, be duplicated, and be moved up or down. Size limits are evaluated separately for every extracted torrent link; links without a declared size use the configured assumed size. The first enabled matching rule wins.
+
 **Test selected client** and **Test all clients** perform non-destructive capability discovery. The saved result shows connection/authentication, live workload, free-space, torrent-list and safe-removal availability. A test never adds or deletes a torrent, and running it again replaces the previous result.
 
 Tests honour the configured global or per-client status retry allowance, delay, request timeout and optional backoff. When the API reports an exact total storage capacity, the test fills **Capacity GB** automatically. Existing manual capacity remains unchanged when the API reports only free space or no filesystem information. rTorrent and rQBit normally require manual capacity because their portable APIs do not expose filesystem totals. A removal-API tick means the adapter supports removal and its listing call succeeded; it is not proof of server-side removal permission.
@@ -35,6 +37,10 @@ Every successful client destination receives its own persistent green tick. The 
 The runtime ledger records processed links, routing activity, managed allocations and pending retries so restarting RSS Guard does not resend the same URL or lose queued work. Retry timing, attempt count, exponential backoff and request timeout are configurable globally, with per-client overrides. A definite transient failure can fail over to the next suitable client. After an ambiguous timeout, a magnet's info hash is checked on the original client before failover; an ambiguous direct `.torrent` URL is not automatically resent because its outcome cannot be verified safely.
 
 The **Activity** tab displays queued items with the reason and next attempt in local time. A selected entry can be retried immediately, deliberately sent to a chosen enabled client, or cancelled without changing any torrent already on a server. Optional routing hours defer unattended work to the next opening of the configured local-time window.
+
+All queued entries can be retried or cancelled together after confirmation. Activity can be exported as JSON for diagnosis and cleared separately. Exported reports can contain titles, torrent URLs and client identifiers but never stored passwords or API tokens. Clearing Activity does not erase duplicate protection, managed allocations or queued work.
+
+**Check readiness for live automation** audits participating clients, saved capability tests and their age, storage fallbacks, RSS rules, queued work and cleanup safeguards. It reports blocking issues separately from warnings and passed checks; it does not silently change the configuration.
 
 **Export torrent configuration** writes client layout, non-secret connection fields, rules and automation settings to JSON. Passwords and API tokens are not written. Import replaces the layout after confirmation and retains credentials already stored locally for matching client IDs.
 
