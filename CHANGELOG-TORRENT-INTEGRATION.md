@@ -2,6 +2,11 @@
 
 ## Torrent automation development build
 
+- Build 60 replaces the short dry-run result with a complete, read-only decision trace. It reports the matched rule, estimated size, routing strategy, every participating client's traffic-light assessment and exact restriction or selection reason.
+- Dry-run cleanup now names every torrent that would be removed to reach the configured target, whether downloaded data would be deleted, its size, estimated recovered space, and every enabled cleanup condition it satisfied. Torrents retained by active-upload, unknown-speed, recent-upload, age, ratio, inactivity, tag/tracker, copy-count, incomplete-download or grace-period protection are named with the exact reason.
+- Forced dry tests now include already-processed recent items and explicitly report unmatched rules and RSS items with no supported torrent link. They simulate routing windows, retry/backoff, duplicate handling, cleanup grace and multi-item batch load without writing queue, cleanup-candidate, processed-item, reconciliation or client-health state.
+- Activity displays the configured retained history instead of silently truncating it to 100 entries, and long decision explanations wrap in the settings page.
+
 - Build 59 adds a readiness audit that separates blocking configuration problems, warnings and passed checks before dry-run mode is disabled.
 - Completed RSS rule size handling: minimum/maximum sizes are editable and enforced per extracted torrent, including multiple torrent links within one article. Rules can now be duplicated and moved up/down to control first-match ordering.
 - Added retry-all and cancel-all controls for the persistent queue. Retried work still passes through normal client limits and safety checks; cancellation does not change existing torrents.

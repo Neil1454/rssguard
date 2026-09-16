@@ -437,6 +437,7 @@ void SettingsTorrentAutomation::loadUi() {
   auto* activityPage = new QWidget(tabs);
   auto* activityLayout = new QVBoxLayout(activityPage);
   m_activity = new QListWidget(activityPage);
+  m_activity->setWordWrap(true);
   m_queue = new QListWidget(activityPage);
   m_queue->setToolTip(tr("Persistent items waiting for a retry, maintenance window or healthy destination."));
   auto* refresh = new QPushButton(tr("Refresh activity"), activityPage);

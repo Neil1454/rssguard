@@ -150,7 +150,7 @@ QStringList TorrentAutomationEngine::recentActivity() const {
                     .arg(item.value(QStringLiteral("time")).toString(),
                          item.value(QStringLiteral("state")).toString(),
                          item.value(QStringLiteral("detail")).toString()));
-    if (result.size() >= 100) break;
+    if (result.size() >= qBound(50, m_config.historyLimit, 5000)) break;
   }
   return result;
 }
@@ -267,7 +267,15 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
     for (const Message& message : feedIt.value()) {
       const QString messageFeedId = feedId.isEmpty() ? message.m_feedCustomId : feedId;
       if (manualApproval && TorrentSendHistory::instance(qApp)->wasSentToAnyClient(message.m_id)) continue;
-      for (const QString& url : TorrentExtractor::extract(message)) {
+      const QStringList extracted = TorrentExtractor::extract(message);
+      if (forceDryRun && extracted.isEmpty()) {
+        Job skipped;
+        skipped.title = message.m_title;
+        skipped.feedId = messageFeedId;
+        record(QStringLiteral("DRY RUN — NO TORRENT"), skipped, {},
+               tr("The RSS item contained no supported magnet link or torrent URL, so automation would take no action."));
+      }
+      for (const QString& url : extracted) {
         const qint64 size = torrentSizeHint(url, m_config.unknownTorrentSizeBytes);
         QStringList allowed;
         bool matched = m_config.rules.isEmpty();
@@ -280,7 +288,6 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
             break;
           }
         }
-        if (!matched) continue;
         Job job;
         job.key = jobKey(url);
         job.title = message.m_title;
@@ -291,7 +298,13 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
         job.allowedClientIds = allowed;
         job.sizeBytes = size;
         job.manualApproval = manualApproval;
-        if (!wasProcessed(job.key)) m_jobs.enqueue(job);
+        if (!matched) {
+          if (forceDryRun)
+            record(QStringLiteral("DRY RUN — NO RULE"), job, {},
+                   tr("No enabled RSS automation rule matched this torrent, so it would not be routed, queued or cleaned up."));
+          continue;
+        }
+        if (forceDryRun || !wasProcessed(job.key)) m_jobs.enqueue(job);
       }
     }
   }
@@ -300,7 +313,7 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
     Job summary;
     summary.title = tr("Manual dry run");
     record(QStringLiteral("DRY RUN"), summary, {},
-           tr("No eligible unprocessed torrent items matched the current RSS rules."));
+           tr("No torrent items were available for routing simulation. Review the preceding dry-run entries for unmatched rules or RSS items without torrent links."));
     m_forcedDryRun = false;
   }
   else if (manualApproval && !m_busy) {
@@ -351,7 +364,7 @@ void TorrentAutomationEngine::queryClientStatus(int index, int attempt) {
       status.detail = breakerDetail;
       m_statuses[index] = status;
       if (--m_pendingStatusQueries == 0) {
-        reconcileManagedState();
+        if (!m_config.dryRun) reconcileManagedState();
         processNextJob();
       }
       return;
@@ -363,6 +376,17 @@ void TorrentAutomationEngine::queryClientStatus(int index, int attempt) {
     const int maximumRetries = policy.retryAttempts >= 0 ? policy.retryAttempts : m_config.retryAttempts;
     if (!status.reachable && m_config.retryEnabled && attempt < maximumRetries &&
         isTransientFailure(status.detail)) {
+      if (m_config.dryRun) {
+        qint64 delay = qMax(1, m_config.retryInitialSeconds);
+        if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(attempt, 16));
+        delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+        Job statusJob;
+        statusJob.title = m_clients.at(index).name;
+        record(QStringLiteral("DRY RUN — STATUS RETRY"), statusJob, m_clients.at(index).id,
+               tr("The status check failed temporarily. Live automation would retry attempt %1 of %2 after %3 seconds; the dry run did not wait or change client-health state. %4")
+                 .arg(attempt + 1).arg(maximumRetries).arg(delay).arg(status.detail));
+      }
+      else {
       qint64 delay = qMax(1, m_config.retryInitialSeconds);
       if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(attempt, 16));
       delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
@@ -375,13 +399,16 @@ void TorrentAutomationEngine::queryClientStatus(int index, int attempt) {
       QTimer::singleShot(int(qMin<qint64>(delay * 1000, std::numeric_limits<int>::max())), this,
                          [this, index, attempt]() { queryClientStatus(index, attempt + 1); });
       return;
+      }
     }
     if (status.totalBytes <= 0 && policy.configuredCapacityBytes > 0)
       status.totalBytes = policy.configuredCapacityBytes;
     if (status.freeBytes < 0 && policy.configuredCapacityBytes > 0) {
       status.freeBytes = qMax<qint64>(0, policy.configuredCapacityBytes - estimatedManagedBytes(policy.clientId));
     }
-    const bool clientReady = updateCircuitBreaker(m_clients.at(index).id, status.reachable, status.detail);
+    const bool clientReady = m_config.dryRun
+                               ? !circuitBreakerOpen(m_clients.at(index).id)
+                               : updateCircuitBreaker(m_clients.at(index).id, status.reachable, status.detail);
     if (status.reachable && !clientReady) {
       status.reachable = false;
       status.detail = tr("Recovery check passed; waiting for another consecutive successful check before routing.");
@@ -389,7 +416,7 @@ void TorrentAutomationEngine::queryClientStatus(int index, int attempt) {
     m_statuses[index] = status;
     client->deleteLater();
     if (--m_pendingStatusQueries == 0) {
-      reconcileManagedState();
+      if (!m_config.dryRun) reconcileManagedState();
       processNextJob();
     }
   });
@@ -568,6 +595,13 @@ void TorrentAutomationEngine::processNextJob() {
   const Job job = m_jobs.dequeue();
   if (!job.directOverride && m_config.scheduleEnabled &&
       !withinHourWindow(m_config.scheduleStartHour, m_config.scheduleEndHour)) {
+    if (m_config.dryRun) {
+      record(QStringLiteral("DRY RUN — SCHEDULE"), job, {},
+             tr("Rule: %1. Automatic routing would wait because the current time is outside the configured routing hours. No item was queued and no changes were made.")
+               .arg(job.ruleName));
+      processNextJob();
+      return;
+    }
     scheduleForWindow(job, m_config.scheduleStartHour,
                       tr("Outside the configured automatic-routing hours."));
     processNextJob();
@@ -580,9 +614,11 @@ void TorrentAutomationEngine::processNextJob() {
       for (const TorrentRemoteItem& item : status.torrents)
         if (!hash.isEmpty() && item.hash.compare(hash, Qt::CaseInsensitive) == 0) existingCopy = true;
     if (existingCopy) {
-      markProcessed(job.key);
-      record(QStringLiteral("already-present"), job, {},
-             tr("This torrent already exists on a configured client; automatic duplicate submission was skipped."));
+      if (!m_config.dryRun) markProcessed(job.key);
+      record(m_config.dryRun ? QStringLiteral("DRY RUN — DUPLICATE") : QStringLiteral("already-present"), job, {},
+             m_config.dryRun
+               ? tr("Rule: %1. This torrent was found on a configured client, so it would be skipped as a duplicate. No processed marker was written and no changes were made.").arg(job.ruleName)
+               : tr("This torrent already exists on a configured client; automatic duplicate submission was skipped."));
       processNextJob();
       return;
     }
@@ -618,8 +654,19 @@ void TorrentAutomationEngine::processNextJob() {
   }
   const QList<int> eligible = eligibleClientIndexes(job);
   int selected = selectClient(eligible);
+  if (m_config.dryRun && !job.directOverride) recordDryRunClientAssessments(job, selected);
   if (selected < 0) {
     if (tryCleanup(job)) return;
+    if (m_config.dryRun && !job.directOverride) {
+      const QString retry = m_config.retryEnabled
+                              ? tr("Live automation would place the item in the retry queue using the configured retry limits and delay.")
+                              : tr("Retries are disabled, so live automation would record a final failure.");
+      record(QStringLiteral("DRY RUN — FINAL"), job, {},
+             tr("No client is currently suitable and safe cleanup could not make enough space. %1 No item was queued, sent or removed.")
+               .arg(retry));
+      processNextJob();
+      return;
+    }
     if (job.manualApproval) {
       const int decision = confirmManualDestination(job, eligible, selected);
       if (decision >= 0) { sendJob(job, decision); return; }
@@ -651,6 +698,236 @@ void TorrentAutomationEngine::processNextJob() {
   sendJob(job, selected);
 }
 
+void TorrentAutomationEngine::recordDryRunClientAssessments(const Job& job, int selected) {
+  record(QStringLiteral("DRY RUN — ITEM"), job, {},
+         tr("Testing “%1” against rule “%2”; estimated torrent size %3 GB. Routing strategy: %4. Live client status was read, but no client or torrent was changed.")
+           .arg(job.title, job.ruleName)
+           .arg(job.sizeBytes / 1000000000.0, 0, 'f', 2)
+           .arg(TorrentAutomationConfig::strategyName(m_config.strategy)));
+
+  for (int index = 0; index < m_clients.size(); ++index) {
+    bool soft = false;
+    const QString restriction = clientRestriction(index, job, &soft);
+    const TorrentClientStatus& status = m_statuses.at(index);
+    const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(index).id);
+    const QString level = index == selected ? tr("BLUE — selected")
+                          : restriction.isEmpty() ? tr("GREEN — suitable")
+                          : soft ? tr("AMBER — policy restricted")
+                                 : tr("RED — unavailable or unsafe");
+    const QString space = status.freeBytes < 0
+                            ? tr("free space unknown")
+                            : tr("%1 GB free of %2 GB; safety target %3 GB")
+                                .arg(status.freeBytes / 1000000000.0, 0, 'f', 1)
+                                .arg(status.totalBytes > 0 ? status.totalBytes / 1000000000.0 : 0.0, 0, 'f', 1)
+                                .arg(clientFreeSpaceTarget(index) / 1000000000.0, 0, 'f', 1);
+    const QString reason = restriction.isEmpty()
+                             ? (index == selected ? tr("highest result under the configured routing strategy")
+                                                  : tr("eligible, but ranked below the selected client"))
+                             : restriction;
+    record(QStringLiteral("DRY RUN — CLIENT"), job, m_clients.at(index).id,
+           tr("%1: %2 — %3. Priority %4; %5 active and %6 queued downloads; downloading %7 MiB/s; uploading %8 MiB/s; %9.")
+             .arg(m_clients.at(index).name, level, reason)
+             .arg(policy.priority)
+             .arg(status.activeDownloads)
+             .arg(status.queuedDownloads)
+             .arg(qMax<qint64>(0, status.downloadBytesPerSecond) / (1024.0 * 1024.0), 0, 'f', 1)
+             .arg(qMax<qint64>(0, status.uploadBytesPerSecond) / (1024.0 * 1024.0), 0, 'f', 1)
+             .arg(space));
+  }
+}
+
+QString TorrentAutomationEngine::cleanupEligibilityDetail(const TorrentRemoteItem& item,
+                                                           const QDateTime& now) const {
+  QStringList reasons;
+  reasons.append(m_config.smartCleanupOrder ? tr("selected by Smart combined score")
+                                            : tr("selected by oldest-completed-first order"));
+  if (m_config.minimumSeedHoursEnabled)
+    reasons.append(tr("seeded/completed for %1 h (minimum %2 h)")
+                     .arg(item.completed.isValid() ? item.completed.secsTo(now) / 3600 : 0)
+                     .arg(m_config.minimumSeedHours));
+  if (m_config.minimumRatioEnabled)
+    reasons.append(tr("ratio %1 (minimum %2)").arg(item.ratio, 0, 'f', 2).arg(m_config.minimumRatio, 0, 'f', 2));
+  if (m_config.minimumInactiveHoursEnabled)
+    reasons.append(tr("inactive for %1 h (minimum %2 h)")
+                     .arg(item.lastActivity.isValid() ? item.lastActivity.secsTo(now) / 3600 : 0)
+                     .arg(m_config.minimumInactiveHours));
+  if (m_config.protectUploadingEnabled)
+    reasons.append(tr("upload %1 KiB/s is below protection threshold %2 KiB/s")
+                     .arg(qMax<qint64>(0, item.uploadBytesPerSecond) / 1024.0, 0, 'f', 1)
+                     .arg(m_config.protectUploadBytesPerSecond / 1024.0, 0, 'f', 1));
+  if (!m_config.protectedTags.isEmpty()) reasons.append(tr("does not have a protected tag"));
+  if (!m_config.protectedTrackerTerms.isEmpty()) reasons.append(tr("tracker is not protected"));
+  if (m_config.minimumCopiesEnabled)
+    reasons.append(tr("copy-protection check passed (%1 completed copies)").arg(completedCopyCount(item.hash)));
+  return reasons.join(QStringLiteral("; "));
+}
+
+bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
+  const int removalLimit = m_config.maximumRemovalsEnabled ? m_config.maximumRemovalsPerRun : 25;
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  bool inspectedCleanupClient = false;
+
+  if (m_config.cleanupScheduleEnabled &&
+      !withinHourWindow(m_config.cleanupScheduleStartHour, m_config.cleanupScheduleEndHour)) {
+    record(QStringLiteral("DRY RUN — CLEANUP"), job, {},
+           tr("Cleanup would wait for the configured maintenance window. No retry was scheduled and no changes were made."));
+    return true;
+  }
+
+  for (int i = 0; i < m_clients.size(); ++i) {
+    const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(i).id);
+    const TorrentClientStatus& status = m_statuses.at(i);
+    const qint64 originalFree = status.freeBytes;
+    if (!policy.allowCleanup || !status.reachable || status.freeBytes < 0 ||
+        job.attemptedClientIds.contains(m_clients.at(i).id)) continue;
+
+    qint64 target = clientFreeSpaceTarget(i) + job.sizeBytes;
+    const qint64 capacity = status.totalBytes > 0 ? status.totalBytes : policy.configuredCapacityBytes;
+    if (capacity > 0 && m_config.cleanupBatchPercent > 0.0) {
+      const qint64 batch = qMax<qint64>(1, qint64(double(capacity) * m_config.cleanupBatchPercent / 100.0));
+      target = qint64(std::ceil(double(target) / double(batch))) * batch;
+    }
+    if (status.freeBytes >= target) continue;
+    inspectedCleanupClient = true;
+    record(QStringLiteral("DRY RUN — CLEANUP TARGET"), job, m_clients.at(i).id,
+           tr("%1 has %2 GB free. It would need %3 GB free after allowing for this %4 GB torrent, configured reserves and cleanup batching; approximately %5 GB must be recovered.")
+             .arg(m_clients.at(i).name)
+             .arg(status.freeBytes / 1000000000.0, 0, 'f', 1)
+             .arg(target / 1000000000.0, 0, 'f', 1)
+             .arg(job.sizeBytes / 1000000000.0, 0, 'f', 1)
+             .arg((target - status.freeBytes) / 1000000000.0, 0, 'f', 1));
+
+    QList<TorrentRemoteItem> eligible;
+    for (const TorrentRemoteItem& item : status.torrents) {
+      if (!item.managedByAutomation || item.hash.isEmpty()) continue;
+      QString reason;
+      if (item.progress < 1.0 || item.downloading) reason = tr("still downloading or incomplete");
+      bool protectedByName = false;
+      for (const QString& tag : item.tags)
+        if (m_config.protectedTags.contains(tag, Qt::CaseInsensitive)) { protectedByName = true; break; }
+      if (!protectedByName)
+        for (const QString& tracker : m_config.protectedTrackerTerms)
+          if (!tracker.trimmed().isEmpty() && item.tracker.contains(tracker.trimmed(), Qt::CaseInsensitive)) {
+            protectedByName = true; break;
+          }
+      if (reason.isEmpty() && protectedByName) reason = tr("protected tag or tracker matched");
+      if (reason.isEmpty() && m_config.minimumCopiesEnabled &&
+          completedCopyCount(item.hash) <= m_config.minimumCopiesAcrossClients)
+        reason = tr("minimum-copy protection would be breached");
+      if (reason.isEmpty() && m_config.protectUploadingEnabled && item.uploadBytesPerSecond < 0 &&
+          m_config.protectWhenSpeedUnknown) reason = tr("upload speed is unknown and unknown speeds are protected");
+      if (reason.isEmpty() && m_config.protectUploadingEnabled &&
+          item.uploadBytesPerSecond >= m_config.protectUploadBytesPerSecond)
+        reason = tr("uploading at %1 KiB/s, at or above the %2 KiB/s protection threshold")
+                   .arg(item.uploadBytesPerSecond / 1024.0, 0, 'f', 1)
+                   .arg(m_config.protectUploadBytesPerSecond / 1024.0, 0, 'f', 1);
+      const QDateTime recentUpload = lastUploadActivity(m_clients.at(i).id, item.hash);
+      if (reason.isEmpty() && m_config.protectRecentUploadHours > 0 && recentUpload.isValid() &&
+          recentUpload.secsTo(now) < qint64(m_config.protectRecentUploadHours) * 3600)
+        reason = tr("uploaded recently and is inside the %1-hour protection period").arg(m_config.protectRecentUploadHours);
+      if (reason.isEmpty() && m_config.minimumRatioEnabled && item.ratio < m_config.minimumRatio)
+        reason = tr("ratio %1 is below the required %2").arg(item.ratio, 0, 'f', 2).arg(m_config.minimumRatio, 0, 'f', 2);
+      if (reason.isEmpty() && m_config.minimumSeedHoursEnabled &&
+          (!item.completed.isValid() || item.completed.secsTo(now) < qint64(m_config.minimumSeedHours) * 3600))
+        reason = tr("minimum seeding/completed age has not been reached");
+      if (reason.isEmpty() && m_config.minimumInactiveHoursEnabled &&
+          (!item.lastActivity.isValid() || item.lastActivity.secsTo(now) < qint64(m_config.minimumInactiveHours) * 3600))
+        reason = tr("minimum inactivity period has not been reached");
+      if (!reason.isEmpty()) {
+        record(QStringLiteral("DRY RUN — PROTECTED"), job, m_clients.at(i).id,
+               tr("Would keep “%1” (%2 GB): %3.")
+                 .arg(item.name).arg(item.sizeBytes / 1000000000.0, 0, 'f', 1).arg(reason));
+      }
+      else if (m_config.cleanupGraceEnabled) {
+        QDateTime markedAt;
+        for (const QJsonValue& value : std::as_const(m_cleanupCandidates)) {
+          const QJsonObject candidate = value.toObject();
+          if (candidate.value(QStringLiteral("clientId")).toString() == m_clients.at(i).id &&
+              candidate.value(QStringLiteral("hash")).toString().compare(item.hash, Qt::CaseInsensitive) == 0) {
+            markedAt = QDateTime::fromString(candidate.value(QStringLiteral("markedAt")).toString(), Qt::ISODate);
+            break;
+          }
+        }
+        if (!markedAt.isValid()) {
+          record(QStringLiteral("DRY RUN — WOULD MARK"), job, m_clients.at(i).id,
+                 tr("Would mark “%1” as a cleanup candidate because %2. Live automation would wait %3 hour(s), then completely recheck it before removal. The dry run did not create the mark.")
+                   .arg(item.name, cleanupEligibilityDetail(item, now)).arg(m_config.cleanupGraceHours));
+        }
+        else {
+          const QDateTime ready = markedAt.addSecs(qMax(1, m_config.cleanupGraceHours) * 3600);
+          if (ready > now)
+            record(QStringLiteral("DRY RUN — GRACE WAIT"), job, m_clients.at(i).id,
+                   tr("Would keep “%1” for now because its cleanup grace period ends at %2. It would be fully rechecked then.")
+                     .arg(item.name, ready.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss"))));
+          else eligible.append(item);
+        }
+      }
+      else eligible.append(item);
+    }
+
+    std::sort(eligible.begin(), eligible.end(), [this, now](const TorrentRemoteItem& a, const TorrentRemoteItem& b) {
+      if (m_config.smartCleanupOrder) return cleanupScore(a, now) > cleanupScore(b, now);
+      const QDateTime aDate = a.completed.isValid() ? a.completed : a.added;
+      const QDateTime bDate = b.completed.isValid() ? b.completed : b.added;
+      return aDate < bDate;
+    });
+
+    qint64 simulatedFree = status.freeBytes;
+    int proposed = 0;
+    const int availableRemovals = qMax(0, removalLimit - m_cleanupCount);
+    QStringList proposedHashes;
+    for (const TorrentRemoteItem& item : std::as_const(eligible)) {
+      if (simulatedFree >= target || proposed >= availableRemovals) break;
+      ++proposed;
+      proposedHashes.append(item.hash);
+      simulatedFree += qMax<qint64>(0, item.sizeBytes);
+      record(QStringLiteral("DRY RUN — WOULD REMOVE"), job, m_clients.at(i).id,
+             tr("Would remove “%1” from %2%3; size %4 GB; %5. Estimated free space afterwards: %6 GB. No changes made.")
+               .arg(item.name, m_clients.at(i).name,
+                    m_config.deleteData ? tr(" and delete its downloaded data") : tr(" but keep its downloaded data"))
+               .arg(item.sizeBytes / 1000000000.0, 0, 'f', 1)
+               .arg(cleanupEligibilityDetail(item, now))
+               .arg(simulatedFree / 1000000000.0, 0, 'f', 1));
+    }
+
+    if (proposed > 0) {
+      m_cleanupCount += proposed;
+      m_statuses[i].freeBytes = simulatedFree;
+      for (int torrentIndex = m_statuses[i].torrents.size() - 1; torrentIndex >= 0; --torrentIndex)
+        if (proposedHashes.contains(m_statuses[i].torrents.at(torrentIndex).hash, Qt::CaseInsensitive))
+          m_statuses[i].torrents.removeAt(torrentIndex);
+    }
+
+    if (simulatedFree >= target) {
+      record(QStringLiteral("DRY RUN — FINAL"), job, m_clients.at(i).id,
+             tr("Cleanup would remove %1 torrent(s), recover approximately %2 GB, reach the configured target and then send “%3” to %4. No torrent was removed, no data was deleted and nothing was sent.")
+               .arg(proposed)
+               .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1)
+               .arg(job.title, m_clients.at(i).name));
+      ++m_statuses[i].activeDownloads;
+      if (!m_config.reserveRemainingBytes)
+        m_statuses[i].freeBytes = qMax<qint64>(0, m_statuses[i].freeBytes - job.sizeBytes);
+      processNextJob();
+      return true;
+    }
+    else {
+      const QString limitReason = proposed >= availableRemovals
+                                    ? tr("the configured maximum-removals limit was reached")
+                                    : tr("no more eligible torrents remained");
+      record(QStringLiteral("DRY RUN — CLEANUP INSUFFICIENT"), job, m_clients.at(i).id,
+             tr("Cleanup would recover approximately %1 GB, but would still not reach the %2 GB target because %3. No changes made.")
+               .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1)
+               .arg(target / 1000000000.0, 0, 'f', 1)
+               .arg(limitReason));
+    }
+  }
+  if (inspectedCleanupClient) {
+    processNextJob();
+    return true;
+  }
+  return false;
+}
+
 void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
   TorrentClientConfig config = m_clients.at(clientIndex);
   if (!config.tags.contains(AutomationTag)) config.tags.append(AutomationTag);
@@ -666,6 +943,9 @@ void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
     record(QStringLiteral("DRY RUN"), job, config.id,
            tr("Rule: %1. Would send to %2 (%3).").arg(job.ruleName, config.name, decision));
     notify(tr("Torrent automation dry run"), tr("Would send “%1” to %2 — %3.").arg(job.title, config.name, decision));
+    ++m_statuses[clientIndex].activeDownloads;
+    if (m_statuses[clientIndex].freeBytes >= 0 && !m_config.reserveRemainingBytes)
+      m_statuses[clientIndex].freeBytes = qMax<qint64>(0, m_statuses[clientIndex].freeBytes - job.sizeBytes);
     processNextJob();
     return;
   }
@@ -751,6 +1031,17 @@ bool TorrentAutomationEngine::isAmbiguousFailure(const QString& message) const {
 }
 
 void TorrentAutomationEngine::scheduleRetry(Job job, const QString& reason) {
+  if (m_config.dryRun && !job.directOverride) {
+    qint64 delay = qMax(1, m_config.retryInitialSeconds);
+    if (m_config.retryExponentialBackoff) delay *= (1LL << qMin(job.attempt, 16));
+    delay = qMin<qint64>(delay, qMax(1, m_config.retryMaximumSeconds));
+    record(QStringLiteral("DRY RUN — RETRY"), job, {},
+           m_config.retryEnabled
+             ? tr("Live automation would queue retry %1 of %2 after %3 seconds: %4. The dry run did not create a queue entry.")
+                 .arg(job.attempt + 1).arg(m_config.retryAttempts).arg(delay).arg(reason)
+             : tr("Live automation would fail without retry because retries are disabled: %1. The dry run changed nothing.").arg(reason));
+    return;
+  }
   if (!m_config.retryEnabled) {
     record(QStringLiteral("failed"), job, {}, tr("Retries are disabled. %1").arg(reason));
     return;
@@ -801,6 +1092,7 @@ void TorrentAutomationEngine::armDeferredJob(const Job& job) {
 bool TorrentAutomationEngine::tryCleanup(const Job& job) {
   const int removalLimit = m_config.maximumRemovalsEnabled ? m_config.maximumRemovalsPerRun : 25;
   if (!m_config.cleanupEnabled || m_cleanupCount >= removalLimit) return false;
+  if (m_config.dryRun) return simulateCleanup(job);
   if (m_config.cleanupScheduleEnabled &&
       !withinHourWindow(m_config.cleanupScheduleStartHour, m_config.cleanupScheduleEndHour)) {
     scheduleForWindow(job, m_config.cleanupScheduleStartHour,
@@ -920,15 +1212,6 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
         if (!earliestGraceReady.isValid() || ready < earliestGraceReady) earliestGraceReady = ready;
         continue;
       }
-    }
-    if (m_config.dryRun) {
-      record(QStringLiteral("DRY RUN"), job, m_clients.at(i).id,
-             tr("Would remove %1 from %2 to recover approximately %3 GB (cleanup score %4); no changes made.")
-               .arg(victim.name, m_clients.at(i).name)
-               .arg(victim.sizeBytes / 1000000000.0, 0, 'f', 1)
-               .arg(cleanupScore(victim, now), 0, 'f', 1));
-      processNextJob();
-      return true;
     }
     const bool noEligibilityFilters = !m_config.minimumSeedHoursEnabled && !m_config.minimumRatioEnabled &&
                                       !m_config.minimumInactiveHoursEnabled;

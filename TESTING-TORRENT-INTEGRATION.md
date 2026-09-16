@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 59 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 60 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -62,7 +62,7 @@ Client-specific checks:
 - URL assistance: common Transmission Web UI, ruTorrent homepage and qBittorrent `/api/v2` entries offer a corrected endpoint; custom endpoints can be retained.
 - Client identity: automation rows display the configured name, configured colour and underlying client type.
 - Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
-- Manual dry test: evaluates the latest fetched eligible items, writes concise DRY RUN routing/cleanup decisions, and performs no add/remove/delete request.
+- Manual dry test: evaluates the latest fetched items including already-processed ones; names the matched/unmatched rule; reports every client's status/restriction and selected destination; lists every torrent that would be removed and every protected/skipped torrent with its exact settings-based reason; simulates enough removals to reach the configured target; and performs no add, remove, data-delete, queue, grace-mark, processed-marker, reconciliation or client-health-state write.
 - Unknown-size reservation: magnet `xl` is honoured and links without a declared size reserve the configured fallback.
 - Proxy test: correct, incorrect, timed-out and authenticated SOCKS5/HTTP proxy settings report clear results without exposing credentials.
 - Theme toggle: the top-right control switches immediately between bundled minimal-light and minimal-dark skins and persists the selection.

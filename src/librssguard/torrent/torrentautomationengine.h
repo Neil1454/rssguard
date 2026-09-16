@@ -83,6 +83,9 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     int confirmManualDestination(const Job& job, const QList<int>& eligible, int recommended);
     QString clientRestriction(int index, const Job& job, bool* softRestriction = nullptr) const;
     qint64 clientFreeSpaceTarget(int index) const;
+    void recordDryRunClientAssessments(const Job& job, int selected);
+    bool simulateCleanup(const Job& job);
+    QString cleanupEligibilityDetail(const TorrentRemoteItem& item, const QDateTime& now) const;
     void sendJob(const Job& job, int clientIndex);
     bool tryCleanup(const Job& job);
     void finishBatch();
