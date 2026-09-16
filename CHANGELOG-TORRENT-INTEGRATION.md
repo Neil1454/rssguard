@@ -2,6 +2,9 @@
 
 ## Torrent automation development build
 
+- Build 61 fixes the malformed **Clients and limits** table. The duplicated custom cell overlay was removed, client name/type now use one DPI-aware two-line item, colour swatches render once, row height follows the active Windows font, and limit columns size to their contents with smooth horizontal scrolling when required.
+- Corrected the visible fork build definition so Help > About reports Build 61 consistently with the package tag and documentation.
+
 - Build 60 replaces the short dry-run result with a complete, read-only decision trace. It reports the matched rule, estimated size, routing strategy, every participating client's traffic-light assessment and exact restriction or selection reason.
 - Dry-run cleanup now names every torrent that would be removed to reach the configured target, whether downloaded data would be deleted, its size, estimated recovered space, and every enabled cleanup condition it satisfied. Torrents retained by active-upload, unknown-speed, recent-upload, age, ratio, inactivity, tag/tracker, copy-count, incomplete-download or grace-period protection are named with the exact reason.
 - Forced dry tests now include already-processed recent items and explicitly report unmatched rules and RSS items with no supported torrent link. They simulate routing windows, retry/backoff, duplicate handling, cleanup grace and multi-item batch load without writing queue, cleanup-candidate, processed-item, reconciliation or client-health state.

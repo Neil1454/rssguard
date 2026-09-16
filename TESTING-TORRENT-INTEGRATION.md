@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 60 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 61 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 ## Required automated checks
 
@@ -61,6 +61,7 @@ Client-specific checks:
 - Cleanup integrity: after each successful removal, the same torrent cannot be selected again and estimated managed capacity falls by the removed allocation; a failed removal tries another eligible client or enters the bounded retry queue.
 - URL assistance: common Transmission Web UI, ruTorrent homepage and qBittorrent `/api/v2` entries offer a corrected endpoint; custom endpoints can be retained.
 - Client identity: automation rows display the configured name, configured colour and underlying client type.
+- Clients and limits layout: each client appears once as a readable two-line name/type item; colour swatches and text do not overlap at Windows display scaling; row height follows the active font; limit columns size to their contents and remain horizontally scrollable on narrower windows.
 - Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
 - Manual dry test: evaluates the latest fetched items including already-processed ones; names the matched/unmatched rule; reports every client's status/restriction and selected destination; lists every torrent that would be removed and every protected/skipped torrent with its exact settings-based reason; simulates enough removals to reach the configured target; and performs no add, remove, data-delete, queue, grace-mark, processed-marker, reconciliation or client-health-state write.
 - Unknown-size reservation: magnet `xl` is honoured and links without a declared size reserve the configured fallback.

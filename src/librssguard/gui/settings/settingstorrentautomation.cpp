@@ -13,6 +13,7 @@
 #include "torrent/torrentclientconfig.h"
 
 #include <QCheckBox>
+#include <QAbstractItemView>
 #include <QAbstractSpinBox>
 #include <QColor>
 #include <QComboBox>
@@ -34,6 +35,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -272,7 +274,12 @@ void SettingsTorrentAutomation::loadUi() {
     tr("Shows whether storage decisions use live disk space, a reconciled estimate, a managed-ledger estimate, or no usable figure.")};
   for (int column = 0; column < clientTips.size(); ++column)
     m_clients->horizontalHeaderItem(column)->setToolTip(clientTips.at(column));
+  for (int column = 0; column < m_clients->columnCount(); ++column)
+    m_clients->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
   m_clients->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+  m_clients->horizontalHeader()->setMinimumSectionSize(54);
+  m_clients->horizontalHeader()->setStretchLastSection(false);
+  m_clients->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
   m_clients->verticalHeader()->setVisible(false);
   clientsLayout->addWidget(m_clients);
   auto* capabilityBox = new QGroupBox(tr("Detected capabilities for selected client"), clientsPage);
@@ -738,17 +745,32 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
     const bool hasSavedPolicy = std::any_of(m_config.clients.cbegin(), m_config.clients.cend(),
       [&client](const TorrentAutomationClientPolicy& saved) { return saved.clientId == client.id; });
     if (!hasSavedPolicy) policy.priority = qMax(1, client.priority);
-    auto* use = new QTableWidgetItem(); use->setCheckState(policy.enabled ? Qt::Checked : Qt::Unchecked);
-    auto* name = new QTableWidgetItem(client.name); name->setData(Qt::UserRole, client.id); name->setFlags(name->flags() & ~Qt::ItemIsEditable);
-    if (client.colorSettingsLists && !client.buttonColor.isEmpty()) {
-      QPixmap swatch(14, 14); swatch.fill(QColor(client.buttonColor)); name->setIcon(QIcon(swatch));
-    }
+    auto* use = new QTableWidgetItem();
+    use->setCheckState(policy.enabled ? Qt::Checked : Qt::Unchecked);
+    use->setTextAlignment(Qt::AlignCenter);
     const QString typeName = TorrentClientConfig::typeName(client.type);
+    auto* name = new QTableWidgetItem(QStringLiteral("%1\n%2").arg(client.name, typeName));
+    name->setData(Qt::UserRole, client.id);
+    name->setFlags(name->flags() & ~Qt::ItemIsEditable);
+    name->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    if (client.colorSettingsLists && !client.buttonColor.isEmpty()) {
+      const int swatchSize = qMax(12, m_clients->fontMetrics().height());
+      QPixmap swatch(swatchSize, swatchSize);
+      swatch.fill(Qt::transparent);
+      QPainter painter(&swatch);
+      painter.setPen(Qt::NoPen);
+      painter.setBrush(QColor(client.buttonColor));
+      painter.drawRoundedRect(swatch.rect().adjusted(1, 1, -1, -1), 2, 2);
+      name->setIcon(QIcon(swatch));
+    }
+    const int clientRowHeight = m_clients->fontMetrics().lineSpacing() * 2 + 12;
+    name->setSizeHint(QSize(0, clientRowHeight));
     name->setToolTip(client.capabilityTested
       ? tr("Last capability test: %1\n%2").arg(QLocale().toString(client.capabilityTestedAt.toLocalTime(), QLocale::ShortFormat),
                                                client.capabilityDetail)
       : tr("%1\nCapabilities not tested yet. Select this client and choose Test selected client.").arg(typeName));
     auto* cleanup = new QTableWidgetItem();
+    cleanup->setTextAlignment(Qt::AlignCenter);
     const bool cleanupSupported = client.capabilityTested && client.capabilityTorrentList && client.capabilityRemoval;
     cleanup->setCheckState(cleanupSupported && policy.allowCleanup ? Qt::Checked : Qt::Unchecked);
     if (!cleanupSupported) {
@@ -756,21 +778,7 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
       cleanup->setToolTip(tr("Disabled until a capability test confirms torrent listing and adapter removal-API support. Server-side permission is not destructively tested."));
     }
     m_clients->setItem(row, 0, use); m_clients->setItem(row, 1, name);
-    auto* clientCell = new QWidget(m_clients);
-    auto* clientCellLayout = new QHBoxLayout(clientCell);
-    clientCellLayout->setContentsMargins(4, 1, 4, 1);
-    if (client.colorSettingsLists && !client.buttonColor.isEmpty()) {
-      auto* colour = new QLabel(clientCell);
-      colour->setFixedSize(10, 30);
-      colour->setStyleSheet(QStringLiteral("background:%1; border-radius:2px;").arg(QColor(client.buttonColor).name()));
-      clientCellLayout->addWidget(colour);
-    }
-    auto* clientText = new QLabel(QStringLiteral("<b>%1</b><br><small>%2</small>")
-                                    .arg(client.name.toHtmlEscaped(), typeName.toHtmlEscaped()), clientCell);
-    clientText->setToolTip(name->toolTip());
-    clientCellLayout->addWidget(clientText, 1);
-    m_clients->setCellWidget(row, 1, clientCell);
-    m_clients->setRowHeight(row, 42);
+    m_clients->setRowHeight(row, clientRowHeight);
     m_clients->setItem(row, 2, new QTableWidgetItem(QString::number(policy.maxActiveDownloads)));
     m_clients->setItem(row, 3, new QTableWidgetItem(QString::number(policy.maxManagedTorrents)));
     m_clients->setItem(row, 4, new QTableWidgetItem(QString::number(policy.priority)));
