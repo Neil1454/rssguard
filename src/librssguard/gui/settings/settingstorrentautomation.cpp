@@ -51,7 +51,46 @@
 #include <memory>
 
 namespace {
+  constexpr double MiB = 1024.0 * 1024.0;
   constexpr double GiB = 1024.0 * 1024.0 * 1024.0;
+  constexpr double TiB = 1024.0 * 1024.0 * 1024.0 * 1024.0;
+
+  double byteUnitFactor(const QString& unit) {
+    if (unit.compare(QStringLiteral("MiB"), Qt::CaseInsensitive) == 0 ||
+        unit.compare(QStringLiteral("MB"), Qt::CaseInsensitive) == 0) return MiB;
+    if (unit.compare(QStringLiteral("TiB"), Qt::CaseInsensitive) == 0 ||
+        unit.compare(QStringLiteral("TB"), Qt::CaseInsensitive) == 0) return TiB;
+    return GiB;
+  }
+
+  QString formatByteQuantity(qint64 bytes, const QString& unit) {
+    const int decimals = unit == QStringLiteral("MiB") ? 0 : 2;
+    QString value = QString::number(bytes / byteUnitFactor(unit), 'f', decimals);
+    while (value.contains(QLatin1Char('.')) && value.endsWith(QLatin1Char('0'))) value.chop(1);
+    if (value.endsWith(QLatin1Char('.'))) value.chop(1);
+    return value;
+  }
+
+  qint64 parseByteQuantity(QString text, const QString& defaultUnit, bool* ok = nullptr) {
+    static const QRegularExpression expression(
+      QStringLiteral("^\\s*([+-]?[0-9]+(?:[\\.,][0-9]+)?)\\s*(MiB|MB|GiB|GB|TiB|TB)?(?:\\s*/?s)?\\s*$"),
+      QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = expression.match(text);
+    bool numberOk = false;
+    const double number = match.hasMatch()
+                            ? QString(match.captured(1)).replace(QLatin1Char(','), QLatin1Char('.')).toDouble(&numberOk)
+                            : 0.0;
+    if (ok != nullptr) *ok = numberOk && number >= 0.0;
+    if (!numberOk || number < 0.0) return 0;
+    const QString unit = match.captured(2).isEmpty() ? defaultUnit : match.captured(2);
+    return qint64(number * byteUnitFactor(unit));
+  }
+
+  QString formatTransferRate(qint64 bytesPerSecond) {
+    if (bytesPerSecond >= qint64(TiB)) return formatByteQuantity(bytesPerSecond, QStringLiteral("TiB")) + QStringLiteral(" TiB/s");
+    if (bytesPerSecond >= qint64(GiB)) return formatByteQuantity(bytesPerSecond, QStringLiteral("GiB")) + QStringLiteral(" GiB/s");
+    return formatByteQuantity(bytesPerSecond, QStringLiteral("MiB")) + QStringLiteral(" MiB/s");
+  }
 
   QString capabilitySummary(const TorrentClientConfig& config,
                             const TorrentClientStatus& status,
@@ -255,19 +294,30 @@ void SettingsTorrentAutomation::loadUi() {
   auto* clientsHelp = new QLabel(tr("Limits block unattended routing. Approval-based processing can explicitly override amber load/target warnings, but never red unavailable or insufficient-space states. Zero means no limit."), clientsPage);
   clientsHelp->setWordWrap(true);
   clientsLayout->addWidget(clientsHelp);
+  auto* storageUnitRow = new QHBoxLayout();
+  storageUnitRow->addWidget(new QLabel(tr("Storage display/input unit:"), clientsPage));
+  m_storageUnit = new QComboBox(clientsPage);
+  m_storageUnit->addItem(tr("MiB (mebibytes)"), QStringLiteral("MiB"));
+  m_storageUnit->addItem(tr("GiB (gibibytes)"), QStringLiteral("GiB"));
+  m_storageUnit->addItem(tr("TiB (tebibytes)"), QStringLiteral("TiB"));
+  m_storageUnit->setToolTip(tr("Controls unsuffixed values in the storage columns. You can always type an explicit value such as 2048 MiB, 750 GiB or 1.8 TiB; RSS Guard converts it to bytes automatically."));
+  storageUnitRow->addWidget(m_storageUnit);
+  storageUnitRow->addWidget(new QLabel(tr("Explicit MiB/GiB/TiB suffixes override this selection."), clientsPage));
+  storageUnitRow->addStretch();
+  clientsLayout->addLayout(storageUnitRow);
   m_clients = new QTableWidget(clientsPage);
   m_clients->setColumnCount(13);
-  m_clients->setHorizontalHeaderLabels({tr("Use"), tr("Client"), tr("Max active"), tr("Max managed"), tr("Priority"), tr("Min free GB"), tr("Target free %"), tr("Capacity GB"), tr("Max down MiB/s"), tr("Timeout s"), tr("Retries"), tr("Cleanup"), tr("Storage source")});
+  m_clients->setHorizontalHeaderLabels({tr("Use"), tr("Client"), tr("Max active"), tr("Max managed"), tr("Priority"), tr("Min free GiB"), tr("Target free %"), tr("Capacity GiB"), tr("Max down rate"), tr("Timeout s"), tr("Retries"), tr("Cleanup"), tr("Storage source")});
   const QStringList clientTips{
     tr("Include this client in automatic routing."),
     tr("Configured torrent client. Its colour comes from Torrent clients settings."),
     tr("Do not send another torrent when this many downloads are active. Zero disables this limit."),
     tr("Maximum RSS Guard-managed torrents retained on this client. Zero disables this limit."),
     tr("Automation preference: 1 is highest priority. Used by Priority, Priority-biased and Balanced routing."),
-    tr("Keep at least this much free space after routing a torrent. Zero disables the reserve."),
+    tr("Keep at least this much free space after routing a torrent. Zero disables the reserve. Accepts MiB, GiB or TiB suffixes."),
     tr("Keep at least this percentage of total capacity free after routing. Zero disables the percentage target."),
-    tr("Fallback total capacity when the client API cannot report live disk space. Zero means unknown."),
-    tr("Treat the client as overloaded above this total download speed. Zero disables this limit."),
+    tr("Fallback total capacity when the client API cannot report live disk space. Zero means unknown. Accepts MiB, GiB or TiB suffixes."),
+    tr("Treat the client as overloaded above this total download speed. Zero disables this limit. Accepts MiB/s, GiB/s or TiB/s suffixes; unsuffixed values use MiB/s."),
     tr("Per-client request timeout. Zero uses the default from Retries and health."),
     tr("Per-client retry count. Minus one uses the default from Retries and health."),
     tr("Permit Safe cleanup on this client. Available only when tested APIs can list and safely remove managed torrents."),
@@ -494,6 +544,8 @@ void SettingsTorrentAutomation::loadUi() {
   }
   connect(m_clients, &QTableWidget::cellChanged, this, &SettingsTorrentAutomation::dirtifySettings);
   connect(m_clients, &QTableWidget::currentCellChanged, this, [this]() { updateCapabilityDisplay(); });
+  connect(m_storageUnit, QOverload<int>::of(&QComboBox::currentIndexChanged),
+          this, &SettingsTorrentAutomation::changeStorageUnit);
   connect(m_testSelected, &QPushButton::clicked, this, &SettingsTorrentAutomation::testSelectedClient);
   connect(m_testAll, &QPushButton::clicked, this, &SettingsTorrentAutomation::testAllClients);
   connect(add, &QPushButton::clicked, this, &SettingsTorrentAutomation::addRule);
@@ -611,6 +663,12 @@ void SettingsTorrentAutomation::loadSettings() {
   m_retryBackoff->setChecked(m_config.retryExponentialBackoff);
   m_requestTimeoutSeconds->setValue(m_config.requestTimeoutSeconds);
   m_historyLimit->setValue(m_config.historyLimit);
+  m_storageUnit->blockSignals(true);
+  m_storageUnit->setCurrentIndex(m_storageUnit->findData(m_config.storageDisplayUnit));
+  m_currentStorageUnit = m_config.storageDisplayUnit;
+  m_storageUnit->blockSignals(false);
+  m_clients->horizontalHeaderItem(5)->setText(tr("Min free %1").arg(m_currentStorageUnit));
+  m_clients->horizontalHeaderItem(7)->setText(tr("Capacity %1").arg(m_currentStorageUnit));
   m_unknownSizeGb->setValue(m_config.unknownTorrentSizeBytes / GiB);
   m_reconciliation->setChecked(m_config.reconciliationEnabled);
   m_reserveRemaining->setChecked(m_config.reserveRemainingBytes);
@@ -672,6 +730,7 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.retryExponentialBackoff = m_retryBackoff->isChecked();
   m_config.requestTimeoutSeconds = m_requestTimeoutSeconds->value();
   m_config.historyLimit = m_historyLimit->value();
+  m_config.storageDisplayUnit = m_storageUnit->currentData().toString();
   m_config.unknownTorrentSizeBytes = qint64(m_unknownSizeGb->value() * GiB);
   m_config.reconciliationEnabled = m_reconciliation->isChecked();
   m_config.reserveRemainingBytes = m_reserveRemaining->isChecked();
@@ -714,6 +773,20 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.cleanupScheduleStartHour = m_cleanupScheduleStart->currentData().toInt();
   m_config.cleanupScheduleEndHour = m_cleanupScheduleEnd->currentData().toInt();
   m_config.cleanupBatchPercent = m_cleanupBatchPercent->value();
+  for (int row = 0; row < m_clients->rowCount(); ++row) {
+    for (const int column : {5, 7, 8}) {
+      bool valid = false;
+      parseByteQuantity(m_clients->item(row, column)->text(),
+                        column == 8 ? QStringLiteral("MiB") : m_config.storageDisplayUnit, &valid);
+      if (valid) continue;
+      QMessageBox::warning(this, tr("Invalid size or transfer rate"),
+                           tr("%1 contains an invalid value in “%2”. Use a number with an optional unit, for example 2048 MiB, 750 GiB, 1.8 TiB, 500 MiB/s or 1.2 GiB/s.")
+                             .arg(m_clients->item(row, 1)->text().section(QLatin1Char('\n'), 0, 0),
+                                  m_clients->horizontalHeaderItem(column)->text()));
+      onEndSaveSettings();
+      return;
+    }
+  }
   m_config.clients.clear();
   for (int row = 0; row < m_clients->rowCount(); ++row) {
     TorrentAutomationClientPolicy policy;
@@ -722,10 +795,10 @@ void SettingsTorrentAutomation::saveSettings() {
     policy.maxActiveDownloads = m_clients->item(row, 2)->text().toInt();
     policy.maxManagedTorrents = m_clients->item(row, 3)->text().toInt();
     policy.priority = qMax(1, m_clients->item(row, 4)->text().toInt());
-    policy.minimumFreeBytes = qint64(m_clients->item(row, 5)->text().toDouble() * GiB);
+    policy.minimumFreeBytes = parseByteQuantity(m_clients->item(row, 5)->text(), m_config.storageDisplayUnit);
     policy.targetFreePercent = qBound(0.0, m_clients->item(row, 6)->text().toDouble(), 100.0);
-    policy.configuredCapacityBytes = qint64(m_clients->item(row, 7)->text().toDouble() * GiB);
-    policy.maximumDownloadBytesPerSecond = qMax<qint64>(0, qint64(m_clients->item(row, 8)->text().toDouble() * 1024.0 * 1024.0));
+    policy.configuredCapacityBytes = parseByteQuantity(m_clients->item(row, 7)->text(), m_config.storageDisplayUnit);
+    policy.maximumDownloadBytesPerSecond = parseByteQuantity(m_clients->item(row, 8)->text(), QStringLiteral("MiB"));
     policy.requestTimeoutSeconds = qMax(0, m_clients->item(row, 9)->text().toInt());
     policy.retryAttempts = qMax(-1, m_clients->item(row, 10)->text().toInt());
     policy.allowCleanup = m_clients->item(row, 11)->checkState() == Qt::Checked;
@@ -733,6 +806,28 @@ void SettingsTorrentAutomation::saveSettings() {
   }
   m_config.save(settings());
   onEndSaveSettings();
+}
+
+void SettingsTorrentAutomation::changeStorageUnit(int index) {
+  if (index < 0 || m_clients == nullptr) return;
+  const QString newUnit = m_storageUnit->itemData(index).toString();
+  if (newUnit.isEmpty() || newUnit == m_currentStorageUnit) return;
+
+  m_clients->blockSignals(true);
+  for (int row = 0; row < m_clients->rowCount(); ++row) {
+    for (const int column : {5, 7}) {
+      QTableWidgetItem* item = m_clients->item(row, column);
+      if (item == nullptr) continue;
+      bool ok = false;
+      const qint64 bytes = parseByteQuantity(item->text(), m_currentStorageUnit, &ok);
+      if (ok) item->setText(formatByteQuantity(bytes, newUnit));
+    }
+  }
+  m_clients->horizontalHeaderItem(5)->setText(tr("Min free %1").arg(newUnit));
+  m_clients->horizontalHeaderItem(7)->setText(tr("Capacity %1").arg(newUnit));
+  m_clients->blockSignals(false);
+  m_currentStorageUnit = newUnit;
+  dirtifySettings();
 }
 
 void SettingsTorrentAutomation::refreshClientPolicies() {
@@ -782,10 +877,10 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
     m_clients->setItem(row, 2, new QTableWidgetItem(QString::number(policy.maxActiveDownloads)));
     m_clients->setItem(row, 3, new QTableWidgetItem(QString::number(policy.maxManagedTorrents)));
     m_clients->setItem(row, 4, new QTableWidgetItem(QString::number(policy.priority)));
-    m_clients->setItem(row, 5, new QTableWidgetItem(QString::number(policy.minimumFreeBytes / GiB, 'f', 1)));
+    m_clients->setItem(row, 5, new QTableWidgetItem(formatByteQuantity(policy.minimumFreeBytes, m_currentStorageUnit)));
     m_clients->setItem(row, 6, new QTableWidgetItem(QString::number(policy.targetFreePercent, 'f', 1)));
-    m_clients->setItem(row, 7, new QTableWidgetItem(QString::number(policy.configuredCapacityBytes / GiB, 'f', 1)));
-    m_clients->setItem(row, 8, new QTableWidgetItem(QString::number(policy.maximumDownloadBytesPerSecond / (1024.0 * 1024.0), 'f', 1)));
+    m_clients->setItem(row, 7, new QTableWidgetItem(formatByteQuantity(policy.configuredCapacityBytes, m_currentStorageUnit)));
+    m_clients->setItem(row, 8, new QTableWidgetItem(formatTransferRate(policy.maximumDownloadBytesPerSecond)));
     m_clients->setItem(row, 9, new QTableWidgetItem(QString::number(policy.requestTimeoutSeconds)));
     m_clients->setItem(row, 10, new QTableWidgetItem(QString::number(policy.retryAttempts)));
     m_clients->setItem(row, 11, cleanup);

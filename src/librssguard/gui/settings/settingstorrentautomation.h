@@ -53,6 +53,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     void cancelAllQueuedItems();
     void exportActivity();
     void clearActivity();
+    void changeStorageUnit(int index);
 
   private:
     TorrentAutomationRule editRuleDialog(const TorrentAutomationRule& initial, bool* accepted);
@@ -69,7 +70,8 @@ class SettingsTorrentAutomation final : public SettingsPanel {
 
     TorrentAutomationConfig m_config;
     QCheckBox *m_enabled = nullptr, *m_dryRun = nullptr, *m_notifications = nullptr;
-    QComboBox* m_strategy = nullptr;
+    QComboBox *m_strategy = nullptr, *m_storageUnit = nullptr;
+    QString m_currentStorageUnit = QStringLiteral("GiB");
     QSpinBox* m_historyLimit = nullptr;
     QDoubleSpinBox* m_unknownSizeGb = nullptr;
     QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;

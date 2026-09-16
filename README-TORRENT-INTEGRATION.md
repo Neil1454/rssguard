@@ -30,6 +30,7 @@ Successful destinations are saved per article and client. Green ticks are synchr
 
 - Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, priority-biased, or balanced policy.
 - Applies per-client active-download, aggregate-download-rate, managed-count, free-space, target-free-percentage, automation-priority, timeout/retry and fallback-capacity settings.
+- Displays and accepts storage limits in MiB, GiB or TiB. The selected unit applies to ordinary numbers, while explicit values such as `750 GiB` or `1.8 TiB` are converted automatically. Download-rate limits likewise accept MiB/s, GiB/s or TiB/s suffixes.
 - Adds **Process automatically** to notifications and the main article context menu. Manual approval displays blue/green/amber/red destination assessments, explains each result, and permits an explicit override of amber limits while keeping unavailable red clients blocked.
 - Supports ordered RSS rules with selection from existing feeds, text, exclusion, title-pattern and client-pool matching.
 - Detects and remembers each client's non-destructive automation capabilities, individually or in a test-all run.

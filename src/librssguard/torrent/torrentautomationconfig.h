@@ -62,6 +62,7 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool retryExponentialBackoff = true;
   int requestTimeoutSeconds = 15;
   int historyLimit = 500;
+  QString storageDisplayUnit = QStringLiteral("GiB");
   int roundRobinCursor = 0;
   qint64 unknownTorrentSizeBytes = 10LL * 1024 * 1024 * 1024;
   bool reconciliationEnabled = true;

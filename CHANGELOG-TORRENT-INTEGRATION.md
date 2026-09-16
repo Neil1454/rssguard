@@ -2,6 +2,9 @@
 
 ## Torrent automation development build
 
+- Build 62 adds a persistent MiB/GiB/TiB selector to **Clients and limits**. Changing the unit converts the displayed minimum-free-space and capacity values without changing their stored byte values.
+- Storage cells accept explicit `MiB`, `GiB` or `TiB` suffixes (including decimal values such as `1.8 TiB`) regardless of the selected display unit. Maximum download-rate cells also accept `MiB/s`, `GiB/s` and `TiB/s`, and invalid entries are blocked with a clear example instead of silently becoming zero.
+
 - Build 61 fixes the malformed **Clients and limits** table. The duplicated custom cell overlay was removed, client name/type now use one DPI-aware two-line item, colour swatches render once, row height follows the active Windows font, and limit columns size to their contents with smooth horizontal scrolling when required.
 - Corrected the visible fork build definition so Help > About reports Build 61 consistently with the package tag and documentation.
 

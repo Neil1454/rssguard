@@ -52,6 +52,11 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.retryExponentialBackoff = root.value(QStringLiteral("retryExponentialBackoff")).toBool(true);
   config.requestTimeoutSeconds = root.value(QStringLiteral("requestTimeoutSeconds")).toInt(15);
   config.historyLimit = root.value(QStringLiteral("historyLimit")).toInt(500);
+  config.storageDisplayUnit = root.value(QStringLiteral("storageDisplayUnit")).toString(QStringLiteral("GiB"));
+  if (config.storageDisplayUnit != QStringLiteral("MiB") &&
+      config.storageDisplayUnit != QStringLiteral("GiB") &&
+      config.storageDisplayUnit != QStringLiteral("TiB"))
+    config.storageDisplayUnit = QStringLiteral("GiB");
   config.roundRobinCursor = root.value(QStringLiteral("roundRobinCursor")).toInt(0);
   config.unknownTorrentSizeBytes = root.value(QStringLiteral("unknownTorrentSizeBytes"))
                                      .toVariant().toLongLong();
@@ -152,6 +157,7 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("retryExponentialBackoff"), retryExponentialBackoff);
   root.insert(QStringLiteral("requestTimeoutSeconds"), requestTimeoutSeconds);
   root.insert(QStringLiteral("historyLimit"), historyLimit);
+  root.insert(QStringLiteral("storageDisplayUnit"), storageDisplayUnit);
   root.insert(QStringLiteral("roundRobinCursor"), roundRobinCursor);
   root.insert(QStringLiteral("unknownTorrentSizeBytes"), unknownTorrentSizeBytes);
   root.insert(QStringLiteral("reconciliationEnabled"), reconciliationEnabled);
