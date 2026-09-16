@@ -1,5 +1,10 @@
 # Torrent integration changelog
 
+## Build 64
+
+- Reworked dry-run notifications into short, strongly labelled outcome cards with separate torrent, destination, reason and live-behaviour sections.
+- Added clear **TEST ONLY** footers and matching send, cleanup, wait, blocked and duplicate wording.
+
 ## Build 63
 
 - Added a dedicated **Simple** dry-run results tab with bold, colour-coded outcome rows.

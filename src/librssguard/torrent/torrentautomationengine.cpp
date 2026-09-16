@@ -629,6 +629,8 @@ void TorrentAutomationEngine::processNextJob() {
       record(QStringLiteral("DRY RUN — SCHEDULE"), job, {},
              tr("Rule: %1. Automatic routing would wait because the current time is outside the configured routing hours. No item was queued and no changes were made.")
                .arg(job.ruleName));
+      notify(tr("DRY RUN  •  WOULD WAIT"),
+             tr("TORRENT\n%1\n\nWHY\nOutside the configured routing hours\n\nNEXT STEP\nIt would be processed in the next allowed window\n\n✓ TEST ONLY — nothing was queued or changed").arg(job.title));
       processNextJob();
       return;
     }
@@ -649,6 +651,9 @@ void TorrentAutomationEngine::processNextJob() {
              m_config.dryRun
                ? tr("Rule: %1. This torrent was found on a configured client, so it would be skipped as a duplicate. No processed marker was written and no changes were made.").arg(job.ruleName)
                : tr("This torrent already exists on a configured client; automatic duplicate submission was skipped."));
+      if (m_config.dryRun)
+        notify(tr("DRY RUN  •  WOULD SKIP"),
+               tr("TORRENT\n%1\n\nWHY\nA matching torrent already exists on a configured client\n\n✓ TEST ONLY — nothing was sent or changed").arg(job.title));
       processNextJob();
       return;
     }
@@ -694,6 +699,9 @@ void TorrentAutomationEngine::processNextJob() {
       record(QStringLiteral("DRY RUN — FINAL"), job, {},
              tr("No client is currently suitable and safe cleanup could not make enough space. %1 No item was queued, sent or removed.")
                .arg(retry));
+      notify(tr("DRY RUN  •  BLOCKED"),
+             tr("TORRENT\n%1\n\nOUTCOME\nNo client is currently suitable\n\nWHY\nSafe cleanup could not make enough space\n\nLIVE BEHAVIOUR\n%2\n\n✓ TEST ONLY — nothing was queued, sent or removed")
+               .arg(job.title, retry), true);
       processNextJob();
       return;
     }
@@ -934,6 +942,11 @@ bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
                .arg(proposed)
                .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1)
                .arg(job.title, m_clients.at(i).name));
+      notify(tr("DRY RUN  •  WOULD CLEAN UP AND SEND"),
+             tr("TORRENT\n%1\n\nDESTINATION\n%2\n\nCLEANUP\n%3 torrent(s) would be removed\nApproximately %4 GB would be recovered\n\n✓ TEST ONLY — no torrent or data was removed and nothing was sent")
+               .arg(job.title, m_clients.at(i).name)
+               .arg(proposed)
+               .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1));
       ++m_statuses[i].activeDownloads;
       if (!m_config.reserveRemainingBytes)
         m_statuses[i].freeBytes = qMax<qint64>(0, m_statuses[i].freeBytes - job.sizeBytes);
@@ -949,6 +962,12 @@ bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
                .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1)
                .arg(target / 1000000000.0, 0, 'f', 1)
                .arg(limitReason));
+      notify(tr("DRY RUN  •  CLEANUP NOT ENOUGH"),
+             tr("TORRENT\n%1\n\nCLIENT\n%2\n\nOUTCOME\nAbout %3 GB could be recovered, but the %4 GB target would not be reached\n\nWHY\n%5\n\n✓ TEST ONLY — nothing was removed or changed")
+               .arg(job.title, m_clients.at(i).name)
+               .arg((simulatedFree - originalFree) / 1000000000.0, 0, 'f', 1)
+               .arg(target / 1000000000.0, 0, 'f', 1)
+               .arg(limitReason), true);
     }
   }
   if (inspectedCleanupClient) {
@@ -972,7 +991,9 @@ void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
   if (m_config.dryRun && !job.directOverride) {
     record(QStringLiteral("DRY RUN"), job, config.id,
            tr("Rule: %1. Would send to %2 (%3).").arg(job.ruleName, config.name, decision));
-    notify(tr("Torrent automation dry run"), tr("Would send “%1” to %2 — %3.").arg(job.title, config.name, decision));
+    notify(tr("DRY RUN  •  WOULD SEND"),
+           tr("TORRENT\n%1\n\nDESTINATION\n%2\n\nMATCHED RULE\n%3\n\nWHY THIS CLIENT\n%4\n\n✓ TEST ONLY — nothing was sent or changed")
+             .arg(job.title, config.name, job.ruleName, decision));
     ++m_statuses[clientIndex].activeDownloads;
     if (m_statuses[clientIndex].freeBytes >= 0 && !m_config.reserveRemainingBytes)
       m_statuses[clientIndex].freeBytes = qMax<qint64>(0, m_statuses[clientIndex].freeBytes - job.sizeBytes);

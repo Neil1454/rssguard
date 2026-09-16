@@ -11,7 +11,9 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 63 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 64 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+Confirm dry-run notification pop-ups use a prominent outcome heading, clean line-separated sections and an explicit **TEST ONLY** footer for sends, waits, duplicates, blocked routes and cleanup outcomes.
 
 For dry-run review, confirm the **Simple** tab shows concise colour-coded outcomes and that **WOULD DELETE** rows name the torrent, client, estimated size and matched cleanup reason. Hover each row and compare it with the full **Activity** record.
 When no newly fetched batch exists, open a feed with older articles and confirm the test automatically uses a clearly labelled historical sample without changing sent history, processed markers, queues or clients.
