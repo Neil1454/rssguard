@@ -1,5 +1,14 @@
 # Torrent integration changelog
 
+## Build 66
+
+- Redesigned the setup wizard as a visually welcoming, question-led walkthrough rather than a dense settings form.
+- Added clear live safety banners for Dry run and cleanup, plain-English recommendations and strategy-specific explanations.
+- Added conditional controls so follow-up values are enabled only when their parent choice applies.
+- Added an **Explain this page** action with detailed descriptions of every setting group.
+- Added per-column plain-language help to the client-limits table while preserving every advanced option.
+- Expanded the welcome, rule, retry, maintenance, cleanup, protection and final-review guidance with practical examples.
+
 ## Build 65
 
 - Added a complete step-by-step Torrent automation setup wizard.

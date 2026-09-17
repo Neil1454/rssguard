@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 65 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 66 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 Confirm dry-run notification pop-ups use a prominent outcome heading, clean line-separated sections and an explicit **TEST ONLY** footer for sends, waits, duplicates, blocked routes and cleanup outcomes.
 
@@ -124,3 +124,13 @@ Do not replace the user's existing RSS Guard portable build until:
 - Change representative values, finish the wizard, and confirm the matching controls change on the main settings page.
 - Cancel a second wizard run after editing values and rules; confirm none of those cancelled changes remain.
 - Confirm finishing does not itself send a torrent, run cleanup or save until **Apply** or **OK** is selected.
+
+## Build 66 walkthrough and presentation checks
+
+- Confirm the wizard remains readable at normal Windows scaling and at 125%, 150% and 200% scaling, in both light and dark themes.
+- Confirm every page has a useful **Explain this page** description and every individual editor has a tooltip.
+- Change the routing strategy and confirm the visible plain-English explanation follows the selected strategy.
+- Toggle retries, reconciliation, circuit breaker, schedules and cleanup safeguards; confirm only the relevant follow-up editors enable or disable.
+- Select each Clients and limits column and confirm the help card explains that exact setting.
+- Confirm the Dry-run and cleanup banners change immediately and clearly distinguish safe test mode, live routing, cleanup-only removal and permanent data deletion.
+- Confirm Cancel restores rule edits and leaves all other main-page settings unchanged.

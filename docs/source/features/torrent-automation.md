@@ -6,6 +6,8 @@ Open **Tools > Settings > Torrent automation**. Automation is disabled by defaul
 
 For a guided first-time setup, select **Start guided setup wizard**. The wizard covers every automation section in a safe order: basic safety, routing and size estimates, per-client limits, RSS matching rules, retries, storage and health maintenance, scheduling, cleanup thresholds, and cleanup protections. Each page explains the setting and gives examples where useful. Nothing is copied to the settings page until **Finish** is selected, and the main Settings window still requires **Apply** or **OK** before the choices are saved.
 
+The wizard uses plain-language questions, live Dry-run and cleanup safety warnings, and conditional follow-up fields that are available only when their parent option applies. Select **Explain this page** for a fuller description of the current section. On **Clients and limits**, select any cell to see a clear explanation of that column below the table. Hovering an individual control provides its setting-specific tooltip.
+
 ## Routing
 
 Available strategies are priority order, least busy, most free space, even round-robin, priority-biased distribution and balanced. A client must be enabled both in **Torrent clients** and in the automation client table. Per-client controls cover active downloads, aggregate download rate, managed torrent count, minimum free space, target free-space percentage, request timeout and retry count. Automation priority 1 is highest; it is separate from the notification-button order. Balanced routing scores the free-space ratio, active and queued downloads, aggregate download rate and configured priority.
