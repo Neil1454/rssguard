@@ -1306,7 +1306,7 @@ void SettingsTorrentAutomation::runSetupWizard() {
   clientTable->verticalHeader()->setVisible(false);
   clientTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
   clientTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-  clients->layout()->addWidget(clientTable, 1);
+  static_cast<QVBoxLayout*>(clients->layout())->addWidget(clientTable, 1);
   note(clients, tr("<b>Examples:</b> Max active 3 blocks a fourth active download. Min free 20 GiB preserves a fixed reserve. "
                    "Target free 10% scales with disk size. Capacity is only a fallback when the client cannot report live space. "
                    "Cleanup must remain off unless that client's list/removal capability has been tested."));
@@ -1327,7 +1327,7 @@ void SettingsTorrentAutomation::runSetupWizard() {
     }
   };
   refreshWizardRules();
-  rules->layout()->addWidget(ruleList, 1);
+  static_cast<QVBoxLayout*>(rules->layout())->addWidget(ruleList, 1);
   auto* ruleButtons = new QHBoxLayout();
   auto* addRuleButton = new QPushButton(tr("Add rule…"), rules);
   auto* editRuleButton = new QPushButton(tr("Edit selected…"), rules);
@@ -1433,12 +1433,13 @@ void SettingsTorrentAutomation::runSetupWizard() {
   protectionForm->addRow(cleanupSchedule, cleanupWindow); protectionForm->addRow(tr("Cleanup space batch:"), batch);
 
   QWizardPage* finish = page(tr("9. Review and finish"), tr("Press Finish to copy these choices into Torrent automation settings."));
+  const int finishPageId = wizard.pageIds().constLast();
   note(finish, tr("After finishing, press <b>Apply</b> or <b>OK</b> in the main Settings window to save everything permanently.<br><br>"
                   "Before live use: test every enabled client, run a dry test, inspect Simple and Activity, and use Check readiness for live automation. "
                   "The wizard never sends a torrent or performs cleanup."));
   auto* finishDry = new QLabel(finish); finishDry->setWordWrap(true); finish->layout()->addWidget(finishDry);
-  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finish, finishDry, dryRun, cleanupEnabled, deleteData](int id) {
-    if (id != finish->wizard()->currentId()) return;
+  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finishPageId, finishDry, dryRun, cleanupEnabled, deleteData](int id) {
+    if (id != finishPageId) return;
     finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Cleanup: %2 · Delete downloaded data: %3")
       .arg(dryRun->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
            cleanupEnabled->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
