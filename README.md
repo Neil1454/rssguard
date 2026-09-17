@@ -1,15 +1,15 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-66-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-67-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 66**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 67**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 66 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 67 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -115,7 +115,7 @@ Non-destructive selected/all-client tests record whether the authenticated API c
 
 An exact server-reported capacity is copied into the automation capacity field. Where an API does not expose filesystem totals, a manually configured capacity can be used as an estimate. The capability test never adds or removes a torrent.
 
-Build 58 periodically reconciles the managed ledger with reachable clients. It updates actual sizes and unfinished-byte reservations, removes stale allocations, and recognises still-present RSS Guard-owned hashes. The client table identifies whether storage decisions are based on live space, a reconciled estimate, a ledger-only estimate or no usable figure.
+Build 67 periodically reconciles the managed ledger with reachable clients. It updates actual sizes and unfinished-byte reservations, removes stale allocations, recognises still-present RSS Guard-owned hashes, and includes manually added torrents in non-live capacity estimates. The client table identifies whether storage decisions are based on live space, an all-torrent estimate, a conservative fallback estimate or no usable figure.
 
 ### Guarded cleanup
 
@@ -129,6 +129,10 @@ Cleanup is **off by default**. It only considers completed torrents that RSS Gua
 - Optional two-stage cleanup marks a candidate, waits through a grace period, then rechecks every safeguard before removal.
 - Routing and cleanup can each be restricted to configurable local-time windows.
 - Cleanup can target a fixed free-space value and/or a percentage of client capacity.
+- A separate maximum-retention deadline can remove completed managed torrents at a configured age even when storage space is healthy.
+- Firm retention deadlines may override ratio, inactivity and upload-activity delays while protected tags, trackers and minimum-copy safeguards remain absolute.
+- Capacity fallbacks conservatively count all client-reported torrents and pending managed reservations, including torrents added outside RSS Guard.
+- Quick Set offers explained presets for safe testing, balanced protected automation, 30-day rotation and long-term seeding on both the main page and inside the wizard; presets preserve clients/rules and always start in Dry run.
 - Space recovery can be rounded into configurable capacity-percentage batches.
 - Torrents uploading at or above a configurable speed can be protected until a later cleanup pass.
 - Unknown upload speeds can be protected conservatively.
@@ -156,7 +160,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 66 — current candidate** | Redesigns the setup wizard as a friendly, polished walkthrough with live safety banners, conditional questions, strategy explanations, per-column client help and in-depth help on every page. |
+| **Build 67 — current candidate** | Adds fixed maximum-retention cleanup, safer all-torrent fallback accounting, correct retained-file space handling, and fully explained Quick Set presets on the main page and in the wizard. |
+| **Build 66** | Redesigns the setup wizard as a friendly, polished walkthrough with live safety banners, conditional questions, strategy explanations, per-column client help and in-depth help on every page. |
 | **Build 65** | Adds a full beginner-friendly setup wizard covering every torrent-automation section, with explanations, examples, safe cancellation and a final safety review. |
 | **Build 64** | Makes dry-run notification pop-ups much clearer with prominent outcome headings and separate torrent, destination, reason and test-only sections. |
 | **Build 63** | Adds a dedicated colour-coded Simple dry-run results tab showing concise would-send, would-delete, would-keep, wait/retry, blocked and skipped outcomes while retaining complete explanations in Activity and tooltips. When no new batch exists, dry tests safely use a labelled sample of previously received articles. |
@@ -194,7 +199,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 66 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 67 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

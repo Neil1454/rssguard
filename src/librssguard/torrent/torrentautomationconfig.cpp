@@ -75,6 +75,9 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
   config.deleteData = root.value(QStringLiteral("deleteData")).toBool(false);
   config.cleanupRequireConfirmation = root.value(QStringLiteral("cleanupRequireConfirmation")).toBool(true);
+  config.maximumRetentionEnabled = root.value(QStringLiteral("maximumRetentionEnabled")).toBool(false);
+  config.maximumRetentionHours = qMax(1, root.value(QStringLiteral("maximumRetentionHours")).toInt(720));
+  config.maximumRetentionStrict = root.value(QStringLiteral("maximumRetentionStrict")).toBool(true);
   config.minimumSeedHoursEnabled = root.value(QStringLiteral("minimumSeedHoursEnabled")).toBool(true);
   config.minimumSeedHours = root.value(QStringLiteral("minimumSeedHours")).toInt(168);
   config.minimumRatioEnabled = root.value(QStringLiteral("minimumRatioEnabled")).toBool(true);
@@ -174,6 +177,9 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("cleanupEnabled"), cleanupEnabled);
   root.insert(QStringLiteral("deleteData"), deleteData);
   root.insert(QStringLiteral("cleanupRequireConfirmation"), cleanupRequireConfirmation);
+  root.insert(QStringLiteral("maximumRetentionEnabled"), maximumRetentionEnabled);
+  root.insert(QStringLiteral("maximumRetentionHours"), maximumRetentionHours);
+  root.insert(QStringLiteral("maximumRetentionStrict"), maximumRetentionStrict);
   root.insert(QStringLiteral("minimumSeedHoursEnabled"), minimumSeedHoursEnabled);
   root.insert(QStringLiteral("minimumSeedHours"), minimumSeedHours);
   root.insert(QStringLiteral("minimumRatioEnabled"), minimumRatioEnabled);

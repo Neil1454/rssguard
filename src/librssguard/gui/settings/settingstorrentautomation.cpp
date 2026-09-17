@@ -138,6 +138,61 @@ namespace {
       return lower.contains(marker);
     });
   }
+
+  enum QuickPreset {
+    PresetCustom = 0,
+    PresetSafeTest = 1,
+    PresetBalanced = 2,
+    PresetThirtyDay = 3,
+    PresetLongSeed = 4
+  };
+
+  QString quickPresetName(int preset) {
+    switch (preset) {
+      case PresetSafeTest: return QObject::tr("Safety-first test only");
+      case PresetBalanced: return QObject::tr("Balanced protected automation");
+      case PresetThirtyDay: return QObject::tr("30-day automatic rotation");
+      case PresetLongSeed: return QObject::tr("Long-term seeding");
+      default: return QObject::tr("Choose a preset…");
+    }
+  }
+
+  QString quickPresetDetail(int preset, bool richText = true) {
+    QString title, does, keeps, risk;
+    switch (preset) {
+      case PresetSafeTest:
+        title = QObject::tr("Safest way to learn and verify the feature");
+        does = QObject::tr("Enables automation in Dry run, uses Balanced routing, enables retries, reconciliation, duplicate protection and client-health protection, and disables all cleanup.");
+        keeps = QObject::tr("Your torrent clients, client limits, capacities and RSS matching rules are not replaced.");
+        risk = QObject::tr("No torrent is sent or removed while Dry run remains on.");
+        break;
+      case PresetBalanced:
+        title = QObject::tr("Common protected setup for normal automatic use");
+        does = QObject::tr("Uses Balanced routing; requires 7 days completed, ratio 1.0 and 24 hours inactive before storage cleanup; protects active or recently uploading torrents; marks candidates for a 24-hour grace period; and removes at most one torrent per run. Fixed-age removal is off.");
+        keeps = QObject::tr("It enables downloaded-data deletion so storage cleanup can genuinely recover space, but also enables confirmation and Dry run. Client-specific limits and RSS rules are preserved.");
+        risk = QObject::tr("After you later disable Dry run, an approved eligible torrent and its downloaded files can be permanently deleted.");
+        break;
+      case PresetThirtyDay:
+        title = QObject::tr("Predictable 30-day content rotation");
+        does = QObject::tr("Enables storage cleanup plus a firm 720-hour (30-day) retention deadline. Expired completed managed torrents are due even when space is healthy or ratio/activity targets are not met. Only one removal is allowed per run.");
+        keeps = QObject::tr("Protected tags, protected tracker text and minimum-copy protection still win. Confirmation and Dry run are enabled, and client-specific settings and RSS rules are preserved.");
+        risk = QObject::tr("After Dry run is disabled, expired torrent jobs and their downloaded files can be permanently deleted.");
+        break;
+      case PresetLongSeed:
+        title = QObject::tr("Keep torrents seeding for longer");
+        does = QObject::tr("Requires 30 days completed, ratio 2.0 and 72 hours inactive for storage cleanup. A non-firm 90-day retention trigger is enabled, so normal activity protections may postpone removal. It uses a 48-hour grace period and one removal per run.");
+        keeps = QObject::tr("Active or unknown uploads, recent uploads, protected tags/trackers and configured copy protection are retained. Confirmation and Dry run are enabled.");
+        risk = QObject::tr("Downloaded-data deletion is enabled; after Dry run is disabled, eligible files can be permanently deleted.");
+        break;
+      default:
+        return QObject::tr("Select a preset to see every change and risk before applying it. Presets never replace torrent clients, per-client capacities or RSS rules.");
+    }
+    if (richText)
+      return QObject::tr("<b>%1</b><br><br><b>What it sets:</b> %2<br><br><b>What it keeps:</b> %3<br><br><b>Risk:</b> %4<br><br><b>Safety:</b> Every preset starts with Dry run ON.")
+        .arg(title, does, keeps, risk);
+    return QObject::tr("%1\n\nWhat it sets: %2\n\nWhat it keeps: %3\n\nRisk: %4\n\nSafety: Every preset starts with Dry run ON.")
+      .arg(title, does, keeps, risk);
+  }
 }
 
 SettingsTorrentAutomation::SettingsTorrentAutomation(Settings* settings, QWidget* parent)
@@ -173,6 +228,43 @@ void SettingsTorrentAutomation::loadUi() {
 
   auto* general = new QWidget(tabs);
   auto* generalLayout = new QVBoxLayout(general);
+  auto* presetBox = new QGroupBox(tr("Quick Set — common starting configurations"), general);
+  auto* presetLayout = new QVBoxLayout(presetBox);
+  auto* presetRow = new QHBoxLayout();
+  auto* presetChoice = new QComboBox(presetBox);
+  for (int preset = PresetCustom; preset <= PresetLongSeed; ++preset)
+    presetChoice->addItem(quickPresetName(preset), preset);
+  auto* applyPreset = new QPushButton(tr("Review and apply preset"), presetBox);
+  auto* presetDetail = new QLabel(quickPresetDetail(PresetCustom), presetBox);
+  presetDetail->setWordWrap(true); presetDetail->setTextFormat(Qt::RichText);
+  presetDetail->setObjectName(QStringLiteral("quickPresetDetail"));
+  presetDetail->setStyleSheet(QStringLiteral("QLabel#quickPresetDetail { background: palette(alternate-base); border: 1px solid palette(mid); border-radius: 6px; padding: 10px; }"));
+  applyPreset->setEnabled(false);
+  presetRow->addWidget(presetChoice, 1); presetRow->addWidget(applyPreset);
+  presetLayout->addLayout(presetRow); presetLayout->addWidget(presetDetail);
+  generalLayout->addWidget(presetBox);
+  connect(presetChoice, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+          [presetChoice, presetDetail, applyPreset]() {
+    const int preset = presetChoice->currentData().toInt();
+    presetDetail->setText(quickPresetDetail(preset));
+    applyPreset->setEnabled(preset != PresetCustom);
+  });
+  connect(applyPreset, &QPushButton::clicked, this, [this, presetChoice]() {
+    const int preset = presetChoice->currentData().toInt();
+    if (preset == PresetCustom) return;
+    QMessageBox review(this);
+    review.setWindowTitle(tr("Review Quick Set preset"));
+    review.setIcon(preset == PresetSafeTest ? QMessageBox::Information : QMessageBox::Warning);
+    review.setText(quickPresetName(preset));
+    review.setInformativeText(quickPresetDetail(preset, false));
+    auto* apply = review.addButton(tr("Apply this preset"), QMessageBox::AcceptRole);
+    review.addButton(QMessageBox::Cancel);
+    review.exec();
+    if (review.clickedButton() != apply) return;
+    applyQuickPreset(preset);
+    QMessageBox::information(this, tr("Preset applied"),
+      tr("The preset is now shown in the settings. Dry run is ON. Press Apply or OK to save, then run the dry test and readiness check before considering live mode."));
+  });
   auto* generalForm = new QFormLayout();
   m_enabled = new QCheckBox(tr("Enable torrent automation"), general);
   m_dryRun = new QCheckBox(tr("Dry run — report decisions without sending"), general);
@@ -326,7 +418,7 @@ void SettingsTorrentAutomation::loadUi() {
     tr("Automation preference: 1 is highest priority. Used by Priority, Priority-biased and Balanced routing."),
     tr("Keep at least this much free space after routing a torrent. Zero disables the reserve. Accepts MiB, GiB or TiB suffixes."),
     tr("Keep at least this percentage of total capacity free after routing. Zero disables the percentage target."),
-    tr("Fallback total capacity when the client API cannot report live disk space. Zero means unknown. Accepts MiB, GiB or TiB suffixes."),
+    tr("Fallback torrent-storage budget when the client API cannot report live disk space. RSS Guard subtracts every listed torrent, including manually added ones, plus pending managed reservations. Deduct space used by unrelated files before entering this value. Zero means unknown."),
     tr("Treat the client as overloaded above this total download speed. Zero disables this limit. Accepts MiB/s, GiB/s or TiB/s suffixes; unsuffixed values use MiB/s."),
     tr("Per-client request timeout. Zero uses the default from Retries and health."),
     tr("Per-client retry count. Minus one uses the default from Retries and health."),
@@ -410,9 +502,12 @@ void SettingsTorrentAutomation::loadUi() {
   warning->setWordWrap(true);
   cleanupLayout->addWidget(warning);
   auto* cleanupForm = new QFormLayout();
-  m_cleanup = new QCheckBox(tr("Allow automatic cleanup when a client is below its free-space limit"), cleanupPage);
+  m_cleanup = new QCheckBox(tr("Allow automatic cleanup for storage pressure and/or maximum retention time"), cleanupPage);
   m_deleteData = new QCheckBox(tr("Delete downloaded data as well as the torrent"), cleanupPage);
   m_confirmCleanup = new QCheckBox(tr("Ask before every removal"), cleanupPage);
+  m_retentionEnabled = new QCheckBox(tr("Remove completed managed torrents after a maximum time"), cleanupPage);
+  m_retentionHours = new QSpinBox(cleanupPage); m_retentionHours->setRange(1, 100000); m_retentionHours->setSuffix(tr(" hours"));
+  m_retentionStrict = new QCheckBox(tr("Treat the maximum time as a firm deadline"), cleanupPage);
   m_seedHoursEnabled = new QCheckBox(tr("Use"), cleanupPage);
   m_seedHours = new QSpinBox(cleanupPage); m_seedHours->setRange(0, 100000); m_seedHours->setSuffix(tr(" hours"));
   m_ratioEnabled = new QCheckBox(tr("Use"), cleanupPage);
@@ -444,9 +539,12 @@ void SettingsTorrentAutomation::loadUi() {
   auto* cleanupWindow = new QWidget(cleanupPage); auto* cleanupWindowLayout = new QHBoxLayout(cleanupWindow);
   cleanupWindowLayout->setContentsMargins(0, 0, 0, 0); cleanupWindowLayout->addWidget(m_cleanupScheduleStart); cleanupWindowLayout->addWidget(new QLabel(tr("to"), cleanupWindow)); cleanupWindowLayout->addWidget(m_cleanupScheduleEnd);
   m_cleanupBatchPercent = new QDoubleSpinBox(cleanupPage); m_cleanupBatchPercent->setRange(0, 100); m_cleanupBatchPercent->setDecimals(1); m_cleanupBatchPercent->setSuffix(tr(" %"));
-  m_cleanup->setToolTip(tr("Allow cleanup only when routing is blocked because an opted-in client is below its minimum-free-space limit."));
+  m_cleanup->setToolTip(tr("Master switch for storage-pressure cleanup and fixed maximum-retention cleanup. Only completed RSS Guard-managed torrents on opted-in clients are considered."));
   m_deleteData->setToolTip(tr("Also erase downloaded files. Leave off to remove only the torrent job. This action cannot be undone."));
   m_confirmCleanup->setToolTip(tr("Ask for approval before every removal. Recommended while validating your rules and limits."));
+  m_retentionEnabled->setToolTip(tr("Run periodic cleanup even when no disk space is needed. A completed managed torrent becomes due after the selected time."));
+  m_retentionHours->setToolTip(tr("Maximum time after completion before removal. If completion time is unavailable, the client-reported added time is used. Examples: 24 hours = 1 day, 168 = 7 days, 720 = 30 days."));
+  m_retentionStrict->setToolTip(tr("When enabled, the deadline overrides ratio, inactivity and upload-activity protections. Protected tags, protected trackers and minimum-copy protection still win."));
   m_seedHours->setToolTip(tr("A completed managed torrent must have seeded for at least this many hours before it can be considered."));
   m_ratio->setToolTip(tr("A managed torrent must reach at least this share ratio before it can be considered for cleanup."));
   m_inactiveHours->setToolTip(tr("A managed torrent must have no recent transfer activity for at least this many hours."));
@@ -481,6 +579,8 @@ void SettingsTorrentAutomation::loadUi() {
   cleanupForm->addRow(m_cleanup);
   cleanupForm->addRow(m_deleteData);
   cleanupForm->addRow(m_confirmCleanup);
+  cleanupForm->addRow(m_retentionEnabled, m_retentionHours);
+  cleanupForm->addRow(m_retentionStrict);
   cleanupForm->addRow(tr("Minimum completed/seeding age:"), optionalControl(m_seedHoursEnabled, m_seedHours));
   cleanupForm->addRow(tr("Minimum ratio:"), optionalControl(m_ratioEnabled, m_ratio));
   cleanupForm->addRow(tr("Minimum inactivity:"), optionalControl(m_inactiveHoursEnabled, m_inactiveHours));
@@ -563,7 +663,8 @@ void SettingsTorrentAutomation::loadUi() {
                                      m_circuitBreaker, m_breakerFailures, m_breakerCooldown,
                                      m_breakerRecoverySuccesses,
                                      m_schedule, m_scheduleStart, m_scheduleEnd,
-                                     m_cleanup, m_deleteData, m_confirmCleanup, m_seedHours, m_ratio,
+                                     m_cleanup, m_deleteData, m_confirmCleanup, m_retentionEnabled,
+                                     m_retentionHours, m_retentionStrict, m_seedHours, m_ratio,
                                      m_inactiveHours, m_maxRemovals, m_cleanupStopGb, m_seedHoursEnabled,
                                      m_ratioEnabled, m_inactiveHoursEnabled, m_maxRemovalsEnabled,
                                      m_cleanupStopGbEnabled, m_protectUploading, m_protectUploadKib,
@@ -607,6 +708,7 @@ void SettingsTorrentAutomation::loadUi() {
   connect(refresh, &QPushButton::clicked, this, &SettingsTorrentAutomation::refreshActivity);
   connect(simpleRefresh, &QPushButton::clicked, this, &SettingsTorrentAutomation::refreshSimpleActivity);
   connect(m_cleanup, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
+  connect(m_retentionEnabled, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
   for (QCheckBox* option : {m_seedHoursEnabled, m_ratioEnabled, m_inactiveHoursEnabled,
                              m_maxRemovalsEnabled, m_cleanupStopGbEnabled})
     connect(option, &QCheckBox::toggled, this, &SettingsTorrentAutomation::updateCleanupControls);
@@ -653,6 +755,14 @@ void SettingsTorrentAutomation::loadUi() {
   connect(m_confirmCleanup, &QCheckBox::clicked, this, [this](bool checked) {
     if (!checked && m_cleanup->isChecked()) QMessageBox::warning(this, tr("Cleanup confirmation disabled"),
       tr("Live cleanup will be able to remove eligible torrents without asking you first."));
+  });
+  connect(m_retentionEnabled, &QCheckBox::clicked, this, [this](bool checked) {
+    if (checked) QMessageBox::information(this, tr("Maximum retention enabled"),
+      tr("Completed RSS Guard-managed torrents can now be removed when their time limit expires even if no storage space is needed. Run a dry test before using live mode."));
+  });
+  connect(m_retentionStrict, &QCheckBox::clicked, this, [this](bool checked) {
+    if (checked && m_retentionEnabled->isChecked()) QMessageBox::warning(this, tr("Firm retention deadline"),
+      tr("At the deadline, ratio, inactivity and upload-activity protections will no longer postpone removal. Protected tags, protected trackers and minimum-copy protection still apply."));
   });
   for (QCheckBox* option : {m_seedHoursEnabled, m_ratioEnabled, m_inactiveHoursEnabled}) {
     connect(option, &QCheckBox::clicked, this, [this](bool checked) {
@@ -723,6 +833,9 @@ void SettingsTorrentAutomation::loadSettings() {
   m_cleanup->setChecked(m_config.cleanupEnabled);
   m_deleteData->setChecked(m_config.deleteData);
   m_confirmCleanup->setChecked(m_config.cleanupRequireConfirmation);
+  m_retentionEnabled->setChecked(m_config.maximumRetentionEnabled);
+  m_retentionHours->setValue(m_config.maximumRetentionHours);
+  m_retentionStrict->setChecked(m_config.maximumRetentionStrict);
   m_seedHoursEnabled->setChecked(m_config.minimumSeedHoursEnabled);
   m_seedHours->setValue(m_config.minimumSeedHours);
   m_ratioEnabled->setChecked(m_config.minimumRatioEnabled);
@@ -785,6 +898,9 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.cleanupEnabled = m_cleanup->isChecked();
   m_config.deleteData = m_deleteData->isChecked();
   m_config.cleanupRequireConfirmation = m_confirmCleanup->isChecked();
+  m_config.maximumRetentionEnabled = m_retentionEnabled->isChecked();
+  m_config.maximumRetentionHours = m_retentionHours->value();
+  m_config.maximumRetentionStrict = m_retentionStrict->isChecked();
   m_config.minimumSeedHoursEnabled = m_seedHoursEnabled->isChecked();
   m_config.minimumSeedHours = m_seedHours->value();
   m_config.minimumRatioEnabled = m_ratioEnabled->isChecked();
@@ -927,8 +1043,8 @@ void SettingsTorrentAutomation::refreshClientPolicies() {
     if (client.capabilityFreeSpace) storageSource = policy.configuredCapacityBytes > 0
       ? tr("Live free + known total") : tr("Live free; total unknown");
     else if (m_config.reconciliationEnabled && client.capabilityTorrentList && policy.configuredCapacityBytes > 0)
-      storageSource = tr("Reconciled estimate");
-    else if (policy.configuredCapacityBytes > 0) storageSource = tr("Managed estimate");
+      storageSource = tr("All-torrent estimate");
+    else if (policy.configuredCapacityBytes > 0) storageSource = tr("Conservative estimate");
     else storageSource = tr("Unknown");
     auto* storage = new QTableWidgetItem(storageSource);
     storage->setFlags(storage->flags() & ~Qt::ItemIsEditable);
@@ -1133,7 +1249,8 @@ void SettingsTorrentAutomation::refreshSimpleActivity() {
 
     QString action, summary;
     QColor foreground, background;
-    if (state == QStringLiteral("DRY RUN — WOULD REMOVE")) {
+    if (state == QStringLiteral("DRY RUN — WOULD REMOVE") ||
+        state == QStringLiteral("DRY RUN — WOULD REMOVE EXPIRED")) {
       action = tr("WOULD DELETE"); foreground = QColor(QStringLiteral("#6A1B9A")); background = QColor(QStringLiteral("#F3E5F5"));
       QRegularExpressionMatch match = QRegularExpression(
         QStringLiteral("Would remove [“\"](.+?)[”\"] from (.+?)(?: and delete its downloaded data| but keep its downloaded data)?; size ([^;]+); (.+?)\\. Estimated free space"),
@@ -1143,11 +1260,13 @@ void SettingsTorrentAutomation::refreshSimpleActivity() {
       if (match.hasMatch()) summary += tr(" — %1 • %2").arg(match.captured(3), match.captured(4));
       else summary += tr(" • %1").arg(detail.section(QStringLiteral(". No changes"), 0, 0));
     }
-    else if (state == QStringLiteral("DRY RUN — PROTECTED")) {
+    else if (state == QStringLiteral("DRY RUN — PROTECTED") ||
+             state == QStringLiteral("DRY RUN — RETENTION PROTECTED")) {
       action = tr("WOULD KEEP"); foreground = QColor(QStringLiteral("#1B5E20")); background = QColor(QStringLiteral("#E8F5E9"));
       summary = detail.section(QStringLiteral(". "), 0, 0);
     }
     else if (state == QStringLiteral("DRY RUN — CLEANUP INSUFFICIENT") ||
+             state == QStringLiteral("DRY RUN — CLEANUP BLOCKED") ||
              (state == QStringLiteral("DRY RUN — FINAL") && detail.contains(tr("No client"), Qt::CaseInsensitive))) {
       action = tr("BLOCKED"); foreground = QColor(QStringLiteral("#B71C1C")); background = QColor(QStringLiteral("#FFEBEE"));
       summary = detail.section(QStringLiteral(". "), 0, 0);
@@ -1164,8 +1283,13 @@ void SettingsTorrentAutomation::refreshSimpleActivity() {
     }
     else if (state == QStringLiteral("DRY RUN — STATUS RETRY") || state == QStringLiteral("DRY RUN — SCHEDULE") ||
              state == QStringLiteral("DRY RUN — CLEANUP") || state == QStringLiteral("DRY RUN — WOULD MARK") ||
-             state == QStringLiteral("DRY RUN — GRACE WAIT") || state == QStringLiteral("DRY RUN — RETRY")) {
+             state == QStringLiteral("DRY RUN — GRACE WAIT") || state == QStringLiteral("DRY RUN — RETRY") ||
+             state == QStringLiteral("DRY RUN — RETENTION WAIT") || state == QStringLiteral("DRY RUN — RETENTION LIMIT")) {
       action = tr("WOULD WAIT / RETRY"); foreground = QColor(QStringLiteral("#8A5200")); background = QColor(QStringLiteral("#FFF3D6"));
+      summary = detail.section(QStringLiteral(". "), 0, 0);
+    }
+    else if (state == QStringLiteral("DRY RUN — RETENTION")) {
+      action = tr("SKIPPED"); foreground = QColor(QStringLiteral("#455A64")); background = QColor(QStringLiteral("#ECEFF1"));
       summary = detail.section(QStringLiteral(". "), 0, 0);
     }
     else if (state == QStringLiteral("DRY RUN — FINAL")) {
@@ -1192,6 +1316,90 @@ void SettingsTorrentAutomation::refreshSimpleActivity() {
     auto* empty = new QListWidgetItem(tr("No dry-run outcomes yet. Use “Run dry test now”, then return here to review the results."), m_simpleActivity);
     empty->setForeground(QColor(QStringLiteral("#455A64")));
   }
+}
+
+void SettingsTorrentAutomation::applyQuickPreset(int preset) {
+  if (preset <= PresetCustom || preset > PresetLongSeed) return;
+
+  // Common reliable foundation. Presets deliberately do not overwrite RSS
+  // rules, configured clients, per-client storage limits or protected names.
+  m_enabled->setChecked(true);
+  m_dryRun->setChecked(true);
+  m_notifications->setChecked(true);
+  m_strategy->setCurrentIndex(m_strategy->findData(static_cast<int>(TorrentRoutingStrategy::Balanced)));
+  m_retryEnabled->setChecked(true);
+  m_retryAttempts->setValue(3);
+  m_retryInitialSeconds->setValue(60);
+  m_retryMaximumSeconds->setValue(900);
+  m_retryBackoff->setChecked(true);
+  m_requestTimeoutSeconds->setValue(15);
+  m_reconciliation->setChecked(true);
+  m_reconciliationMinutes->setValue(30);
+  m_reserveRemaining->setChecked(true);
+  m_preventDuplicates->setChecked(true);
+  m_circuitBreaker->setChecked(true);
+  m_breakerFailures->setValue(3);
+  m_breakerCooldown->setValue(15);
+  m_breakerRecoverySuccesses->setValue(2);
+
+  if (preset == PresetSafeTest) {
+    m_cleanup->setChecked(false);
+    m_deleteData->setChecked(false);
+    m_confirmCleanup->setChecked(true);
+    m_retentionEnabled->setChecked(false);
+    updateCleanupControls();
+    dirtifySettings();
+    return;
+  }
+
+  m_cleanup->setChecked(true);
+  m_deleteData->setChecked(true);
+  m_confirmCleanup->setChecked(true);
+  m_seedHoursEnabled->setChecked(true);
+  m_ratioEnabled->setChecked(true);
+  m_inactiveHoursEnabled->setChecked(true);
+  m_maxRemovalsEnabled->setChecked(true);
+  m_maxRemovals->setValue(1);
+  m_cleanupStopGbEnabled->setChecked(true);
+  m_cleanupStopGb->setValue(40.0);
+  m_protectUploading->setChecked(true);
+  m_protectUploadKib->setValue(256);
+  m_protectUnknownSpeed->setChecked(true);
+  m_protectRecentHours->setValue(24);
+  m_cleanupGrace->setChecked(true);
+  m_smartCleanup->setChecked(true);
+  m_cleanupBatchPercent->setValue(5.0);
+
+  if (preset == PresetBalanced) {
+    m_seedHours->setValue(168);
+    m_ratio->setValue(1.0);
+    m_inactiveHours->setValue(24);
+    m_cleanupGraceHours->setValue(24);
+    m_retentionEnabled->setChecked(false);
+    m_retentionHours->setValue(720);
+    m_retentionStrict->setChecked(true);
+  }
+  else if (preset == PresetThirtyDay) {
+    m_seedHours->setValue(168);
+    m_ratio->setValue(1.0);
+    m_inactiveHours->setValue(24);
+    m_cleanupGraceHours->setValue(24);
+    m_retentionEnabled->setChecked(true);
+    m_retentionHours->setValue(720);
+    m_retentionStrict->setChecked(true);
+  }
+  else if (preset == PresetLongSeed) {
+    m_seedHours->setValue(720);
+    m_ratio->setValue(2.0);
+    m_inactiveHours->setValue(72);
+    m_cleanupGraceHours->setValue(48);
+    m_retentionEnabled->setChecked(true);
+    m_retentionHours->setValue(2160);
+    m_retentionStrict->setChecked(false);
+  }
+
+  updateCleanupControls();
+  dirtifySettings();
 }
 
 void SettingsTorrentAutomation::runSetupWizard() {
@@ -1287,9 +1495,34 @@ void SettingsTorrentAutomation::runSetupWizard() {
                    "Use <b>Next step</b> to move forward and <b>Previous step</b> whenever you want to change an answer. "
                    "Select <b>Explain this page</b> for a fuller description. Nothing is applied until the final button is selected."));
   note(welcome, tr("<b>What you will decide:</b><br>1. Whether to run safely in test mode<br>2. Which client receives each torrent<br>"
-                   "3. Which RSS items are allowed<br>4. What happens when a client is unavailable<br>5. Whether old managed torrents may ever be cleaned up"));
+                   "3. Which RSS items are allowed<br>4. What happens when a client is unavailable<br>5. Whether managed torrents are removed for low space, at a fixed age, or both"));
   detailedHelp.insert(wizard.pageIds().constLast(), tr("This wizard changes only Torrent automation settings. It does not alter your feeds, existing torrents or configured torrent-client passwords. Cancelling restores the settings that existed before the wizard opened."));
   welcome->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* presetPage = page(tr("Quick Set (optional)"),
+    tr("Choose a common starting configuration or skip this page and answer every section yourself."));
+  auto* wizardPresetBox = new QGroupBox(tr("Common configurations"), presetPage);
+  auto* wizardPresetLayout = new QVBoxLayout(wizardPresetBox);
+  auto* wizardPresetRow = new QHBoxLayout();
+  auto* wizardPresetChoice = new QComboBox(wizardPresetBox);
+  for (int preset = PresetCustom; preset <= PresetLongSeed; ++preset)
+    wizardPresetChoice->addItem(quickPresetName(preset), preset);
+  auto* wizardPresetApply = new QPushButton(tr("Review and use preset"), wizardPresetBox);
+  auto* wizardPresetDetail = new QLabel(quickPresetDetail(PresetCustom), wizardPresetBox);
+  wizardPresetDetail->setWordWrap(true); wizardPresetDetail->setTextFormat(Qt::RichText);
+  wizardPresetApply->setEnabled(false);
+  wizardPresetRow->addWidget(wizardPresetChoice, 1); wizardPresetRow->addWidget(wizardPresetApply);
+  wizardPresetLayout->addLayout(wizardPresetRow); wizardPresetLayout->addWidget(wizardPresetDetail);
+  presetPage->layout()->addWidget(wizardPresetBox);
+  connect(wizardPresetChoice, QOverload<int>::of(&QComboBox::currentIndexChanged), &wizard,
+          [wizardPresetChoice, wizardPresetDetail, wizardPresetApply]() {
+    const int preset = wizardPresetChoice->currentData().toInt();
+    wizardPresetDetail->setText(quickPresetDetail(preset));
+    wizardPresetApply->setEnabled(preset != PresetCustom);
+  });
+  note(presetPage, tr("A preset fills the later wizard pages for you. You can still move through every page and change any answer before Finish. It never changes clients, capacities, cleanup permission per client, protected names or RSS rules."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("Quick Set is optional. Each preset applies a common combination of routing, retry, storage maintenance and cleanup values to this wizard only. Every preset keeps Dry run enabled. The preset does not save anything, and cancelling the wizard discards it."));
+  presetPage->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
   QWizardPage* basics = page(tr("1. Safety and basic behaviour"),
     tr("Choose whether automation runs, whether it remains test-only, and how its decisions are reported."));
@@ -1376,9 +1609,9 @@ void SettingsTorrentAutomation::runSetupWizard() {
       .arg(header->text().toHtmlEscaped(), header->toolTip().toHtmlEscaped()));
   });
   note(clients, tr("<b>Examples:</b> Max active 3 blocks a fourth active download. Min free 20 GiB preserves a fixed reserve. "
-                   "Target free 10% scales with disk size. Capacity is only a fallback when the client cannot report live space. "
+                   "Target free 10% scales with disk size. Capacity is a fallback torrent-storage budget when live space is unavailable; subtract space reserved for unrelated files before entering it. "
                    "Cleanup must remain off unless that client's list/removal capability has been tested."));
-  detailedHelp.insert(wizard.pageIds().constLast(), tr("Use decides whether a client participates. Max active prevents adding work when too many downloads are running. Max managed limits only torrents previously sent by RSS Guard. Priority 1 is preferred over 2. Minimum free keeps a fixed reserve, while Target free keeps a percentage reserve. Capacity is a fallback for APIs without live disk-space reporting. Max down rate avoids heavily downloading clients. Timeout and Retries override the global values. Cleanup gives permission to consider that client for the later cleanup rules; it does not immediately delete anything."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("Use decides whether a client participates. Max active prevents adding work when too many downloads are running. Max managed limits only torrents previously sent by RSS Guard. Priority 1 is preferred over 2. Minimum free keeps a fixed reserve, while Target free keeps a percentage reserve. Capacity is a fallback torrent-storage budget for APIs without live disk-space reporting: RSS Guard subtracts every torrent reported by the client, including manually added torrents, and reserves pending managed downloads. To avoid overestimating space, subtract unrelated files from the value you enter. Max down rate avoids heavily downloading clients. Timeout and Retries override the global values. Cleanup gives permission to consider that client for the later cleanup rules; it does not immediately delete anything."));
 
   QWizardPage* rules = page(tr("4. RSS matching rules"),
     tr("Rules decide which feed items automation may process and which clients they may use."));
@@ -1518,9 +1751,43 @@ void SettingsTorrentAutomation::runSetupWizard() {
   };
   connect(cleanupEnabled, &QCheckBox::toggled, &wizard, updateCleanupWarning);
   connect(deleteData, &QCheckBox::toggled, &wizard, updateCleanupWarning); updateCleanupWarning();
-  detailedHelp.insert(wizard.pageIds().constLast(), tr("Cleanup is used only when an opted-in client is below its free-space requirement. It considers only completed torrents marked as managed by RSS Guard. Minimum age, ratio and inactivity are separate gates; every enabled gate must pass. Maximum removals is a per-run emergency limit. The target free-space value tells cleanup when it has recovered enough room. Deleting data removes the actual downloaded files and cannot be undone."));
+  note(cleanup, tr("<b>This page controls storage-pressure cleanup.</b> It acts only when a client needs room. The next page separately controls removal at a fixed age, even when storage is not low."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("The cleanup master switch permits both cleanup types. Storage-pressure cleanup runs only when an opted-in client needs room for a new torrent and can recover space only when downloaded-data deletion is enabled. Minimum age, ratio and inactivity are separate gates; every enabled gate must pass. Maximum removals is a per-run emergency limit. The target free-space value tells cleanup when it has recovered enough room. Deleting data removes the actual files and cannot be undone."));
 
-  QWizardPage* protection = page(tr("8. Cleanup protections and window"),
+  QWizardPage* retention = page(tr("8. Maximum retention time"),
+    tr("Choose whether a completed RSS Guard-managed torrent must be removed after a fixed time, regardless of whether storage space is needed."));
+  auto* retentionForm = form(retention);
+  auto* retentionEnabled = check(retention, tr("Remove completed torrents after a maximum time"), m_retentionEnabled->isChecked(),
+                                 tr("This runs periodically even when storage space is not low."));
+  auto* retentionHours = integer(retention, m_retentionHours->value(), 1, 100000, tr(" hours"),
+                                 tr("Examples: 24 = 1 day, 168 = 7 days, 720 = 30 days."));
+  auto* retentionStrict = check(retention, tr("Make the maximum time a firm deadline"), m_retentionStrict->isChecked(),
+                                tr("Ignore ratio, inactivity and upload-activity delays after expiry. Absolute protections still apply."));
+  retentionForm->addRow(retentionEnabled); retentionForm->addRow(tr("Remove after:"), retentionHours);
+  retentionForm->addRow(retentionStrict);
+  auto* retentionSummary = warning(retention, QString());
+  const auto updateRetentionWizard = [cleanupEnabled, retentionEnabled, retentionHours, retentionStrict, retentionSummary]() {
+    const bool available = cleanupEnabled->isChecked();
+    retentionEnabled->setEnabled(available);
+    retentionHours->setEnabled(available && retentionEnabled->isChecked());
+    retentionStrict->setEnabled(available && retentionEnabled->isChecked());
+    retentionSummary->setText(!available
+      ? QObject::tr("CLEANUP IS OFF — enable cleanup on the previous page before a retention deadline can run.")
+      : !retentionEnabled->isChecked()
+        ? QObject::tr("MAXIMUM RETENTION IS OFF — torrents will not be removed merely because of their age.")
+        : QObject::tr("TIME-BASED CLEANUP IS ON — completed managed torrents become due after %1 hours (%2 days), even when free space is healthy.")
+            .arg(retentionHours->value()).arg(retentionHours->value() / 24.0, 0, 'f', 1));
+  };
+  connect(cleanupEnabled, &QCheckBox::toggled, &wizard, updateRetentionWizard);
+  connect(retentionEnabled, &QCheckBox::toggled, &wizard, updateRetentionWizard);
+  connect(retentionHours, QOverload<int>::of(&QSpinBox::valueChanged), &wizard, updateRetentionWizard);
+  updateRetentionWizard();
+  note(retention, tr("<b>Example:</b> 720 hours means 30 days. With a firm deadline, a torrent is due at 30 days even if its ratio is low or it is still uploading. A <i>keep</i> tag, protected tracker or minimum-copy rule can still retain it.<br><br>"
+                     "If <b>Delete downloaded data</b> is off, only the torrent job is removed and its files stay on disk. If it is on, the files are permanently deleted too."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("Maximum-retention cleanup is independent of storage pressure and is checked approximately every five minutes while RSS Guard is running. Age is measured from completion, or from the client-reported added time when completion time is unavailable. A firm deadline overrides ratio, inactivity, current-upload and recent-upload postponements. Protected tags, protected tracker text and minimum-copy protection remain absolute. The cleanup time window, per-run removal limit, confirmation choice and downloaded-data choice still apply."));
+  retention->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* protection = page(tr("9. Cleanup protections and window"),
     tr("Protect active, recently added or specially labelled torrents, and optionally restrict cleanup to a maintenance window."));
   auto* protectionForm = form(protection);
   auto* protectUploading = check(protection, tr("Protect torrents currently uploading"), m_protectUploading->isChecked(), tr("Skips torrents at or above the upload threshold."));
@@ -1559,21 +1826,81 @@ void SettingsTorrentAutomation::runSetupWizard() {
                       "<i>keep</i> or <i>archive</i> tags, and leave downloaded-data deletion off on the previous page."));
   detailedHelp.insert(wizard.pageIds().constLast(), tr("Current-upload protection skips a torrent above the selected KiB/s speed. Unknown-speed protection keeps torrents safe when an API cannot report that value. Recent-upload protection remembers previously observed uploads. A grace period marks a candidate and waits before a later recheck. Smart ordering favours safer cleanup choices. Copy protection can keep completed duplicates across clients. Protected tags and tracker text are absolute exclusions. A cleanup window delays removal until chosen local hours. Batch percentage rounds the storage target upward to avoid repeated small cleanup runs."));
 
-  QWizardPage* finish = page(tr("9. Review and finish"), tr("Press Finish to copy these choices into Torrent automation settings."));
+  QWizardPage* finish = page(tr("10. Review and finish"), tr("Press Finish to copy these choices into Torrent automation settings."));
   const int finishPageId = wizard.pageIds().constLast();
   note(finish, tr("After finishing, press <b>Apply</b> or <b>OK</b> in the main Settings window to save everything permanently.<br><br>"
                   "Before live use: test every enabled client, run a dry test, inspect Simple and Activity, and use Check readiness for live automation. "
                   "The wizard never sends a torrent or performs cleanup."));
   auto* finishDry = new QLabel(finish); finishDry->setWordWrap(true); finish->layout()->addWidget(finishDry);
-  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finishPageId, finishDry, dryRun, cleanupEnabled, deleteData](int id) {
+  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finishPageId, finishDry, dryRun, cleanupEnabled, deleteData, retentionEnabled, retentionHours](int id) {
     if (id != finishPageId) return;
-    finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Cleanup: %2 · Delete downloaded data: %3")
+    finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Cleanup: %2 · Delete downloaded data: %3 · Maximum retention: %4")
       .arg(dryRun->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
            cleanupEnabled->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
-           deleteData->isChecked() ? QObject::tr("ON") : QObject::tr("OFF")));
+           deleteData->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
+           retentionEnabled->isChecked() ? QObject::tr("%1 hours").arg(retentionHours->value()) : QObject::tr("OFF")));
   });
   finish->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
   detailedHelp.insert(finishPageId, tr("Finish copies the answers back to the visible Torrent automation settings page. It deliberately does not save, send or clean up anything. Apply or OK performs the save. Run dry test now produces a read-only example, and Check readiness for live automation reports anything that should be corrected before live mode."));
+
+  connect(wizardPresetApply, &QPushButton::clicked, &wizard,
+          [&wizard, wizardPresetChoice, wizardPresetApply, enabled, dryRun, notifications, strategy,
+           retryEnabled, retryAttempts, retryInitial, retryMaximum, retryBackoff, requestTimeout,
+           reconciliation, reconciliationMinutes, reserve, duplicates, breaker, breakerFailures,
+           breakerCooldown, breakerRecovery, cleanupEnabled, deleteData, confirmCleanup,
+           seedEnabled, seedHours, ratioEnabled, ratio, inactiveEnabled, inactiveHours,
+           maxEnabled, maxRemovals, stopEnabled, stopSpace, protectUploading, uploadKib,
+           unknownSpeed, recentUpload, grace, graceHours, smartOrder, batch,
+           retentionEnabled, retentionHours, retentionStrict]() {
+    const int preset = wizardPresetChoice->currentData().toInt();
+    if (preset == PresetCustom) return;
+    QMessageBox review(&wizard);
+    review.setWindowTitle(QObject::tr("Review Quick Set preset"));
+    review.setIcon(preset == PresetSafeTest ? QMessageBox::Information : QMessageBox::Warning);
+    review.setText(quickPresetName(preset));
+    review.setInformativeText(quickPresetDetail(preset, false));
+    auto* apply = review.addButton(QObject::tr("Use this preset"), QMessageBox::AcceptRole);
+    review.addButton(QMessageBox::Cancel);
+    review.exec();
+    if (review.clickedButton() != apply) return;
+
+    enabled->setChecked(true); dryRun->setChecked(true); notifications->setChecked(true);
+    strategy->setCurrentIndex(strategy->findData(static_cast<int>(TorrentRoutingStrategy::Balanced)));
+    retryEnabled->setChecked(true); retryAttempts->setValue(3); retryInitial->setValue(60);
+    retryMaximum->setValue(900); retryBackoff->setChecked(true); requestTimeout->setValue(15);
+    reconciliation->setChecked(true); reconciliationMinutes->setValue(30); reserve->setChecked(true);
+    duplicates->setChecked(true); breaker->setChecked(true); breakerFailures->setValue(3);
+    breakerCooldown->setValue(15); breakerRecovery->setValue(2);
+
+    if (preset == PresetSafeTest) {
+      cleanupEnabled->setChecked(false); deleteData->setChecked(false); confirmCleanup->setChecked(true);
+      retentionEnabled->setChecked(false);
+    }
+    else {
+      cleanupEnabled->setChecked(true); deleteData->setChecked(true); confirmCleanup->setChecked(true);
+      seedEnabled->setChecked(true); ratioEnabled->setChecked(true); inactiveEnabled->setChecked(true);
+      maxEnabled->setChecked(true); maxRemovals->setValue(1); stopEnabled->setChecked(true);
+      stopSpace->setValue(40.0); protectUploading->setChecked(true); uploadKib->setValue(256);
+      unknownSpeed->setChecked(true); recentUpload->setValue(24); grace->setChecked(true);
+      smartOrder->setChecked(true); batch->setValue(5.0);
+      if (preset == PresetBalanced) {
+        seedHours->setValue(168); ratio->setValue(1.0); inactiveHours->setValue(24);
+        graceHours->setValue(24); retentionEnabled->setChecked(false);
+        retentionHours->setValue(720); retentionStrict->setChecked(true);
+      }
+      else if (preset == PresetThirtyDay) {
+        seedHours->setValue(168); ratio->setValue(1.0); inactiveHours->setValue(24);
+        graceHours->setValue(24); retentionEnabled->setChecked(true);
+        retentionHours->setValue(720); retentionStrict->setChecked(true);
+      }
+      else if (preset == PresetLongSeed) {
+        seedHours->setValue(720); ratio->setValue(2.0); inactiveHours->setValue(72);
+        graceHours->setValue(48); retentionEnabled->setChecked(true);
+        retentionHours->setValue(2160); retentionStrict->setChecked(false);
+      }
+    }
+    wizardPresetApply->setText(QObject::tr("Preset applied — review next pages"));
+  });
 
   connect(&wizard, &QWizard::helpRequested, &wizard, [&wizard, detailedHelp]() {
     QMessageBox::information(&wizard, QObject::tr("About this setup step"),
@@ -1606,6 +1933,8 @@ void SettingsTorrentAutomation::runSetupWizard() {
   m_scheduleEnd->setCurrentIndex(m_scheduleEnd->findData(scheduleEnd->currentData()));
   m_cleanup->setChecked(cleanupEnabled->isChecked()); m_deleteData->setChecked(deleteData->isChecked());
   m_confirmCleanup->setChecked(confirmCleanup->isChecked()); m_seedHoursEnabled->setChecked(seedEnabled->isChecked());
+  m_retentionEnabled->setChecked(retentionEnabled->isChecked()); m_retentionHours->setValue(retentionHours->value());
+  m_retentionStrict->setChecked(retentionStrict->isChecked());
   m_seedHours->setValue(seedHours->value()); m_ratioEnabled->setChecked(ratioEnabled->isChecked()); m_ratio->setValue(ratio->value());
   m_inactiveHoursEnabled->setChecked(inactiveEnabled->isChecked()); m_inactiveHours->setValue(inactiveHours->value());
   m_maxRemovalsEnabled->setChecked(maxEnabled->isChecked()); m_maxRemovals->setValue(maxRemovals->value());
@@ -1633,6 +1962,7 @@ void SettingsTorrentAutomation::runReadinessAudit() {
   m_config = TorrentAutomationConfig::load(settings());
   const QList<TorrentClientConfig> allClients = TorrentClientConfig::load(settings());
   QStringList errors, warnings, passed, participatingIds;
+  int cleanupClients = 0;
   for (const TorrentClientConfig& client : allClients) {
     const TorrentAutomationClientPolicy policy = m_config.policyFor(client.id);
     if (!client.enabled || !policy.enabled) continue;
@@ -1648,6 +1978,7 @@ void SettingsTorrentAutomation::runReadinessAudit() {
       warnings.append(tr("%1 has neither live disk space nor a configured fallback capacity.").arg(client.name));
     if (policy.allowCleanup && (!client.capabilityTorrentList || !client.capabilityRemoval))
       errors.append(tr("%1 permits cleanup without confirmed listing and removal capabilities.").arg(client.name));
+    if (policy.allowCleanup) ++cleanupClients;
   }
   if (participatingIds.isEmpty()) errors.append(tr("No enabled torrent client participates in automation."));
 
@@ -1670,12 +2001,21 @@ void SettingsTorrentAutomation::runReadinessAudit() {
   if (m_config.dryRun) passed.append(tr("Dry run is enabled, so sends and cleanup changes are simulated."));
   else warnings.append(tr("Dry run is disabled; matching RSS items can be sent immediately."));
   if (m_config.cleanupEnabled) {
+    if (cleanupClients == 0) errors.append(tr("Cleanup is enabled, but no participating client permits safe cleanup."));
     if (m_config.deleteData) warnings.append(tr("Cleanup can permanently delete downloaded data."));
+    else if (m_config.maximumRetentionEnabled)
+      warnings.append(tr("Maximum-retention cleanup will remove torrent jobs but keep their downloaded files, so it will not recover disk space."));
     if (!m_config.cleanupRequireConfirmation) warnings.append(tr("Per-removal confirmation is disabled."));
     if (!m_config.cleanupGraceEnabled) warnings.append(tr("The cleanup grace period is disabled."));
     if (!m_config.maximumRemovalsEnabled) warnings.append(tr("The user-defined removal limit is disabled; the internal limit of 25 still applies."));
     if (!m_config.minimumSeedHoursEnabled && !m_config.minimumRatioEnabled && !m_config.minimumInactiveHoursEnabled)
       warnings.append(tr("All age, ratio and inactivity cleanup filters are disabled."));
+    if (m_config.maximumRetentionEnabled) {
+      passed.append(tr("Maximum-retention cleanup is enabled at %1 hours and runs independently of free-space pressure.")
+                      .arg(m_config.maximumRetentionHours));
+      if (m_config.maximumRetentionStrict)
+        warnings.append(tr("The maximum-retention deadline overrides ratio, inactivity and upload-activity protections after expiry."));
+    }
   }
   const int queued = TorrentAutomationEngine::instance(qApp)->pendingRetries().size();
   if (queued > 0) warnings.append(tr("%1 automation item(s) are currently queued.").arg(queued));
@@ -1865,13 +2205,16 @@ void SettingsTorrentAutomation::clearActivity() {
 
 void SettingsTorrentAutomation::updateCleanupControls() {
   const bool enabled = m_cleanup->isChecked();
-  const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_seedHoursEnabled, m_ratioEnabled,
+  const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_retentionEnabled,
+                                            m_retentionStrict, m_seedHoursEnabled, m_ratioEnabled,
                                             m_inactiveHoursEnabled, m_maxRemovalsEnabled, m_cleanupStopGbEnabled,
                                             m_protectUploading, m_protectUnknownSpeed, m_protectRecentHours,
                                             m_cleanupGrace, m_smartCleanup, m_minimumCopiesEnabled,
                                             m_protectedTags, m_protectedTrackers, m_cleanupSchedule,
                                             m_cleanupBatchPercent};
   for (QWidget* widget : cleanup_widgets) widget->setEnabled(enabled);
+  m_retentionHours->setEnabled(enabled && m_retentionEnabled->isChecked());
+  m_retentionStrict->setEnabled(enabled && m_retentionEnabled->isChecked());
   m_seedHours->setEnabled(enabled && m_seedHoursEnabled->isChecked());
   m_ratio->setEnabled(enabled && m_ratioEnabled->isChecked());
   m_inactiveHours->setEnabled(enabled && m_inactiveHoursEnabled->isChecked());

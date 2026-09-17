@@ -80,6 +80,9 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool cleanupEnabled = false;
   bool deleteData = false;
   bool cleanupRequireConfirmation = true;
+  bool maximumRetentionEnabled = false;
+  int maximumRetentionHours = 720;
+  bool maximumRetentionStrict = true;
   bool minimumSeedHoursEnabled = true;
   int minimumSeedHours = 168;
   bool minimumRatioEnabled = true;

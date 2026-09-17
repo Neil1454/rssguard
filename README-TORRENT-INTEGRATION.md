@@ -44,6 +44,8 @@ Successful destinations are saved per article and client. Green ticks are synchr
 - Exposes the persistent retry queue with retry-now, choose-client and cancel actions, plus configurable routing hours.
 - Temporarily isolates repeatedly failing clients and requires consecutive successful recovery checks before automatic reuse.
 - Adds smart two-stage cleanup with a grace/recheck period, recent-upload history, protected tags/trackers, optional minimum completed-copy retention, and a separate cleanup schedule.
+- Adds independent maximum-retention cleanup for completed managed torrents, with a configurable firm deadline, periodic checks, dry-run reporting and the same absolute tag/tracker/copy protections.
+- Makes non-live storage fallbacks conservative by subtracting every torrent reported by the client plus pending managed reservations; removing a torrent job without deleting its files never claims recovered disk space.
 - Exports and imports the non-secret torrent configuration as JSON; passwords and tokens are deliberately excluded.
 - Audits readiness before live automation, completes per-torrent size-aware rule matching with explicit rule ordering, adds queue-wide retry/cancel actions, and exports or clears decision history independently of safety state.
 

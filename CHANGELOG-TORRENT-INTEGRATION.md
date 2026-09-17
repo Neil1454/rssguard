@@ -1,5 +1,16 @@
 # Torrent integration changelog
 
+## Build 67
+
+- Added configurable maximum-retention cleanup that runs independently of storage pressure.
+- Added a firm-deadline option that can override ratio, inactivity and upload-activity delays while preserving protected tags, protected trackers and minimum-copy protection.
+- Added periodic expiry checks, removal limits, cleanup-window handling, confirmation prompts, dry-run results and clear retained-file/deleted-file reporting.
+- Corrected cleanup accounting so removing a torrent job without deleting its files never claims disk space was recovered.
+- Improved fallback storage estimates to count every torrent reported by the client, including manually added torrents, plus pending RSS Guard reservations.
+- Expanded the guided wizard to ten stages with a dedicated maximum-retention page, examples, conditional controls and detailed safety explanations.
+- Added Quick Set presets to the main settings page and wizard for safety-first testing, balanced protected automation, 30-day rotation and long-term seeding.
+- Added full before-apply explanations for every preset, including exact behaviour, preserved settings and permanent-deletion risks; every preset starts in Dry run.
+
 ## Build 66
 
 - Redesigned the setup wizard as a visually welcoming, question-led walkthrough rather than a dense settings form.

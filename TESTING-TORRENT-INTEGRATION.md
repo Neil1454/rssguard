@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 66 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 67 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 Confirm dry-run notification pop-ups use a prominent outcome heading, clean line-separated sections and an explicit **TEST ONLY** footer for sends, waits, duplicates, blocked routes and cleanup outcomes.
 
@@ -93,7 +93,7 @@ Client-specific checks:
 - Cleanup batching: the requested recovery target rounds upward by the configured percentage of total/fallback capacity.
 - Direct/manual independence: a named-client button performs a real manual send even while Torrent automation is configured for dry-run mode.
 - Reconciliation: change progress and remove a managed torrent outside RSS Guard; the next reachable status pass updates remaining-byte reservations and removes the stale ledger entry without adopting unrelated torrents.
-- Storage source: verify each client row accurately distinguishes live space, reconciled estimate, managed estimate and unknown; rTorrent/rQBit manual capacities decrease by reconciled downloaded bytes and retain outstanding reservations.
+- Storage source: verify each client row accurately distinguishes live space, all-torrent estimate, conservative estimate and unknown; rTorrent/rQBit fallback budgets subtract every listed torrent and pending managed reservations.
 - Duplicate policy: an unattended magnet already present on any reachable client is skipped by info hash; a direct named-client action can intentionally create another copy.
 - Persistent queue controls: restart with scheduled work, then verify its reason/time and retry-now, choose-client and cancel actions without duplicating completed sends.
 - Circuit breaker: fail one client for the configured number of checks, confirm other clients continue, then confirm the sidelined client is reused only after the configured consecutive recovery successes.
@@ -134,3 +134,15 @@ Do not replace the user's existing RSS Guard portable build until:
 - Select each Clients and limits column and confirm the help card explains that exact setting.
 - Confirm the Dry-run and cleanup banners change immediately and clearly distinguish safe test mode, live routing, cleanup-only removal and permanent data deletion.
 - Confirm Cancel restores rule edits and leaves all other main-page settings unchanged.
+
+## Build 67 retention and storage checks
+
+- Enable maximum retention with a short test value and confirm dry run identifies expired completed managed torrents even when free space is healthy.
+- Confirm firm deadline mode ignores ratio, inactivity and upload-activity postponements but still honours protected tags, protected tracker text and minimum-copy protection.
+- Confirm the cleanup maintenance window and maximum-removals limit apply to time-based cleanup.
+- Confirm **Delete downloaded data** off removes only the torrent job and never reports recovered disk space; with it on, confirm the client is asked to delete data.
+- On a client without live free-space reporting, confirm the fallback estimate subtracts manually added torrents as well as RSS Guard-managed torrents and pending reservations.
+- Complete the new ten-stage wizard and confirm maximum-retention choices copy correctly to the main settings page.
+- On the General tab, review each Quick Set preset and confirm its exact behaviour, preserved settings and deletion risk are shown before Apply is available.
+- Apply each preset and confirm Dry run is always on, client rows and RSS rules are unchanged, and the documented cleanup/retention values are filled correctly.
+- Repeat from the wizard's optional Quick Set page; confirm later pages reflect the preset, remain editable, and cancelling the wizard leaves the main settings unchanged.

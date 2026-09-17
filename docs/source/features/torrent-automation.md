@@ -4,9 +4,11 @@ The Neil1454 Windows fork can automatically route torrent links from newly fetch
 
 Open **Tools > Settings > Torrent automation**. Automation is disabled by default. Enable **Dry run** first to record and display routing decisions without sending torrents.
 
-For a guided first-time setup, select **Start guided setup wizard**. The wizard covers every automation section in a safe order: basic safety, routing and size estimates, per-client limits, RSS matching rules, retries, storage and health maintenance, scheduling, cleanup thresholds, and cleanup protections. Each page explains the setting and gives examples where useful. Nothing is copied to the settings page until **Finish** is selected, and the main Settings window still requires **Apply** or **OK** before the choices are saved.
+For a guided first-time setup, select **Start guided setup wizard**. The step-by-step wizard covers every automation section in a safe order: basic safety, routing and size estimates, per-client limits, RSS matching rules, retries, storage and health maintenance, scheduling, storage-pressure cleanup, maximum retention, and cleanup protections. Each page explains the setting and gives examples where useful. Nothing is copied to the settings page until **Finish** is selected, and the main Settings window still requires **Apply** or **OK** before the choices are saved.
 
 The wizard uses plain-language questions, live Dry-run and cleanup safety warnings, and conditional follow-up fields that are available only when their parent option applies. Select **Explain this page** for a fuller description of the current section. On **Clients and limits**, select any cell to see a clear explanation of that column below the table. Hovering an individual control provides its setting-specific tooltip.
+
+**Quick Set** is available on the General tab and as an optional early wizard page. It provides four common starting points: Safety-first test only, Balanced protected automation, 30-day automatic rotation and Long-term seeding. Selecting a preset first shows exactly what it sets, what client/rule information it preserves and whether files could eventually be deleted. Presets never overwrite configured clients, per-client storage values, cleanup permission, protected names or RSS rules, and every preset turns Dry run on.
 
 ## Routing
 
@@ -26,7 +28,7 @@ Rules can also set minimum and maximum torrent sizes, be duplicated, and be move
 
 Tests honour the configured global or per-client status retry allowance, delay, request timeout and optional backoff. When the API reports an exact total storage capacity, the test fills **Capacity GB** automatically. Existing manual capacity remains unchanged when the API reports only free space or no filesystem information. rTorrent and rQBit normally require manual capacity because their portable APIs do not expose filesystem totals. A removal-API tick means the adapter supports removal and its listing call succeeded; it is not proof of server-side removal permission.
 
-The **Maintenance** tab can periodically reconcile RSS Guard's persistent managed ledger against current torrent lists. Reconciliation updates actual sizes and remaining bytes, removes records no longer present on a reachable client, and recognises server-side ownership markers or hashes already in the ledger. **Reserve space still needed** adds unfinished managed bytes to the routing reserve, which prevents several simultaneous downloads from silently overcommitting a manually configured capacity. The storage-source column states whether a client is using live data, a reconciled estimate, a ledger-only estimate or no usable storage figure.
+The **Maintenance** tab can periodically reconcile RSS Guard's persistent managed ledger against current torrent lists. Reconciliation updates actual sizes and remaining bytes, removes records no longer present on a reachable client, and recognises server-side ownership markers or hashes already in the ledger. **Reserve space still needed** adds unfinished managed bytes to a live-space routing reserve. When live free space is unavailable, the configured capacity is treated as a torrent-storage budget and RSS Guard conservatively subtracts the full size of every torrent returned by the client—including torrents added outside RSS Guard—plus pending managed reservations. Deduct space used by unrelated files before entering the fallback capacity. The storage-source column states whether a client is using live data, an all-torrent estimate, a conservative ledger estimate or no usable storage figure.
 
 Unattended magnet sends can be checked by info hash across every reachable configured client. If the torrent already exists, automation records the decision and does not create another copy. A direct named-client action is treated as an intentional override.
 
@@ -63,6 +65,12 @@ Comma-separated protected tags/labels and tracker substrings exclude important t
 Two-stage cleanup can first mark an eligible candidate, wait for a configurable grace period, then fetch current status and recheck every safeguard. A resumed download, renewed upload, protected tag/tracker, insufficient copy count or other failed eligibility condition clears the candidate. Cleanup can also be restricted to a separate local-time maintenance window. The free-space target can combine a fixed minimum, a percentage of detected/configured capacity, outstanding download reservations and a percentage-based cleanup batch.
 
 The cleanup checkbox for a client remains disabled until a capability test confirms listing and safe-removal support. Actual cleanup still requires a completed torrent to carry RSS Guard's automation marker, so an adapter that cannot prove ownership remains effectively routing-only.
+
+### Maximum retention
+
+Maximum-retention cleanup is separate from storage-pressure cleanup. In live mode, RSS Guard checks approximately every five minutes while the application is running and considers a completed managed torrent due after the configured number of hours, even when the destination has plenty of free space. In Dry run, use **Run dry test now** to preview the same expiry decisions without repeated background reports. Age is measured from completion; if the client does not expose that value, its reported added time is used.
+
+With **Treat the maximum time as a firm deadline** enabled, ratio, inactivity, current-upload and recent-upload protections no longer postpone an expired torrent. Protected tags, protected tracker terms and minimum-copy protection remain absolute exclusions. The cleanup maintenance window, maximum-removals limit and confirmation setting still apply. When **Delete downloaded data** is off, only the torrent job is removed and no recovered disk space is claimed; when it is on, downloaded files are permanently deleted too.
 
 Automation runs only while RSS Guard is running and Windows is awake.
 

@@ -64,6 +64,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       QString queueReason;
       bool manualApproval = false;
       bool directOverride = false;
+      bool retentionCleanup = false;
     };
 
     explicit TorrentAutomationEngine(QObject* parent = nullptr);
@@ -85,6 +86,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     qint64 clientFreeSpaceTarget(int index) const;
     void recordDryRunClientAssessments(const Job& job, int selected);
     bool simulateCleanup(const Job& job);
+    bool processRetentionCleanup(const Job& job);
     QString cleanupEligibilityDetail(const TorrentRemoteItem& item, const QDateTime& now) const;
     void sendJob(const Job& job, int clientIndex);
     bool tryCleanup(const Job& job);
@@ -92,7 +94,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     void record(const QString& state, const Job& job, const QString& clientId, const QString& detail);
     bool wasProcessed(const QString& key) const;
     void markProcessed(const QString& key);
-    qint64 estimatedManagedBytes(const QString& clientId) const;
+    qint64 conservativeAllocatedBytes(const QString& clientId,
+                                      const QList<TorrentRemoteItem>& torrents) const;
     qint64 outstandingManagedBytes(const QString& clientId) const;
     void reconcileManagedState();
     bool withinHourWindow(int startHour, int endHour) const;
@@ -130,6 +133,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QPointer<QWidget> m_manualDialogParent;
     QHash<Feed*, QList<Message>> m_lastArticles;
     QDateTime m_lastReconcile;
+    QDateTime m_lastRetentionCheck;
 };
 
 #endif // TORRENTAUTOMATIONENGINE_H

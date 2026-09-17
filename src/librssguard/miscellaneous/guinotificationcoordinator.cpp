@@ -44,7 +44,12 @@
 #endif
 
 GuiNotificationCoordinator::GuiNotificationCoordinator(Application* application)
-  : QObject(), m_application(application), m_trayIcon(nullptr) {}
+  : QObject(), m_application(application), m_trayIcon(nullptr) {
+  // Start the lightweight maintenance timer even when no feed refresh has yet
+  // produced new articles. This allows maximum-retention deadlines to be
+  // checked while RSS Guard is simply left running.
+  QTimer::singleShot(0, this, [application]() { TorrentAutomationEngine::instance(application); });
+}
 
 GuiNotificationCoordinator::~GuiNotificationCoordinator() {
   delete m_trayIcon;
