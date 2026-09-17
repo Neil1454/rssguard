@@ -46,6 +46,8 @@
 #include <QTimer>
 #include <QUuid>
 #include <QVBoxLayout>
+#include <QWizard>
+#include <QWizardPage>
 
 #include <utility>
 #include <memory>
@@ -157,6 +159,13 @@ void SettingsTorrentAutomation::loadUi() {
   auto* description = new QLabel(tr("Automatically route new torrent RSS items to healthy clients. Start in dry-run mode and review the activity log before allowing live sends."), this);
   description->setWordWrap(true);
   outer->addWidget(description);
+
+  auto* setupWizard = new QPushButton(tr("Start guided setup wizard"), this);
+  setupWizard->setToolTip(tr("Configure every torrent-automation section step by step, with plain-language explanations and examples."));
+  auto* wizardRow = new QHBoxLayout();
+  wizardRow->addStretch();
+  wizardRow->addWidget(setupWizard);
+  outer->addLayout(wizardRow);
 
   auto* tabs = new QTabWidget(this);
   outer->addWidget(tabs, 1);
@@ -618,6 +627,7 @@ void SettingsTorrentAutomation::loadUi() {
   connect(m_schedule, &QCheckBox::toggled, this, updateMaintenanceControls);
   updateMaintenanceControls();
   connect(m_runDryTest, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
+  connect(setupWizard, &QPushButton::clicked, this, &SettingsTorrentAutomation::runSetupWizard);
   connect(readinessAudit, &QPushButton::clicked, this, &SettingsTorrentAutomation::runReadinessAudit);
   connect(testRules, &QPushButton::clicked, this, &SettingsTorrentAutomation::runDryTest);
   connect(exportConfiguration, &QPushButton::clicked, this, &SettingsTorrentAutomation::exportConfiguration);
@@ -1181,6 +1191,303 @@ void SettingsTorrentAutomation::refreshSimpleActivity() {
     auto* empty = new QListWidgetItem(tr("No dry-run outcomes yet. Use “Run dry test now”, then return here to review the results."), m_simpleActivity);
     empty->setForeground(QColor(QStringLiteral("#455A64")));
   }
+}
+
+void SettingsTorrentAutomation::runSetupWizard() {
+  const QList<TorrentAutomationRule> originalRules = m_config.rules;
+  QWizard wizard(this);
+  wizard.setWindowTitle(tr("Torrent automation setup wizard"));
+  wizard.setOption(QWizard::NoBackButtonOnStartPage);
+  wizard.setMinimumSize(820, 620);
+
+  const auto page = [&wizard](const QString& title, const QString& text) {
+    auto* result = new QWizardPage(&wizard);
+    result->setTitle(title);
+    result->setSubTitle(text);
+    result->setLayout(new QVBoxLayout(result));
+    wizard.addPage(result);
+    return result;
+  };
+  const auto note = [](QWizardPage* owner, const QString& text) {
+    auto* label = new QLabel(text, owner);
+    label->setWordWrap(true);
+    label->setTextFormat(Qt::RichText);
+    owner->layout()->addWidget(label);
+    return label;
+  };
+  const auto form = [](QWizardPage* owner) {
+    auto* result = new QFormLayout();
+    static_cast<QVBoxLayout*>(owner->layout())->addLayout(result);
+    return result;
+  };
+  const auto check = [](QWidget* owner, const QString& text, bool value, const QString& tip) {
+    auto* result = new QCheckBox(text, owner);
+    result->setChecked(value); result->setToolTip(tip);
+    return result;
+  };
+  const auto integer = [](QWidget* owner, int value, int minimum, int maximum, const QString& suffix,
+                          const QString& tip) {
+    auto* result = new QSpinBox(owner);
+    result->setRange(minimum, maximum); result->setValue(value); result->setSuffix(suffix); result->setToolTip(tip);
+    return result;
+  };
+  const auto decimal = [](QWidget* owner, double value, double minimum, double maximum, int decimals,
+                          const QString& suffix, const QString& tip) {
+    auto* result = new QDoubleSpinBox(owner);
+    result->setRange(minimum, maximum); result->setDecimals(decimals); result->setValue(value);
+    result->setSuffix(suffix); result->setToolTip(tip);
+    return result;
+  };
+  const auto hours = [](QWidget* owner, int value, bool allow24) {
+    auto* result = new QComboBox(owner);
+    for (int hour = 0; hour <= (allow24 ? 24 : 23); ++hour)
+      result->addItem(QStringLiteral("%1:00").arg(hour, 2, 10, QLatin1Char('0')), hour);
+    result->setCurrentIndex(result->findData(value));
+    return result;
+  };
+
+  QWizardPage* welcome = page(tr("Welcome"), tr("This wizard explains and configures the complete torrent-automation feature one section at a time."));
+  note(welcome, tr("<b>Safe starting point:</b> the wizard keeps <b>Dry run</b> enabled unless you deliberately turn it off. "
+                   "Dry run evaluates real rules and client status but does not send or delete anything.<br><br>"
+                   "You can go Back at any time. Nothing is applied until you press <b>Finish</b>."));
+  welcome->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* basics = page(tr("1. Safety and basic behaviour"),
+    tr("Choose whether automation runs, whether it remains test-only, and how its decisions are reported."));
+  auto* basicsForm = form(basics);
+  auto* enabled = check(basics, tr("Enable torrent automation"), m_enabled->isChecked(),
+                        tr("The master switch. When off, RSS items are never routed automatically."));
+  auto* dryRun = check(basics, tr("Dry run — test decisions without sending or deleting"), m_dryRun->isChecked(),
+                       tr("Recommended until the Simple and Activity results match what you expect."));
+  auto* notifications = check(basics, tr("Show automation notifications"), m_notifications->isChecked(),
+                              tr("Show clear send, wait, block, retry and cleanup outcomes."));
+  auto* history = integer(basics, m_historyLimit->value(), 50, 5000, QString(),
+                          tr("Maximum decision records retained. Example: 500 is normally ample."));
+  basicsForm->addRow(enabled); basicsForm->addRow(dryRun); basicsForm->addRow(notifications);
+  basicsForm->addRow(tr("Activity history entries:"), history);
+  note(basics, tr("<b>Recommended first run:</b> Enable automation, leave Dry run on, keep notifications on, then use Run dry test now."));
+  basics->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* routing = page(tr("2. Routing and size estimates"),
+    tr("Decide how RSS Guard selects between eligible clients and how it reserves space when a feed does not provide a torrent size."));
+  auto* routingForm = form(routing);
+  auto* strategy = new QComboBox(routing);
+  for (int index = 0; index < m_strategy->count(); ++index)
+    strategy->addItem(m_strategy->itemText(index), m_strategy->itemData(index));
+  strategy->setCurrentIndex(strategy->findData(m_strategy->currentData()));
+  auto* unknownSize = decimal(routing, m_unknownSizeGb->value(), 0.1, 1000000.0, 1, tr(" GiB"),
+                              tr("Example: reserve 10 GiB when the real size is unknown. Exact magnet xl sizes still take precedence."));
+  auto* storageUnit = new QComboBox(routing);
+  for (int index = 0; index < m_storageUnit->count(); ++index)
+    storageUnit->addItem(m_storageUnit->itemText(index), m_storageUnit->itemData(index));
+  storageUnit->setCurrentIndex(storageUnit->findData(m_storageUnit->currentData()));
+  routingForm->addRow(tr("Routing strategy:"), strategy);
+  routingForm->addRow(tr("Assumed unknown torrent size:"), unknownSize);
+  routingForm->addRow(tr("Storage input/display unit:"), storageUnit);
+  note(routing, tr("<b>Balanced (recommended)</b> considers free-space ratio, active and queued downloads, download rate and priority. "
+                   "Priority order always favours the lowest priority number; Round robin rotates evenly."));
+  routing->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* clients = page(tr("3. Clients and limits"),
+    tr("Choose which configured clients participate and set their safety limits. Zero disables a numeric limit; priority 1 is highest."));
+  auto* clientTable = new QTableWidget(clients);
+  clientTable->setColumnCount(m_clients->columnCount());
+  clientTable->setRowCount(m_clients->rowCount());
+  QStringList headers;
+  for (int column = 0; column < m_clients->columnCount(); ++column)
+    headers.append(m_clients->horizontalHeaderItem(column)->text());
+  clientTable->setHorizontalHeaderLabels(headers);
+  for (int row = 0; row < m_clients->rowCount(); ++row) {
+    for (int column = 0; column < m_clients->columnCount(); ++column) {
+      const QTableWidgetItem* source = m_clients->item(row, column);
+      if (source != nullptr) clientTable->setItem(row, column, new QTableWidgetItem(*source));
+    }
+  }
+  clientTable->verticalHeader()->setVisible(false);
+  clientTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+  clientTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+  clients->layout()->addWidget(clientTable, 1);
+  note(clients, tr("<b>Examples:</b> Max active 3 blocks a fourth active download. Min free 20 GiB preserves a fixed reserve. "
+                   "Target free 10% scales with disk size. Capacity is only a fallback when the client cannot report live space. "
+                   "Cleanup must remain off unless that client's list/removal capability has been tested."));
+
+  QWizardPage* rules = page(tr("4. RSS matching rules"),
+    tr("Rules decide which feed items automation may process and which clients they may use."));
+  auto* ruleList = new QListWidget(rules);
+  const auto refreshWizardRules = [this, ruleList]() {
+    ruleList->clear();
+    for (const TorrentAutomationRule& rule : std::as_const(m_config.rules)) {
+      auto* item = new QListWidgetItem(rule.name.isEmpty() ? tr("Unnamed rule") : rule.name, ruleList);
+      item->setCheckState(rule.enabled ? Qt::Checked : Qt::Unchecked);
+      item->setToolTip(tr("Required: %1\nExcluded: %2\nTitle expression: %3\nAllowed clients: %4")
+        .arg(rule.requiredText.isEmpty() ? tr("any") : rule.requiredText,
+             rule.excludedText.isEmpty() ? tr("none") : rule.excludedText,
+             rule.titleRegularExpression.isEmpty() ? tr("none") : rule.titleRegularExpression,
+             rule.clientIds.isEmpty() ? tr("any enabled client") : rule.clientIds.join(QStringLiteral(", "))));
+    }
+  };
+  refreshWizardRules();
+  rules->layout()->addWidget(ruleList, 1);
+  auto* ruleButtons = new QHBoxLayout();
+  auto* addRuleButton = new QPushButton(tr("Add rule…"), rules);
+  auto* editRuleButton = new QPushButton(tr("Edit selected…"), rules);
+  auto* removeRuleButton = new QPushButton(tr("Remove selected"), rules);
+  ruleButtons->addWidget(addRuleButton); ruleButtons->addWidget(editRuleButton); ruleButtons->addWidget(removeRuleButton); ruleButtons->addStretch();
+  static_cast<QVBoxLayout*>(rules->layout())->addLayout(ruleButtons);
+  note(rules, tr("<b>Example:</b> Required text <i>1080p</i>, excluded text <i>CAM</i>, and an allowed-client selection. "
+                 "Leave a field empty when you do not want that restriction. Rules are checked from top to bottom."));
+  connect(addRuleButton, &QPushButton::clicked, &wizard, [this, refreshWizardRules]() { addRule(); refreshWizardRules(); });
+  connect(editRuleButton, &QPushButton::clicked, &wizard, [this, ruleList, refreshWizardRules]() {
+    if (ruleList->currentRow() < 0) return;
+    m_rules->setCurrentRow(ruleList->currentRow()); editRule(); refreshWizardRules();
+  });
+  connect(removeRuleButton, &QPushButton::clicked, &wizard, [this, ruleList, refreshWizardRules]() {
+    if (ruleList->currentRow() < 0) return;
+    m_rules->setCurrentRow(ruleList->currentRow()); removeRule(); refreshWizardRules();
+  });
+  connect(ruleList, &QListWidget::itemChanged, &wizard, [this, ruleList](QListWidgetItem* item) {
+    const int row = ruleList->row(item);
+    if (row >= 0 && row < m_config.rules.size()) m_config.rules[row].enabled = item->checkState() == Qt::Checked;
+  });
+
+  QWizardPage* retries = page(tr("5. Retries and request health"),
+    tr("Temporary faults can be retried without repeatedly hammering an unavailable seedbox."));
+  auto* retryForm = form(retries);
+  auto* retryEnabled = check(retries, tr("Retry temporary connection and capacity failures"), m_retryEnabled->isChecked(), tr("Authentication and permanent configuration failures are not retried."));
+  auto* retryAttempts = integer(retries, m_retryAttempts->value(), 0, 20, QString(), tr("Retries after the first attempt. Example: 3 means up to four total attempts."));
+  auto* retryInitial = integer(retries, m_retryInitialSeconds->value(), 1, 86400, tr(" seconds"), tr("Delay before the first retry."));
+  auto* retryMaximum = integer(retries, m_retryMaximumSeconds->value(), 1, 86400, tr(" seconds"), tr("Upper limit for later retry delays."));
+  auto* retryBackoff = check(retries, tr("Increase the delay after each failure"), m_retryBackoff->isChecked(), tr("Exponential backoff gives an unhealthy server time to recover."));
+  auto* requestTimeout = integer(retries, m_requestTimeoutSeconds->value(), 5, 300, tr(" seconds"), tr("Default client request timeout. Example: 15 seconds."));
+  retryForm->addRow(retryEnabled); retryForm->addRow(tr("Retries after first attempt:"), retryAttempts);
+  retryForm->addRow(tr("Initial delay:"), retryInitial); retryForm->addRow(tr("Maximum delay:"), retryMaximum);
+  retryForm->addRow(retryBackoff); retryForm->addRow(tr("Default request timeout:"), requestTimeout);
+  retries->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* maintenance = page(tr("6. Storage, duplicates and scheduling"),
+    tr("Keep RSS Guard's estimates aligned with live clients, protect unfinished downloads and isolate repeatedly failing clients."));
+  auto* maintenanceForm = form(maintenance);
+  auto* reconciliation = check(maintenance, tr("Reconcile managed storage with live torrent lists"), m_reconciliation->isChecked(), tr("Recommended when torrents can also be changed outside RSS Guard."));
+  auto* reserve = check(maintenance, tr("Reserve unfinished bytes"), m_reserveRemaining->isChecked(), tr("Prevents several simultaneous downloads from overcommitting disk space."));
+  auto* duplicates = check(maintenance, tr("Skip torrents already present on another client"), m_preventDuplicates->isChecked(), tr("Uses the magnet info hash when available."));
+  auto* reconciliationMinutes = integer(maintenance, m_reconciliationMinutes->value(), 1, 1440, tr(" minutes"), tr("Example: 30 minutes."));
+  auto* breaker = check(maintenance, tr("Temporarily sideline repeatedly failing clients"), m_circuitBreaker->isChecked(), tr("Other healthy clients continue to be considered."));
+  auto* breakerFailures = integer(maintenance, m_breakerFailures->value(), 1, 20, QString(), tr("Consecutive failures before cooldown."));
+  auto* breakerCooldown = integer(maintenance, m_breakerCooldown->value(), 1, 1440, tr(" minutes"), tr("How long to wait before recovery checks."));
+  auto* breakerRecovery = integer(maintenance, m_breakerRecoverySuccesses->value(), 1, 10, QString(), tr("Successful checks required before reuse."));
+  auto* schedule = check(maintenance, tr("Limit unattended routing to set hours"), m_schedule->isChecked(), tr("Outside the window, jobs wait in the persistent queue."));
+  auto* scheduleStart = hours(maintenance, m_scheduleStart->currentData().toInt(), false);
+  auto* scheduleEnd = hours(maintenance, m_scheduleEnd->currentData().toInt(), true);
+  auto* scheduleWidget = new QWidget(maintenance); auto* scheduleLayout = new QHBoxLayout(scheduleWidget);
+  scheduleLayout->setContentsMargins(0, 0, 0, 0); scheduleLayout->addWidget(scheduleStart); scheduleLayout->addWidget(new QLabel(tr("to"), scheduleWidget)); scheduleLayout->addWidget(scheduleEnd);
+  maintenanceForm->addRow(reconciliation); maintenanceForm->addRow(reserve); maintenanceForm->addRow(duplicates);
+  maintenanceForm->addRow(tr("Reconciliation interval:"), reconciliationMinutes); maintenanceForm->addRow(breaker);
+  maintenanceForm->addRow(tr("Failures before cooldown:"), breakerFailures); maintenanceForm->addRow(tr("Cooldown:"), breakerCooldown);
+  maintenanceForm->addRow(tr("Recovery checks:"), breakerRecovery); maintenanceForm->addRow(schedule); maintenanceForm->addRow(tr("Routing window:"), scheduleWidget);
+
+  QWizardPage* cleanup = page(tr("7. Safe cleanup"),
+    tr("Cleanup is optional and potentially destructive. Every enabled safeguard must pass before an RSS Guard-managed torrent can be removed."));
+  auto* cleanupForm = form(cleanup);
+  auto* cleanupEnabled = check(cleanup, tr("Enable automatic safe cleanup"), m_cleanup->isChecked(), tr("Leave off until dry-run cleanup outcomes have been reviewed."));
+  auto* deleteData = check(cleanup, tr("Also delete downloaded data"), m_deleteData->isChecked(), tr("Permanent and cannot be undone. Off removes only the torrent job."));
+  auto* confirmCleanup = check(cleanup, tr("Ask before every removal"), m_confirmCleanup->isChecked(), tr("Strongly recommended during setup."));
+  auto* seedEnabled = check(cleanup, tr("Require minimum completed/seeding age"), m_seedHoursEnabled->isChecked(), tr("Example: 168 hours is seven days."));
+  auto* seedHours = integer(cleanup, m_seedHours->value(), 0, 100000, tr(" hours"), tr("Minimum completed/seeding age."));
+  auto* ratioEnabled = check(cleanup, tr("Require minimum share ratio"), m_ratioEnabled->isChecked(), tr("Only torrents meeting the ratio can be considered."));
+  auto* ratio = decimal(cleanup, m_ratio->value(), 0.0, 1000.0, 2, QString(), tr("Example: 1.0 means uploaded as much as downloaded."));
+  auto* inactiveEnabled = check(cleanup, tr("Require minimum inactivity"), m_inactiveHoursEnabled->isChecked(), tr("Protect recently active torrents."));
+  auto* inactiveHours = integer(cleanup, m_inactiveHours->value(), 0, 100000, tr(" hours"), tr("Minimum time with no recent transfer activity."));
+  auto* maxEnabled = check(cleanup, tr("Limit removals per run"), m_maxRemovalsEnabled->isChecked(), tr("A hard safety cap; 1 is the safest starting value."));
+  auto* maxRemovals = integer(cleanup, m_maxRemovals->value(), 1, 25, QString(), tr("Maximum removals in one processing run."));
+  auto* stopEnabled = check(cleanup, tr("Stop at a target free-space level"), m_cleanupStopGbEnabled->isChecked(), tr("Cleanup stops after reaching this free-space target."));
+  auto* stopSpace = decimal(cleanup, m_cleanupStopGb->value(), 0.0, 1000000.0, 1, tr(" GiB"), tr("Example: 40 GiB."));
+  cleanupForm->addRow(cleanupEnabled); cleanupForm->addRow(deleteData); cleanupForm->addRow(confirmCleanup);
+  cleanupForm->addRow(seedEnabled, seedHours); cleanupForm->addRow(ratioEnabled, ratio);
+  cleanupForm->addRow(inactiveEnabled, inactiveHours); cleanupForm->addRow(maxEnabled, maxRemovals);
+  cleanupForm->addRow(stopEnabled, stopSpace);
+
+  QWizardPage* protection = page(tr("8. Cleanup protections and window"),
+    tr("Protect active, recently added or specially labelled torrents, and optionally restrict cleanup to a maintenance window."));
+  auto* protectionForm = form(protection);
+  auto* protectUploading = check(protection, tr("Protect torrents currently uploading"), m_protectUploading->isChecked(), tr("Skips torrents at or above the upload threshold."));
+  auto* uploadKib = integer(protection, m_protectUploadKib->value(), 1, 1048576, tr(" KiB/s"), tr("Per-torrent upload-speed threshold."));
+  auto* unknownSpeed = check(protection, tr("Protect when upload speed is unavailable"), m_protectUnknownSpeed->isChecked(), tr("Safest choice for limited client APIs."));
+  auto* recentUpload = integer(protection, m_protectRecentHours->value(), 0, 100000, tr(" hours"), tr("Protect after RSS Guard last observed upload activity; zero disables."));
+  auto* grace = check(protection, tr("Require a cleanup grace period"), m_cleanupGrace->isChecked(), tr("A candidate must remain eligible through a later check."));
+  auto* graceHours = integer(protection, m_cleanupGraceHours->value(), 1, 100000, tr(" hours"), tr("Minimum delay between candidate marking and removal."));
+  auto* smartOrder = check(protection, tr("Use smart cleanup ordering"), m_smartCleanup->isChecked(), tr("Ranks by age, recoverable size and ratio."));
+  auto* copiesEnabled = check(protection, tr("Keep completed copies across clients"), m_minimumCopiesEnabled->isChecked(), tr("Prevents cleanup from removing the last required completed copy."));
+  auto* copies = integer(protection, m_minimumCopies->value(), 1, 100, QString(), tr("Minimum completed copies retained."));
+  auto* tags = new QLineEdit(m_protectedTags->text(), protection); tags->setToolTip(tr("Comma-separated exact tags, for example: keep, archive"));
+  auto* trackers = new QLineEdit(m_protectedTrackers->text(), protection); trackers->setToolTip(tr("Comma-separated tracker text, for example: tracker.example"));
+  auto* cleanupSchedule = check(protection, tr("Restrict cleanup to set hours"), m_cleanupSchedule->isChecked(), tr("Outside the window, cleanup waits."));
+  auto* cleanupStart = hours(protection, m_cleanupScheduleStart->currentData().toInt(), false);
+  auto* cleanupEnd = hours(protection, m_cleanupScheduleEnd->currentData().toInt(), true);
+  auto* cleanupWindow = new QWidget(protection); auto* cleanupWindowLayout = new QHBoxLayout(cleanupWindow);
+  cleanupWindowLayout->setContentsMargins(0, 0, 0, 0); cleanupWindowLayout->addWidget(cleanupStart); cleanupWindowLayout->addWidget(new QLabel(tr("to"), cleanupWindow)); cleanupWindowLayout->addWidget(cleanupEnd);
+  auto* batch = decimal(protection, m_cleanupBatchPercent->value(), 0.0, 100.0, 1, tr(" %"), tr("Rounds the required space target upward; zero disables batch rounding."));
+  protectionForm->addRow(protectUploading, uploadKib); protectionForm->addRow(unknownSpeed);
+  protectionForm->addRow(tr("Protect after recent upload:"), recentUpload); protectionForm->addRow(grace, graceHours);
+  protectionForm->addRow(smartOrder); protectionForm->addRow(copiesEnabled, copies);
+  protectionForm->addRow(tr("Never remove tags:"), tags); protectionForm->addRow(tr("Never remove tracker text:"), trackers);
+  protectionForm->addRow(cleanupSchedule, cleanupWindow); protectionForm->addRow(tr("Cleanup space batch:"), batch);
+
+  QWizardPage* finish = page(tr("9. Review and finish"), tr("Press Finish to copy these choices into Torrent automation settings."));
+  note(finish, tr("After finishing, press <b>Apply</b> or <b>OK</b> in the main Settings window to save everything permanently.<br><br>"
+                  "Before live use: test every enabled client, run a dry test, inspect Simple and Activity, and use Check readiness for live automation. "
+                  "The wizard never sends a torrent or performs cleanup."));
+  auto* finishDry = new QLabel(finish); finishDry->setWordWrap(true); finish->layout()->addWidget(finishDry);
+  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finish, finishDry, dryRun, cleanupEnabled, deleteData](int id) {
+    if (id != finish->wizard()->currentId()) return;
+    finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Cleanup: %2 · Delete downloaded data: %3")
+      .arg(dryRun->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
+           cleanupEnabled->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
+           deleteData->isChecked() ? QObject::tr("ON") : QObject::tr("OFF")));
+  });
+  finish->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  if (wizard.exec() != QDialog::Accepted) {
+    m_config.rules = originalRules;
+    refreshRules();
+    return;
+  }
+
+  m_enabled->setChecked(enabled->isChecked()); m_dryRun->setChecked(dryRun->isChecked());
+  m_notifications->setChecked(notifications->isChecked()); m_historyLimit->setValue(history->value());
+  m_strategy->setCurrentIndex(m_strategy->findData(strategy->currentData()));
+  m_unknownSizeGb->setValue(unknownSize->value());
+  m_storageUnit->setCurrentIndex(m_storageUnit->findData(storageUnit->currentData()));
+  for (int row = 0; row < m_clients->rowCount(); ++row)
+    for (int column = 0; column < m_clients->columnCount(); ++column)
+      if (clientTable->item(row, column) != nullptr && m_clients->item(row, column) != nullptr)
+        *m_clients->item(row, column) = *clientTable->item(row, column);
+  m_retryEnabled->setChecked(retryEnabled->isChecked()); m_retryAttempts->setValue(retryAttempts->value());
+  m_retryInitialSeconds->setValue(retryInitial->value()); m_retryMaximumSeconds->setValue(retryMaximum->value());
+  m_retryBackoff->setChecked(retryBackoff->isChecked()); m_requestTimeoutSeconds->setValue(requestTimeout->value());
+  m_reconciliation->setChecked(reconciliation->isChecked()); m_reserveRemaining->setChecked(reserve->isChecked());
+  m_preventDuplicates->setChecked(duplicates->isChecked()); m_reconciliationMinutes->setValue(reconciliationMinutes->value());
+  m_circuitBreaker->setChecked(breaker->isChecked()); m_breakerFailures->setValue(breakerFailures->value());
+  m_breakerCooldown->setValue(breakerCooldown->value()); m_breakerRecoverySuccesses->setValue(breakerRecovery->value());
+  m_schedule->setChecked(schedule->isChecked()); m_scheduleStart->setCurrentIndex(m_scheduleStart->findData(scheduleStart->currentData()));
+  m_scheduleEnd->setCurrentIndex(m_scheduleEnd->findData(scheduleEnd->currentData()));
+  m_cleanup->setChecked(cleanupEnabled->isChecked()); m_deleteData->setChecked(deleteData->isChecked());
+  m_confirmCleanup->setChecked(confirmCleanup->isChecked()); m_seedHoursEnabled->setChecked(seedEnabled->isChecked());
+  m_seedHours->setValue(seedHours->value()); m_ratioEnabled->setChecked(ratioEnabled->isChecked()); m_ratio->setValue(ratio->value());
+  m_inactiveHoursEnabled->setChecked(inactiveEnabled->isChecked()); m_inactiveHours->setValue(inactiveHours->value());
+  m_maxRemovalsEnabled->setChecked(maxEnabled->isChecked()); m_maxRemovals->setValue(maxRemovals->value());
+  m_cleanupStopGbEnabled->setChecked(stopEnabled->isChecked()); m_cleanupStopGb->setValue(stopSpace->value());
+  m_protectUploading->setChecked(protectUploading->isChecked()); m_protectUploadKib->setValue(uploadKib->value());
+  m_protectUnknownSpeed->setChecked(unknownSpeed->isChecked()); m_protectRecentHours->setValue(recentUpload->value());
+  m_cleanupGrace->setChecked(grace->isChecked()); m_cleanupGraceHours->setValue(graceHours->value());
+  m_smartCleanup->setChecked(smartOrder->isChecked()); m_minimumCopiesEnabled->setChecked(copiesEnabled->isChecked());
+  m_minimumCopies->setValue(copies->value()); m_protectedTags->setText(tags->text()); m_protectedTrackers->setText(trackers->text());
+  m_cleanupSchedule->setChecked(cleanupSchedule->isChecked());
+  m_cleanupScheduleStart->setCurrentIndex(m_cleanupScheduleStart->findData(cleanupStart->currentData()));
+  m_cleanupScheduleEnd->setCurrentIndex(m_cleanupScheduleEnd->findData(cleanupEnd->currentData()));
+  m_cleanupBatchPercent->setValue(batch->value());
+  refreshRules(); updateCleanupControls(); dirtifySettings();
+  QMessageBox::information(this, tr("Setup wizard complete"),
+    tr("The wizard choices are now shown in Torrent automation settings. Press Apply or OK to save them, then run the dry test and readiness check before disabling Dry run."));
 }
 
 void SettingsTorrentAutomation::runDryTest() {

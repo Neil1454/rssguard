@@ -4,6 +4,8 @@ The Neil1454 Windows fork can automatically route torrent links from newly fetch
 
 Open **Tools > Settings > Torrent automation**. Automation is disabled by default. Enable **Dry run** first to record and display routing decisions without sending torrents.
 
+For a guided first-time setup, select **Start guided setup wizard**. The wizard covers every automation section in a safe order: basic safety, routing and size estimates, per-client limits, RSS matching rules, retries, storage and health maintenance, scheduling, cleanup thresholds, and cleanup protections. Each page explains the setting and gives examples where useful. Nothing is copied to the settings page until **Finish** is selected, and the main Settings window still requires **Apply** or **OK** before the choices are saved.
+
 ## Routing
 
 Available strategies are priority order, least busy, most free space, even round-robin, priority-biased distribution and balanced. A client must be enabled both in **Torrent clients** and in the automation client table. Per-client controls cover active downloads, aggregate download rate, managed torrent count, minimum free space, target free-space percentage, request timeout and retry count. Automation priority 1 is highest; it is separate from the notification-button order. Balanced routing scores the free-space ratio, active and queued downloads, aggregate download rate and configured priority.

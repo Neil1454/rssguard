@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 64 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 65 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 Confirm dry-run notification pop-ups use a prominent outcome heading, clean line-separated sections and an explicit **TEST ONLY** footer for sends, waits, duplicates, blocked routes and cleanup outcomes.
 
@@ -116,3 +116,11 @@ Do not replace the user's existing RSS Guard portable build until:
 3. At least one real instance of each supported client passes connection and send tests.
 4. Proxy-on and proxy-off behavior is packet/log verified.
 5. A copied `data5` profile opens safely in the separate test directory.
+
+## Build 65 setup-wizard checks
+
+- Open **Tools > Settings > Torrent automation** and select **Start guided setup wizard**.
+- Confirm Back/Next navigation covers safety, routing, client limits, rules, retries, maintenance, scheduling, cleanup and cleanup protections.
+- Change representative values, finish the wizard, and confirm the matching controls change on the main settings page.
+- Cancel a second wizard run after editing values and rules; confirm none of those cancelled changes remain.
+- Confirm finishing does not itself send a torrent, run cleanup or save until **Apply** or **OK** is selected.

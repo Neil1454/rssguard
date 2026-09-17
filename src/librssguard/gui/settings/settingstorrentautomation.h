@@ -55,6 +55,7 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     void exportActivity();
     void clearActivity();
     void changeStorageUnit(int index);
+    void runSetupWizard();
 
   private:
     TorrentAutomationRule editRuleDialog(const TorrentAutomationRule& initial, bool* accepted);

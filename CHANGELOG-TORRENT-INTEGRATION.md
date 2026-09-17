@@ -1,5 +1,12 @@
 # Torrent integration changelog
 
+## Build 65
+
+- Added a complete step-by-step Torrent automation setup wizard.
+- Covers safety and dry-run mode, routing, size estimates, every per-client limit, RSS rules, retries, maintenance, scheduling, cleanup thresholds and cleanup protections.
+- Adds plain-language explanations, practical examples, a final safety summary and explicit Apply/OK guidance.
+- Wizard cancellation restores the original RSS rules and applies no other choices.
+
 ## Build 64
 
 - Reworked dry-run notifications into short, strongly labelled outcome cards with separate torrent, destination, reason and live-behaviour sections.
