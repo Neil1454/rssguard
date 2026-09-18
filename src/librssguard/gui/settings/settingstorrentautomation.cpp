@@ -36,6 +36,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QMessageBox>
+#include <QPalette>
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
@@ -144,7 +145,8 @@ namespace {
     PresetSafeTest = 1,
     PresetBalanced = 2,
     PresetThirtyDay = 3,
-    PresetLongSeed = 4
+    PresetQuickTurnaround = 4,
+    PresetLongSeed = 5
   };
 
   QString quickPresetName(int preset) {
@@ -152,6 +154,7 @@ namespace {
       case PresetSafeTest: return QObject::tr("Safety-first test only");
       case PresetBalanced: return QObject::tr("Balanced protected automation");
       case PresetThirtyDay: return QObject::tr("30-day automatic rotation");
+      case PresetQuickTurnaround: return QObject::tr("Quick turnaround — 3-day seed / 7-day limit");
       case PresetLongSeed: return QObject::tr("Long-term seeding");
       default: return QObject::tr("Choose a preset…");
     }
@@ -178,6 +181,12 @@ namespace {
         keeps = QObject::tr("Protected tags, protected tracker text and minimum-copy protection still win. Confirmation and Dry run are enabled, and client-specific settings and RSS rules are preserved.");
         risk = QObject::tr("After Dry run is disabled, expired torrent jobs and their downloaded files can be permanently deleted.");
         break;
+      case PresetQuickTurnaround:
+        title = QObject::tr("Short seeding and faster space recovery for a steady flow of new releases");
+        does = QObject::tr("Makes storage-pressure cleanup eligible after 72 hours completed, ratio 0.5 and 6 hours inactive; keeps cleaning until 60 GiB is free; uses a 6-hour grace period; and can remove up to three torrents per run. A firm 168-hour (7-day) deadline removes completed managed torrents even when space is healthy.");
+        keeps = QObject::tr("Active and unknown uploads, uploads seen within 6 hours, protected tags/trackers and minimum-copy protection are retained before the deadline. Confirmation and Dry run start enabled. Clients, per-client capacities and RSS rules are preserved.");
+        risk = QObject::tr("This is deliberately aggressive. A 0.5 ratio or 7-day firm deadline may be too short for private-tracker rules, bonus goals or slow swarms. At the deadline, upload and ratio delays no longer postpone removal. Once Dry run is disabled and a deletion is approved, the torrent job and downloaded files can be permanently deleted.");
+        break;
       case PresetLongSeed:
         title = QObject::tr("Keep torrents seeding for longer");
         does = QObject::tr("Requires 30 days completed, ratio 2.0 and 72 hours inactive for storage cleanup. A non-firm 90-day retention trigger is enabled, so normal activity protections may postpone removal. It uses a 48-hour grace period and one removal per run.");
@@ -192,6 +201,17 @@ namespace {
         .arg(title, does, keeps, risk);
     return QObject::tr("%1\n\nWhat it sets: %2\n\nWhat it keeps: %3\n\nRisk: %4\n\nSafety: Every preset starts with Dry run ON.")
       .arg(title, does, keeps, risk);
+  }
+
+  QString informationCardStyle(const QPalette& palette, const QString& objectName) {
+    const bool dark = palette.color(QPalette::Window).lightness() < 128 ||
+                      palette.color(QPalette::Base).lightness() < 128;
+    const QString background = dark ? QStringLiteral("#26364F") : QStringLiteral("#EAF2FF");
+    const QString foreground = dark ? QStringLiteral("#F5F8FC") : QStringLiteral("#17243D");
+    const QString border = dark ? QStringLiteral("#6F8FB8") : QStringLiteral("#9DB4D3");
+    return QStringLiteral("QLabel#%1 { background: %2; color: %3; border: 1px solid %4; "
+                          "border-radius: 8px; padding: 12px; }")
+      .arg(objectName, background, foreground, border);
   }
 }
 
@@ -238,7 +258,7 @@ void SettingsTorrentAutomation::loadUi() {
   auto* presetDetail = new QLabel(quickPresetDetail(PresetCustom), presetBox);
   presetDetail->setWordWrap(true); presetDetail->setTextFormat(Qt::RichText);
   presetDetail->setObjectName(QStringLiteral("quickPresetDetail"));
-  presetDetail->setStyleSheet(QStringLiteral("QLabel#quickPresetDetail { background: palette(alternate-base); border: 1px solid palette(mid); border-radius: 6px; padding: 10px; }"));
+  presetDetail->setStyleSheet(informationCardStyle(presetDetail->palette(), QStringLiteral("quickPresetDetail")));
   applyPreset->setEnabled(false);
   presetRow->addWidget(presetChoice, 1); presetRow->addWidget(applyPreset);
   presetLayout->addLayout(presetRow); presetLayout->addWidget(presetDetail);
@@ -1388,6 +1408,18 @@ void SettingsTorrentAutomation::applyQuickPreset(int preset) {
     m_retentionHours->setValue(720);
     m_retentionStrict->setChecked(true);
   }
+  else if (preset == PresetQuickTurnaround) {
+    m_seedHours->setValue(72);
+    m_ratio->setValue(0.5);
+    m_inactiveHours->setValue(6);
+    m_cleanupStopGb->setValue(60.0);
+    m_protectRecentHours->setValue(6);
+    m_cleanupGraceHours->setValue(6);
+    m_maxRemovals->setValue(3);
+    m_retentionEnabled->setChecked(true);
+    m_retentionHours->setValue(168);
+    m_retentionStrict->setChecked(true);
+  }
   else if (preset == PresetLongSeed) {
     m_seedHours->setValue(720);
     m_ratio->setValue(2.0);
@@ -1415,19 +1447,36 @@ void SettingsTorrentAutomation::runSetupWizard() {
   wizard.setButtonText(QWizard::CancelButton, tr("Cancel without changes"));
   wizard.setButtonText(QWizard::HelpButton, tr("Explain this page"));
   wizard.setMinimumSize(980, 720);
+  const QPalette wizardPalette = wizard.palette();
+  const bool darkWizard = wizardPalette.color(QPalette::Window).lightness() < 128 ||
+                          wizardPalette.color(QPalette::Base).lightness() < 128;
+  const QString pageBackground = wizardPalette.color(QPalette::Window).name();
+  const QString pageText = wizardPalette.color(QPalette::WindowText).name();
+  const QString fieldBackground = wizardPalette.color(QPalette::Base).name();
+  const QString border = darkWizard ? QStringLiteral("#71829A") : QStringLiteral("#AAB6C5");
+  const QString noteBackground = darkWizard ? QStringLiteral("#26364F") : QStringLiteral("#EAF2FF");
+  const QString noteText = darkWizard ? QStringLiteral("#F5F8FC") : QStringLiteral("#17243D");
+  const QString noteBorder = darkWizard ? QStringLiteral("#6F8FB8") : QStringLiteral("#9DB4D3");
+  const QString warningBackground = darkWizard ? QStringLiteral("#4A3B12") : QStringLiteral("#FFF1C7");
+  const QString warningText = darkWizard ? QStringLiteral("#FFF0A6") : QStringLiteral("#543B00");
+  const QString warningBorder = darkWizard ? QStringLiteral("#C59D35") : QStringLiteral("#D3A72E");
   wizard.setStyleSheet(QStringLiteral(
-    "QWizard { background: palette(base); }"
-    "QWizardPage { background: palette(base); }"
-    "QWizardPage QLabel#wizardNote { background: palette(alternate-base); border: 1px solid palette(mid); "
+    "QWizard, QWizardPage { background: %1; color: %2; }"
+    "QWizardPage QLabel, QWizardPage QCheckBox, QWizardPage QRadioButton { color: %2; }"
+    "QWizardPage QLabel#wizardNote { background: %3; color: %4; border: 1px solid %5; "
     "  border-radius: 8px; padding: 12px; margin-top: 6px; }"
-    "QWizardPage QLabel#wizardWarning { background: #fff4d6; color: #5c4300; border: 1px solid #e0b84f; "
+    "QWizardPage QLabel#wizardWarning { background: %6; color: %7; border: 1px solid %8; "
     "  border-radius: 8px; padding: 12px; font-weight: 600; }"
-    "QWizardPage QGroupBox { font-weight: 600; border: 1px solid palette(mid); border-radius: 8px; "
+    "QWizardPage QGroupBox { color: %2; font-weight: 600; border: 1px solid %9; border-radius: 8px; "
     "  margin-top: 12px; padding: 12px 8px 8px 8px; }"
-    "QWizardPage QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }"
+    "QWizardPage QGroupBox::title { background: %1; subcontrol-origin: margin; left: 12px; padding: 0 5px; }"
+    "QWizardPage QLineEdit, QWizardPage QComboBox, QWizardPage QSpinBox, QWizardPage QDoubleSpinBox, "
+    "QWizardPage QTableWidget { background: %10; color: %2; border: 1px solid %9; }"
     "QWizard QPushButton { min-height: 28px; padding-left: 12px; padding-right: 12px; }"
     "QWizard QCheckBox { spacing: 8px; min-height: 24px; }"
-    "QWizard QLineEdit, QWizard QSpinBox, QWizard QDoubleSpinBox, QWizard QComboBox { min-height: 26px; }"));
+    "QWizard QLineEdit, QWizard QSpinBox, QWizard QDoubleSpinBox, QWizard QComboBox { min-height: 26px; }"
+  ).arg(pageBackground).arg(pageText).arg(noteBackground).arg(noteText).arg(noteBorder)
+    .arg(warningBackground).arg(warningText).arg(warningBorder).arg(border).arg(fieldBackground));
 
   QHash<int, QString> detailedHelp;
 
@@ -1892,6 +1941,12 @@ void SettingsTorrentAutomation::runSetupWizard() {
         seedHours->setValue(168); ratio->setValue(1.0); inactiveHours->setValue(24);
         graceHours->setValue(24); retentionEnabled->setChecked(true);
         retentionHours->setValue(720); retentionStrict->setChecked(true);
+      }
+      else if (preset == PresetQuickTurnaround) {
+        seedHours->setValue(72); ratio->setValue(0.5); inactiveHours->setValue(6);
+        stopSpace->setValue(60.0); recentUpload->setValue(6); graceHours->setValue(6);
+        maxRemovals->setValue(3); retentionEnabled->setChecked(true);
+        retentionHours->setValue(168); retentionStrict->setChecked(true);
       }
       else if (preset == PresetLongSeed) {
         seedHours->setValue(720); ratio->setValue(2.0); inactiveHours->setValue(72);

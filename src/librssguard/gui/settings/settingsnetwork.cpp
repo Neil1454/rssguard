@@ -18,6 +18,7 @@
 #include <QInputDialog>
 #include <QElapsedTimer>
 #include <QFormLayout>
+#include <QHostAddress>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -27,7 +28,9 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPushButton>
+#include <QSharedPointer>
 #include <QTimer>
+#include <QVBoxLayout>
 
 SettingsNetwork::SettingsNetwork(Settings* settings, QWidget* parent)
   : SettingsPanel(settings, parent), m_ui(nullptr) {}
@@ -42,14 +45,23 @@ void SettingsNetwork::loadUi() {
 
   m_ui->m_tabBrowserProxy->insertTab(2, m_proxyDetails, tr("Network proxy"));
   auto* testRow = new QWidget(m_proxyDetails);
-  auto* testLayout = new QHBoxLayout(testRow);
+  auto* testLayout = new QVBoxLayout(testRow);
   testLayout->setContentsMargins(0, 0, 0, 0);
+  auto* testControls = new QHBoxLayout();
   m_proxyTestResult = new QLabel(tr("Not tested"), testRow);
   m_proxyTestResult->setWordWrap(true);
-  m_testProxy = new QPushButton(tr("Test proxy connection"), testRow);
-  m_testProxy->setToolTip(tr("Connect to a public IP-check service using exactly the proxy details currently shown. The password is never displayed."));
-  testLayout->addWidget(m_proxyTestResult, 1);
-  testLayout->addWidget(m_testProxy);
+  m_testProxy = new QPushButton(tr("Run proxy privacy check"), testRow);
+  m_testProxy->setToolTip(tr("Makes one request through the shown proxy and one deliberate direct control request, then compares their public IP addresses. No torrent data or credentials are sent."));
+  testControls->addWidget(m_proxyTestResult, 1);
+  testControls->addWidget(m_testProxy);
+  testLayout->addLayout(testControls);
+  auto* privacyScope = new QLabel(
+    tr("<b>What this can prove:</b> whether this RSS Guard network request reached the test service through a different public IP. "
+       "<b>What it cannot prove:</b> freedom from operating-system DNS leaks, browser/WebEngine leaks, or torrent peer-traffic leaks. "
+       "A torrent client's downloads and uploads use that client's own proxy/VPN settings, not this RSS Guard setting."), testRow);
+  privacyScope->setWordWrap(true);
+  privacyScope->setTextFormat(Qt::RichText);
+  testLayout->addWidget(privacyScope);
   if (auto* proxyLayout = qobject_cast<QFormLayout*>(m_proxyDetails->layout())) proxyLayout->insertRow(2, testRow);
 
   connect(m_ui->m_cbFollowHyperlinks, &QCheckBox::STATE_CHANGED, this, &SettingsNetwork::dirtifySettings);
@@ -79,44 +91,102 @@ void SettingsNetwork::testProxyConnection() {
     return;
   }
 
+  const QString testDisclosure = tr(
+    "This privacy check contacts api.ipify.org twice: once through the proxy shown here and once using an intentional direct connection. "
+    "The service will see each request's public IP and ordinary HTTPS connection metadata. The direct control request is necessary to detect whether the proxy changes the visible address.\n\n"
+    "Continue?");
+  if (QMessageBox::question(this, tr("Run proxy privacy check?"), testDisclosure,
+                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+
   m_testProxy->setEnabled(false);
-  m_proxyTestResult->setText(tr("Testing…"));
-  auto* manager = new QNetworkAccessManager(this);
-  manager->setProxy(proxy);
-  QNetworkRequest request(QUrl(QStringLiteral("https://api.ipify.org")));
-  request.setRawHeader("Accept", "text/plain");
-  QNetworkReply* reply = manager->get(request);
-  auto* timer = new QElapsedTimer();
-  timer->start();
-  QTimer::singleShot(15000, reply, [reply]() {
-    if (reply->isRunning()) reply->abort();
-  });
-  connect(reply, &QNetworkReply::finished, this, [this, reply, manager, timer, proxy]() {
-    const qint64 elapsed = timer->elapsed();
-    delete timer;
-    const QByteArray body = reply->readAll().trimmed();
-    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const bool success = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300 && !body.isEmpty();
-    const QString type = proxy.type() == QNetworkProxy::Socks5Proxy ? QStringLiteral("SOCKS5")
-                       : proxy.type() == QNetworkProxy::HttpProxy ? QStringLiteral("HTTP")
-                       : proxy.type() == QNetworkProxy::NoProxy ? tr("Direct connection") : tr("System proxy");
-    QString result;
-    if (success) {
-      result = tr("Connected via %1 in %2 ms. Public IP: %3")
-                 .arg(type).arg(elapsed).arg(QString::fromUtf8(body).toHtmlEscaped());
-      m_proxyTestResult->setText(QStringLiteral("✓ %1").arg(result));
-      QMessageBox::information(this, tr("Proxy test successful"), result);
-    }
-    else {
-      result = tr("%1 test failed after %2 ms: %3")
-                 .arg(type).arg(elapsed).arg(reply->errorString());
-      m_proxyTestResult->setText(QStringLiteral("✗ %1").arg(result));
-      QMessageBox::warning(this, tr("Proxy test failed"), result);
-    }
-    m_testProxy->setEnabled(true);
-    reply->deleteLater();
-    manager->deleteLater();
-  });
+  m_proxyTestResult->setText(tr("Testing proxied and direct paths…"));
+
+  struct PathResult {
+    bool success = false;
+    QString address;
+    QString error;
+    qint64 elapsed = 0;
+  };
+  struct TestState {
+    PathResult proxied;
+    PathResult direct;
+    int completed = 0;
+  };
+  auto state = QSharedPointer<TestState>::create();
+  auto* proxyManager = new QNetworkAccessManager(this);
+  auto* directManager = new QNetworkAccessManager(this);
+  proxyManager->setProxy(proxy);
+  directManager->setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+
+  const QString type = proxy.type() == QNetworkProxy::Socks5Proxy ? QStringLiteral("SOCKS5")
+                     : proxy.type() == QNetworkProxy::HttpProxy ? QStringLiteral("HTTP")
+                     : proxy.type() == QNetworkProxy::NoProxy ? tr("Direct connection") : tr("System proxy");
+  const auto startRequest = [this, state, proxyManager, directManager, type]
+                            (QNetworkAccessManager* manager, bool proxied) {
+    QNetworkRequest request(QUrl(QStringLiteral("https://api.ipify.org")));
+    request.setRawHeader("Accept", "text/plain");
+    QNetworkReply* reply = manager->get(request);
+    auto* timer = new QElapsedTimer();
+    timer->start();
+    QTimer::singleShot(15000, reply, [reply]() {
+      if (reply->isRunning()) reply->abort();
+    });
+    connect(reply, &QNetworkReply::finished, this,
+            [this, state, proxyManager, directManager, type, reply, timer, proxied]() {
+      PathResult& result = proxied ? state->proxied : state->direct;
+      result.elapsed = timer->elapsed();
+      delete timer;
+      const QByteArray body = reply->readAll().trimmed();
+      QHostAddress parsedAddress;
+      const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      result.success = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300 &&
+                       parsedAddress.setAddress(QString::fromUtf8(body));
+      if (result.success) result.address = parsedAddress.toString();
+      else result.error = reply->error() == QNetworkReply::NoError
+                            ? tr("The IP-check service returned an invalid response.") : reply->errorString();
+      reply->deleteLater();
+      if (++state->completed < 2) return;
+
+      QString heading;
+      QString detail;
+      QMessageBox::Icon icon = QMessageBox::Warning;
+      if (!state->proxied.success) {
+        heading = tr("Proxy path failed");
+        detail = tr("The %1 request did not reach the public test service: %2\n\nThe proxy cannot be confirmed from this test.")
+                   .arg(type, state->proxied.error);
+        icon = QMessageBox::Critical;
+      }
+      else if (!state->direct.success) {
+        heading = tr("Proxy works; comparison incomplete");
+        detail = tr("Proxied public IP: %1 (%2 ms)\nDirect control request failed: %3\n\nThe proxy path works, but its address could not be compared with the normal public address.")
+                   .arg(state->proxied.address).arg(state->proxied.elapsed).arg(state->direct.error);
+      }
+      else if (state->proxied.address != state->direct.address) {
+        heading = tr("Public-IP check passed");
+        detail = tr("Proxied public IP: %1 (%2 ms)\nDirect public IP: %3 (%4 ms)\n\nThe test service saw a different address through %5. This confirms this RSS Guard request used a different public route.")
+                   .arg(state->proxied.address).arg(state->proxied.elapsed)
+                   .arg(state->direct.address).arg(state->direct.elapsed).arg(type);
+        icon = QMessageBox::Information;
+      }
+      else {
+        heading = tr("Public IP did not change");
+        detail = tr("Both paths showed %1. The proxy may be local/transparent, may exit through the same public address, or may not be providing the privacy expected.")
+                   .arg(state->proxied.address);
+      }
+
+      detail += tr("\n\nNot tested: operating-system DNS queries, WebEngine/WebRTC behaviour, external links opened by another browser, or torrent peer traffic inside your torrent client. HTTPS hides page content from the proxy, but the proxy operator can still know your account/address, connection times and destination hosts. Configure and test the torrent client's own proxy or VPN separately.");
+      m_proxyTestResult->setText(QStringLiteral("%1 %2 — %3")
+        .arg(icon == QMessageBox::Information ? QStringLiteral("✓") : QStringLiteral("⚠"), heading,
+             state->proxied.success ? tr("proxy IP %1").arg(state->proxied.address) : state->proxied.error));
+      QMessageBox message(icon, heading, detail, QMessageBox::Ok, this);
+      message.exec();
+      m_testProxy->setEnabled(true);
+      proxyManager->deleteLater();
+      directManager->deleteLater();
+    });
+  };
+  startRequest(proxyManager, true);
+  startRequest(directManager, false);
 }
 
 SettingsNetwork::~SettingsNetwork() {

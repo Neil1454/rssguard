@@ -11,7 +11,7 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 68 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 69 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
 On a clean profile, confirm the first-launch welcome credits Martin Rotter as the original application creator and Neil Sampson with `Neil1454@yahoo.com` for the torrent-related feature concept, direction and design. Confirm the same separate, non-replacing credits appear under **Help > About application**.
 
@@ -77,7 +77,7 @@ Client-specific checks:
 - Cleanup switches: each of the five cleanup controls can be disabled independently; enabled eligibility controls are ANDed; disabled removal limit still stops at the internal 25-item cap.
 - Manual dry test: evaluates the latest fetched items including already-processed ones; names the matched/unmatched rule; reports every client's status/restriction and selected destination; lists every torrent that would be removed and every protected/skipped torrent with its exact settings-based reason; simulates enough removals to reach the configured target; and performs no add, remove, data-delete, queue, grace-mark, processed-marker, reconciliation or client-health-state write.
 - Unknown-size reservation: magnet `xl` is honoured and links without a declared size reserve the configured fallback.
-- Proxy test: correct, incorrect, timed-out and authenticated SOCKS5/HTTP proxy settings report clear results without exposing credentials.
+- Proxy privacy check: correct, incorrect, timed-out and authenticated SOCKS5/HTTP proxy settings report clear proxied/direct results without exposing credentials; the disclosure and result accurately limit what the test proves.
 - Theme toggle: the top-right control switches immediately between bundled minimal-light and minimal-dark skins and persists the selection.
 - Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
 - Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
@@ -152,3 +152,14 @@ Do not replace the user's existing RSS Guard portable build until:
 - On the General tab, review each Quick Set preset and confirm its exact behaviour, preserved settings and deletion risk are shown before Apply is available.
 - Apply each preset and confirm Dry run is always on, client rows and RSS rules are unchanged, and the documented cleanup/retention values are filled correctly.
 - Repeat from the wizard's optional Quick Set page; confirm later pages reflect the preset, remain editable, and cancelling the wizard leaves the main settings unchanged.
+
+## Build 69 accessibility, turnaround and proxy-privacy checks
+
+- Open the wizard with every bundled light and dark theme and confirm ordinary text, blue information cards, amber warning cards, group titles and form fields remain clearly readable, including the welcome page shown in the reported screenshot.
+- Confirm the General tab's Quick Set explanation card is equally readable in light and dark themes.
+- Select **Quick turnaround — 3-day seed / 7-day limit** on the General tab and in the wizard. Confirm the review explains the exact 72-hour, ratio 0.5, 6-hour, 60 GiB, three-removal and 168-hour choices before applying.
+- Confirm applying the preset leaves Dry run and confirmation on, enables downloaded-data deletion, preserves clients and RSS rules, and fills the same values in both interfaces.
+- Confirm its warning explains private-tracker risk and that a firm deadline can override ratio and upload-activity delays while protected tags, trackers and minimum-copy protection still win.
+- With a working SOCKS5 proxy, run the privacy check, approve the disclosed direct control request and confirm different valid proxied/direct addresses produce a pass.
+- Repeat with invalid proxy details, a same-exit proxy and a blocked direct path; confirm these are respectively reported as failed, warning and comparison-incomplete rather than a false pass.
+- Confirm the result states that OS DNS, WebEngine/WebRTC, external browsers and the torrent client's own peer traffic are outside this test, and that no torrent data or proxy password is displayed or sent to the IP-check service.

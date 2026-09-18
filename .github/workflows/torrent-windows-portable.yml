@@ -11,7 +11,7 @@ jobs:
   windows-portable:
     runs-on: windows-2022
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Check out source and submodules
         uses: actions/checkout@v7
@@ -24,9 +24,17 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Supply package version for fork builds
+      - name: Read torrent build number and supply package version
         shell: pwsh
-        run: git tag 5.2.6-torrent-build67
+        run: |
+          $cmake = Get-Content "src/librssguard/CMakeLists.txt" -Raw
+          if ($cmake -notmatch 'TORRENT_FORK_BUILD="([0-9]+)"') {
+            throw "TORRENT_FORK_BUILD was not found."
+          }
+          $build = $Matches[1]
+          "TORRENT_BUILD=$build" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TORRENT_TAG=torrent-build-$build" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          git tag "5.2.6-torrent-build$build"
 
       - name: Build Qt 6 WebEngine package
         shell: pwsh
@@ -40,9 +48,65 @@ jobs:
         shell: pwsh
         run: .\resources\scripts\github-actions\package-windows.ps1 "windows-2022" "OFF" "ON"
 
+      - name: Prepare friendly release files and detailed notes
+        shell: pwsh
+        run: |
+          $source = Get-ChildItem ".\rssguard-build\rssguard-*-web-qt6-win10.7z" | Select-Object -First 1
+          if (-not $source) { throw "Portable archive was not created." }
+          $releaseDirectory = ".\rssguard-release"
+          New-Item -ItemType Directory -Force -Path $releaseDirectory | Out-Null
+          $releaseName = "RSSGuard-Torrent-Build-$env:TORRENT_BUILD-Windows-x64.7z"
+          $releasePath = Join-Path $releaseDirectory $releaseName
+          Copy-Item $source.FullName $releasePath
+          $hash = (Get-FileHash $releasePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $releaseName" | Set-Content (Join-Path $releaseDirectory "$releaseName.sha256") -Encoding ascii
+
+          $changelog = Get-Content "CHANGELOG-TORRENT-INTEGRATION.md" -Raw
+          $pattern = "(?ms)^## Build $env:TORRENT_BUILD\s*(.*?)(?=^## |\z)"
+          $details = if ($changelog -match $pattern) { $Matches[1].Trim() } else { "See the torrent integration changelog for details." }
+          @"
+          # RSS Guard Torrent Build $env:TORRENT_BUILD
+
+          Windows 10/11 x64 portable test build using Qt 6 WebEngine.
+
+          ## Changes
+
+          $details
+
+          ## Download and use
+
+          1. Download **$releaseName** from Assets below.
+          2. Extract it into a new folder.
+          3. Run the RSS Guard executable from that folder.
+          4. Keep **Dry run** enabled while checking torrent automation settings.
+
+          This is a test candidate rather than an upstream stable RSS Guard release. Back up your existing profile before replacing another copy. Torrent features must only be used for lawful purposes.
+
+          Source commit: $env:GITHUB_SHA
+          "@ | Set-Content (Join-Path $releaseDirectory "release-notes.md") -Encoding utf8
+
       - name: Upload portable archive
         uses: actions/upload-artifact@v7
         with:
           name: RSSGuard-Torrent-Test
           if-no-files-found: error
-          path: .\rssguard-build\rssguard-*-web-qt6-win10.7z
+          path: |
+            .\rssguard-release\RSSGuard-Torrent-Build-*-Windows-x64.7z
+            .\rssguard-release\RSSGuard-Torrent-Build-*-Windows-x64.7z.sha256
+
+      - name: Publish permanent GitHub pre-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $archive = Get-ChildItem ".\rssguard-release\RSSGuard-Torrent-Build-*-Windows-x64.7z" | Select-Object -First 1
+          $checksum = Get-ChildItem ".\rssguard-release\RSSGuard-Torrent-Build-*-Windows-x64.7z.sha256" | Select-Object -First 1
+          $notes = ".\rssguard-release\release-notes.md"
+          $existing = gh release view $env:TORRENT_TAG --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TORRENT_TAG $archive.FullName $checksum.FullName --clobber --repo $env:GITHUB_REPOSITORY
+            gh release edit $env:TORRENT_TAG --title "RSS Guard Torrent Build $env:TORRENT_BUILD" --notes-file $notes --prerelease --repo $env:GITHUB_REPOSITORY
+          }
+          else {
+            gh release create $env:TORRENT_TAG $archive.FullName $checksum.FullName --target $env:GITHUB_SHA --title "RSS Guard Torrent Build $env:TORRENT_BUILD" --notes-file $notes --prerelease --repo $env:GITHUB_REPOSITORY
+          }

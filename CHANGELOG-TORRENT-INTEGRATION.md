@@ -1,5 +1,14 @@
 # Torrent integration changelog
 
+## Build 69
+
+- Redesigned the setup wizard's information, warning, form and group-box colours as matched high-contrast light/dark palettes, preventing theme-provided navy cards from displaying unreadable black text.
+- Applied the same accessible information-card treatment to Quick Set on the main General tab.
+- Added a fully explained **Quick turnaround — 3-day seed / 7-day limit** preset to both Quick Set locations. It uses a 72-hour seed age, 0.5 ratio, 6-hour inactivity and grace periods, 60 GiB cleanup target, three-removal limit and firm 7-day retention deadline while starting in Dry run with confirmation enabled.
+- Added explicit warnings that quick turnaround can conflict with private-tracker ratio/seed-time requirements and can permanently delete downloaded data after review and live-mode approval.
+- Expanded the network proxy test into a consent-based privacy check that compares proxied and deliberate direct public-IP results, validates returned addresses, distinguishes failures from inconclusive comparisons and clearly explains DNS, WebEngine and torrent-client traffic that it cannot test.
+- Added automatic, permanent GitHub pre-releases with a friendly Windows archive name, SHA-256 checksum, detailed build notes, installation/testing guidance and source commit reference. GitHub Actions artifacts remain available as temporary CI records.
+
 ## Build 68
 
 - Added Neil Sampson's name and contact email as the torrent-feature contributor on the first-ever launch message, About information, Windows executable details and project documentation without altering Martin Rotter's original creator/copyright credit.

@@ -18,6 +18,8 @@ Successful-send dialogs can be disabled either from the dialog itself or with **
 
 Manual sending remains available independently. The optional **Torrent automation** settings section can also route newly fetched matching entries automatically or simulate its decisions in dry-run mode.
 
+The app-wide Network proxy page includes a consent-based privacy check. It compares one request through the currently shown proxy with one deliberately direct control request and reports both validated public IP addresses. This confirms the route used by that RSS Guard request, but it cannot certify operating-system DNS, WebEngine/WebRTC, external-browser or torrent peer traffic. Torrent downloads and uploads occur in the separate torrent client and require that client's own proxy or VPN configuration and testing.
+
 Clients can be retained but disabled, assigned a numbered display priority and colour, and checked together with **Test all enabled**. Colour placement is independently selectable for notification buttons, article context menus, and settings/automation lists. Enabled clients are numbered first; disabled clients appear greyed and unnumbered at the bottom. Only enabled clients appear in send menus and notification buttons, ordered with priority 1 first. Notification settings can preview the real article layout with or without the coloured torrent-client buttons.
 
 Notification torrent buttons have hover, pressed and in-progress feedback. After a complete successful send, the affected article row is shown with a green completed band and selection advances to the next unprocessed article. Partial or failed sends are not marked complete.
@@ -29,6 +31,7 @@ Successful destinations are saved per article and client. Green ticks are synchr
 **Tools > Settings > Torrent automation** adds an optional automation engine without changing the manual send workflow. It is disabled by default and starts in dry-run mode.
 
 - Routes newly fetched torrent items by priority, least-busy, most-space, round-robin, priority-biased, or balanced policy.
+- Provides explained Quick Set starting points on both the General tab and guided wizard, including a deliberately aggressive 3-day-seed/7-day-limit turnaround profile. Every preset starts in Dry run, preserves clients and RSS rules, and shows permanent-deletion and private-tracker risks before it can be applied.
 - Applies per-client active-download, aggregate-download-rate, managed-count, free-space, target-free-percentage, automation-priority, timeout/retry and fallback-capacity settings.
 - Displays and accepts storage limits in MiB, GiB or TiB. The selected unit applies to ordinary numbers, while explicit values such as `750 GiB` or `1.8 TiB` are converted automatically. Download-rate limits likewise accept MiB/s, GiB/s or TiB/s suffixes.
 - Adds **Process automatically** to notifications and the main article context menu. Manual approval displays blue/green/amber/red destination assessments, explains each result, and permits an explicit override of amber limits while keeping unavailable red clients blocked.
