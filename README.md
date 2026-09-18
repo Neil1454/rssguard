@@ -1,7 +1,7 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-67-blue)](CHANGELOG-TORRENT-INTEGRATION.md)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-69-blue)](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-69)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
@@ -15,11 +15,12 @@ The current application source is on **[`feature/torrent-automation`](https://gi
 
 ## Download and install
 
-1. Open the [Windows portable workflow](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml).
-2. Open the newest successful run on `feature/torrent-automation`.
-3. Download the **RSSGuard-Torrent-Test** artifact.
-4. Extract the downloaded ZIP, then extract the `.7z` archive inside it into a new folder.
-5. Run `rssguard.exe`.
+1. Open the permanent [Build 69 GitHub Release](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-69).
+2. Under **Assets**, download **RSSGuard-Torrent-Build-69-Windows-x64.7z**. The adjacent `.sha256` file is available for integrity checking.
+3. Extract the `.7z` archive into a new folder.
+4. Run `rssguard.exe`.
+
+The [GitHub Releases page](https://github.com/Neil1454/rssguard/releases) is the normal download location. Actions artifacts remain temporary CI records and are not required for ordinary downloading.
 
 The package is an unsigned **Windows 10/11 x64, Qt 6, WebEngine portable build**. Windows SmartScreen may warn because it is not code-signed. Do not extract it over an existing RSS Guard installation. This fork currently produces no custom installer, Linux package or macOS package.
 
