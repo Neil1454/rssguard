@@ -7,9 +7,9 @@
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 68**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 69**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 68 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 69 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -160,7 +160,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 68 — current candidate** | Adds Neil Sampson's torrent-feature credit to first launch, About, Windows file details and documentation; makes complete app import/export explicitly cover every torrent section; and expands portable torrent JSON transfer to include every non-secret client and automation option. |
+| **Build 69 — current candidate** | Fixes wizard and Quick Set colour contrast, adds the quick-turnaround preset and proxy privacy comparison, and publishes permanent documented GitHub Releases. |
+| **Build 68** | Adds Neil Sampson's torrent-feature credit to first launch, About, Windows file details and documentation; makes complete app import/export explicitly cover every torrent section; and expands portable torrent JSON transfer to include every non-secret client and automation option. |
 | **Build 67** | Adds fixed maximum-retention cleanup, safer all-torrent fallback accounting, correct retained-file space handling, and fully explained Quick Set presets on the main page and in the wizard. |
 | **Build 66** | Redesigns the setup wizard as a friendly, polished walkthrough with live safety banners, conditional questions, strategy explanations, per-column client help and in-depth help on every page. |
 | **Build 65** | Adds a full beginner-friendly setup wizard covering every torrent-automation section, with explanations, examples, safe cancellation and a final safety review. |
@@ -200,7 +201,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 68 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 69 passed the automated Windows compile, packaging and permanent-release workflow. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 
