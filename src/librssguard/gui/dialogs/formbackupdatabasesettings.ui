@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Backup database/settings</string>
+   <string>Export/backup database and settings</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>

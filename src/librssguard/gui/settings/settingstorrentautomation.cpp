@@ -307,8 +307,8 @@ void SettingsTorrentAutomation::loadUi() {
   auto* configurationButtons = new QHBoxLayout();
   auto* exportConfiguration = new QPushButton(tr("Export torrent configuration"), general);
   auto* importConfiguration = new QPushButton(tr("Import torrent configuration"), general);
-  exportConfiguration->setToolTip(tr("Save torrent clients and automation rules to a portable JSON file. Passwords and API tokens are never exported."));
-  importConfiguration->setToolTip(tr("Import a previously exported torrent configuration. Existing matching credentials are retained; credentials are never read from the file."));
+  exportConfiguration->setToolTip(tr("Save every portable torrent setting: clients, usernames, destinations, colours, notification choice, limits, rules, routing, retries, schedules, storage, cleanup, retention and protections. Passwords and API tokens are excluded for safety."));
+  importConfiguration->setToolTip(tr("Import every portable torrent setting from a supported JSON file. Existing matching passwords and tokens are retained locally; credentials are never read from the file."));
   configurationButtons->addStretch();
   configurationButtons->addWidget(exportConfiguration);
   configurationButtons->addWidget(importConfiguration);
@@ -2047,6 +2047,7 @@ void SettingsTorrentAutomation::exportConfiguration() {
                                {QStringLiteral("name"), client.name},
                                {QStringLiteral("type"), static_cast<int>(client.type)},
                                {QStringLiteral("baseUrl"), client.baseUrl},
+                               {QStringLiteral("username"), client.username},
                                {QStringLiteral("buttonColor"), client.buttonColor},
                                {QStringLiteral("colorNotificationButtons"), client.colorNotificationButtons},
                                {QStringLiteral("colorContextMenus"), client.colorContextMenus},
@@ -2061,9 +2062,13 @@ void SettingsTorrentAutomation::exportConfiguration() {
   }
   const QJsonObject automation = QJsonDocument::fromJson(
     settings()->value(QStringLiteral("TorrentAutomation"), QStringLiteral("configuration")).toByteArray()).object();
-  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-configuration-v1")},
+  const QJsonObject clientSettings{
+    {QStringLiteral("showSuccessNotifications"),
+     settings()->value(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"), true).toBool()}};
+  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-configuration-v2")},
                          {QStringLiteral("exportedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
                          {QStringLiteral("credentialsIncluded"), false},
+                         {QStringLiteral("clientSettings"), clientSettings},
                          {QStringLiteral("clients"), clients},
                          {QStringLiteral("automation"), automation}};
   QSaveFile file(path);
@@ -2072,7 +2077,9 @@ void SettingsTorrentAutomation::exportConfiguration() {
     return;
   }
   QMessageBox::information(this, tr("Configuration exported"),
-                           tr("Torrent settings were exported. Usernames, passwords and API tokens were not included."));
+                           tr("All portable torrent settings were exported. Passwords and API tokens were deliberately "
+                              "excluded. Use the app-wide Backup settings feature when an encrypted, complete transfer "
+                              "including credentials and automation state is required."));
 }
 
 void SettingsTorrentAutomation::importConfiguration() {
@@ -2086,14 +2093,18 @@ void SettingsTorrentAutomation::importConfiguration() {
   }
   QJsonParseError parseError;
   const QJsonObject root = QJsonDocument::fromJson(file.readAll(), &parseError).object();
+  const QString format = root.value(QStringLiteral("format")).toString();
   if (parseError.error != QJsonParseError::NoError ||
-      root.value(QStringLiteral("format")).toString() != QStringLiteral("rssguard-torrent-configuration-v1") ||
+      (format != QStringLiteral("rssguard-torrent-configuration-v1") &&
+       format != QStringLiteral("rssguard-torrent-configuration-v2")) ||
       !root.value(QStringLiteral("automation")).isObject()) {
     QMessageBox::warning(this, tr("Import failed"), tr("This is not a supported RSS Guard torrent-configuration file."));
     return;
   }
   if (QMessageBox::warning(this, tr("Replace torrent configuration"),
-      tr("Replace the current torrent-client layout and automation rules with this file? Existing credentials are retained only for clients with matching IDs."),
+      tr("Replace every portable torrent setting with this file? This includes clients, destinations, colours, "
+         "notifications, limits, rules, routing, retries, schedules, storage, cleanup, retention and protections. "
+         "Existing passwords and tokens are retained only for clients with matching IDs."),
       QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
 
   const QList<TorrentClientConfig> existing = TorrentClientConfig::load(settings());
@@ -2102,12 +2113,20 @@ void SettingsTorrentAutomation::importConfiguration() {
     const QJsonObject object = value.toObject();
     TorrentClientConfig client;
     client.id = object.value(QStringLiteral("id")).toString();
+    QString previousTypeAndEndpoint;
     for (const TorrentClientConfig& current : existing)
-      if (current.id == client.id) { client = current; break; }
+      if (current.id == client.id) {
+        client = current;
+        previousTypeAndEndpoint = QStringLiteral("%1|%2")
+                                    .arg(static_cast<int>(current.type))
+                                    .arg(current.baseUrl.trimmed());
+        break;
+      }
     client.id = object.value(QStringLiteral("id")).toString();
     client.name = object.value(QStringLiteral("name")).toString();
     client.type = static_cast<TorrentClientType>(qBound(0, object.value(QStringLiteral("type")).toInt(), 6));
     client.baseUrl = object.value(QStringLiteral("baseUrl")).toString();
+    if (object.contains(QStringLiteral("username"))) client.username = object.value(QStringLiteral("username")).toString();
     client.buttonColor = object.value(QStringLiteral("buttonColor")).toString();
     client.colorNotificationButtons = object.value(QStringLiteral("colorNotificationButtons")).toBool(true);
     client.colorContextMenus = object.value(QStringLiteral("colorContextMenus")).toBool(true);
@@ -2120,15 +2139,38 @@ void SettingsTorrentAutomation::importConfiguration() {
     client.category = object.value(QStringLiteral("category")).toString();
     client.tags.clear();
     for (const QJsonValue& tag : object.value(QStringLiteral("tags")).toArray()) client.tags.append(tag.toString());
+    const QString importedTypeAndEndpoint = QStringLiteral("%1|%2")
+                                             .arg(static_cast<int>(client.type))
+                                             .arg(client.baseUrl.trimmed());
+    if (previousTypeAndEndpoint.isEmpty() || previousTypeAndEndpoint != importedTypeAndEndpoint) {
+      client.capabilityTested = false;
+      client.capabilityConnected = false;
+      client.capabilityLiveStatus = false;
+      client.capabilityFreeSpace = false;
+      client.capabilityTorrentList = false;
+      client.capabilityTransferRates = false;
+      client.capabilityRemoval = false;
+      client.capabilityTestedAt = {};
+      client.capabilityDetail.clear();
+    }
     if (!client.id.isEmpty() && !client.name.isEmpty() && !client.baseUrl.isEmpty()) imported.append(client);
   }
   TorrentClientConfig::save(settings(), imported);
+  if (format == QStringLiteral("rssguard-torrent-configuration-v2") &&
+      root.value(QStringLiteral("clientSettings")).isObject()) {
+    const QJsonObject clientSettings = root.value(QStringLiteral("clientSettings")).toObject();
+    settings()->setValue(QStringLiteral("TorrentClients"), QStringLiteral("showSuccessNotifications"),
+                         clientSettings.value(QStringLiteral("showSuccessNotifications")).toBool(true));
+  }
   settings()->setValue(QStringLiteral("TorrentAutomation"), QStringLiteral("configuration"),
                        QJsonDocument(root.value(QStringLiteral("automation")).toObject()).toJson(QJsonDocument::Compact));
+  settings()->sync();
   loadSettings();
   dirtifySettings();
   QMessageBox::information(this, tr("Configuration imported"),
-                           tr("Configuration imported. Enter credentials for any newly imported clients before testing them."));
+                           tr("Every portable torrent section was imported. Enter credentials for newly imported clients "
+                              "and run Test all enabled before using automation. Clients whose type or address changed "
+                              "must be capability-tested again."));
 }
 
 void SettingsTorrentAutomation::retryQueuedItem() {

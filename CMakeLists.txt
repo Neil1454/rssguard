@@ -67,7 +67,8 @@
 # Authors and contributors:
 #   - Martin Rotter (project leader),
 #   - Elbert Pol (OS/2-related contributions),
-#   - Anna Vyalkova (cmake-related contributions).
+#   - Anna Vyalkova (cmake-related contributions),
+#   - Neil Sampson (concept, feature direction and design of torrent-related functionality in this fork).
 #
 #################################################################
 
@@ -82,6 +83,8 @@ set(APP_NAME "RSS Guard")
 set(APP_EMAIL "rotter.martinos@gmail.com")
 set(APP_AUTHOR "Martin Rotter")
 set(APP_COPYRIGHT "\\251 2011-${YEAR} ${APP_AUTHOR}")
+set(TORRENT_FEATURE_AUTHOR "Neil Sampson")
+set(TORRENT_FEATURE_EMAIL "Neil1454@yahoo.com")
 set(APP_REVERSE_NAME "io.github.martinrotter.rssguard")
 set(APP_DONATE_URL "https://github.com/sponsors/martinrotter")
 set(APP_VERSION "5.2.6")
@@ -316,6 +319,8 @@ add_compile_definitions(
   APP_AUTHOR="${APP_AUTHOR}"
   APP_DONATE_URL="${APP_DONATE_URL}"
   APP_EMAIL="${APP_EMAIL}"
+  TORRENT_FEATURE_AUTHOR="${TORRENT_FEATURE_AUTHOR}"
+  TORRENT_FEATURE_EMAIL="${TORRENT_FEATURE_EMAIL}"
   APP_LOW_H_NAME=".${CMAKE_PROJECT_NAME}"
   APP_REVISION="${APP_REVISION}"
   APP_SYSTEM_NAME="${CMAKE_SYSTEM_NAME}"

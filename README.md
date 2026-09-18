@@ -7,9 +7,9 @@
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 67**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 68**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 67 application code. Clone or download the feature branch when building this fork from source.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 68 application code. Clone or download the feature branch when building this fork from source.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
@@ -142,7 +142,7 @@ Cleanup is **off by default**. It only considers completed torrents that RSS Gua
 
 Use **Run dry test now** to assess recent eligible RSS entries against live client status and record what would be sent or removed. A dry run makes no add, remove or delete request.
 
-Torrent-client layout and automation rules can be exported to JSON and imported on another machine. Credentials and tokens are deliberately excluded; credentials already stored for matching client IDs are retained.
+Torrent configuration has two transfer choices. **Torrent automation > Export torrent configuration** creates a safe portable JSON containing clients, usernames, destinations, colours, notification choice, limits, rules, routing, retries, schedules, storage, cleanup, retention and protection settings. Passwords and API tokens are deliberately excluded; locally stored credentials for matching client IDs are retained on import. **File > Export/backup settings** copies the complete application settings file, including every torrent section, encrypted credentials and automation state; protect that backup as sensitive.
 
 Before disabling dry run, **Check readiness for live automation** audits participating clients, capability-test age, storage information, rule validity, queued work and destructive cleanup safeguards. Blocking issues, warnings and passed checks are reported separately.
 
@@ -160,7 +160,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 67 — current candidate** | Adds fixed maximum-retention cleanup, safer all-torrent fallback accounting, correct retained-file space handling, and fully explained Quick Set presets on the main page and in the wizard. |
+| **Build 68 — current candidate** | Adds Neil Sampson's torrent-feature credit to first launch, About, Windows file details and documentation; makes complete app import/export explicitly cover every torrent section; and expands portable torrent JSON transfer to include every non-secret client and automation option. |
+| **Build 67** | Adds fixed maximum-retention cleanup, safer all-torrent fallback accounting, correct retained-file space handling, and fully explained Quick Set presets on the main page and in the wizard. |
 | **Build 66** | Redesigns the setup wizard as a friendly, polished walkthrough with live safety banners, conditional questions, strategy explanations, per-column client help and in-depth help on every page. |
 | **Build 65** | Adds a full beginner-friendly setup wizard covering every torrent-automation section, with explanations, examples, safe cancellation and a final safety review. |
 | **Build 64** | Makes dry-run notification pop-ups much clearer with prominent outcome headings and separate torrent, destination, reason and test-only sections. |
@@ -199,7 +200,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 67 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 68 must pass the automated Windows compile and packaging workflow before download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 
@@ -222,7 +223,7 @@ This fork remains based on the upstream RSS Guard codebase. General RSS Guard is
 
 RSS Guard copyright © 2011–2026 Martin Rotter and contributors.
 
-Torrent-related integration added by **Neil Sampson, aka MonsterDK**.
+Concept, feature direction and design of the torrent-related functionality by **Neil Sampson, aka MonsterDK** — [Neil1454@yahoo.com](mailto:Neil1454@yahoo.com).
 
 Any torrent integrations contributed through this fork must be used only for lawful purposes. Illegal activity is strictly prohibited.
 

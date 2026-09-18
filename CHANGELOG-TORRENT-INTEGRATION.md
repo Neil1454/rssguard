@@ -1,5 +1,13 @@
 # Torrent integration changelog
 
+## Build 68
+
+- Added Neil Sampson's name and contact email as the torrent-feature contributor on the first-ever launch message, About information, Windows executable details and project documentation without altering Martin Rotter's original creator/copyright credit.
+- Renamed the app-wide menu actions to **Export/backup settings** and **Import/restore settings** and clearly states that the complete settings backup includes every torrent section, encrypted credentials and automation state.
+- Expanded the safe portable torrent JSON to include usernames and the torrent success-notification preference in addition to the complete stored automation object and client layout.
+- Kept passwords and API tokens out of portable JSON; matching local credentials are retained, while the complete app-wide settings backup remains available when credentials and runtime state must be transferred.
+- Added backward-compatible import of the previous v1 torrent JSON format and resets stale capability results when an imported client's type or endpoint changes.
+
 ## Build 67
 
 - Added configurable maximum-retention cleanup that runs independently of storage pressure.

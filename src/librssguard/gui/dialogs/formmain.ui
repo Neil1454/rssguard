@@ -629,7 +629,7 @@
   </action>
   <action name="m_actionRestoreDatabaseSettings">
    <property name="text">
-    <string>&amp;Restore settings</string>
+    <string>&amp;Import/restore settings</string>
    </property>
    <property name="shortcut">
     <string notr="true"/>
@@ -637,7 +637,7 @@
   </action>
   <action name="m_actionBackupDatabaseSettings">
    <property name="text">
-    <string>&amp;Backup settings</string>
+    <string>&amp;Export/backup settings</string>
    </property>
    <property name="shortcut">
     <string notr="true"/>

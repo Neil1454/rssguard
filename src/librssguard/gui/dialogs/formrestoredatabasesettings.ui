@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Restore database/settings</string>
+   <string>Import/restore database and settings</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="5" column="0" colspan="2">

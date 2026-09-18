@@ -186,12 +186,19 @@ void GuiNotificationCoordinator::deleteTrayIcon() {
 
 void GuiNotificationCoordinator::offerChanges() {
   if (m_application->isFirstRunCurrentVersion()) {
+    const QString welcomeText = m_application->isFirstRun()
+      ? m_application
+          ->tr("Welcome to %1.\n\nOriginal RSS Guard application created by %2.\n"
+               "Torrent-related features conceived and directed by %3 (%4).\n\n"
+               "Open the changelog to see what is included in this version.")
+          .arg(QSL(APP_LONG_NAME), QSL(APP_AUTHOR), QSL(TORRENT_FEATURE_AUTHOR), QSL(TORRENT_FEATURE_EMAIL))
+      : m_application
+          ->tr("Welcome to %1.\n\nPlease, check NEW stuff included in this\n"
+               "version by clicking this popup notification.")
+          .arg(QSL(APP_LONG_NAME));
     showGuiMessage(Notification::Event::GeneralEvent,
                    {m_application->tr("Welcome"),
-                    m_application
-                      ->tr("Welcome to %1.\n\nPlease, check NEW stuff included in this\n"
-                           "version by clicking this popup notification.")
-                      .arg(QSL(APP_LONG_NAME)),
+                    welcomeText,
                     QSystemTrayIcon::MessageIcon::Information},
                    {},
                    GuiAction(m_application->tr("Go to changelog"),

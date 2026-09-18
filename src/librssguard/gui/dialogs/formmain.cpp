@@ -641,6 +641,10 @@ void FormMain::setupIcons() {
   m_ui->m_actionReportBug->setIcon(icon_theme_factory->fromTheme(QSL("call-start")));
   m_ui->m_actionBackupDatabaseSettings->setIcon(icon_theme_factory->fromTheme(QSL("document-export")));
   m_ui->m_actionRestoreDatabaseSettings->setIcon(icon_theme_factory->fromTheme(QSL("document-import")));
+  m_ui->m_actionBackupDatabaseSettings->setToolTip(
+    tr("Export a complete application settings backup. This includes every torrent section and encrypted credentials."));
+  m_ui->m_actionRestoreDatabaseSettings->setToolTip(
+    tr("Import a complete application settings backup, including every torrent section stored in that backup."));
   m_ui->m_actionDonate->setIcon(icon_theme_factory->fromTheme(QSL("applications-office")));
   m_ui->m_actionApplicationLog->setIcon(icon_theme_factory->fromTheme(QSL("dialog-information")));
   m_ui->m_actionDisplayDocs->setIcon(icon_theme_factory->fromTheme(QSL("applications-science")));

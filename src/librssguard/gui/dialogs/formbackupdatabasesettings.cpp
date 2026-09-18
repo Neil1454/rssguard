@@ -21,6 +21,10 @@ FormBackupDatabaseSettings::FormBackupDatabaseSettings(QWidget* parent)
   : QDialog(parent), m_ui(new Ui::FormBackupDatabaseSettings) {
   m_ui->setupUi(this);
   m_ui->m_txtBackupName->lineEdit()->setPlaceholderText(tr("Common name for backup files"));
+  m_ui->m_checkBackupSettings->setText(tr("Settings (including all torrent settings)"));
+  m_ui->m_checkBackupSettings->setToolTip(
+    tr("Includes torrent clients, encrypted credentials and tokens, notification choices, automation rules, "
+       "routing, retries, schedules, storage limits, cleanup, retention, protection settings and automation state."));
 
   GuiUtilities::applyDialogProperties(*this, qApp->icons()->fromTheme(QSL("document-export")));
 
@@ -64,7 +68,8 @@ void FormBackupDatabaseSettings::performBackup() {
                                  m_ui->m_lblSelectFolder->label()->text(),
                                  m_ui->m_txtBackupName->lineEdit()->text());
     m_ui->m_lblResult->setStatus(WidgetWithStatus::StatusType::Ok,
-                                 tr("Backup was created successfully and stored in target directory."),
+                                 tr("Backup was created successfully and stored in target directory. When Settings "
+                                    "was selected, all torrent settings and encrypted credentials were included."),
                                  tr("Backup was created successfully."));
   }
   catch (const ApplicationException& ex) {

@@ -48,7 +48,9 @@ All queued entries can be retried or cancelled together after confirmation. Acti
 
 **Check readiness for live automation** audits participating clients, saved capability tests and their age, storage fallbacks, RSS rules, queued work and cleanup safeguards. It reports blocking issues separately from warnings and passed checks; it does not silently change the configuration.
 
-**Export torrent configuration** writes client layout, non-secret connection fields, rules and automation settings to JSON. Passwords and API tokens are not written. Import replaces the layout after confirmation and retains credentials already stored locally for matching client IDs.
+**Export torrent configuration** writes every portable torrent option to JSON: client layout, usernames, non-secret connection fields, destinations, colours, the success-notification choice, limits, rules, routing, retries, schedules, storage, cleanup, retention and protections. Passwords and API tokens are not written. Import replaces the torrent configuration after confirmation, retains credentials already stored locally for matching client IDs, and requires a fresh capability test when a client's type or endpoint changes.
+
+For a complete transfer, **File > Export/backup settings** copies the whole application settings file. That backup includes every torrent section, encrypted passwords and tokens, send history and automation runtime state. Treat it as sensitive. **File > Import/restore settings** restores those sections together and applies them after restart.
 
 ## Cleanup safety
 

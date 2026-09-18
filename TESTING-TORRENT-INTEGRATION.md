@@ -11,7 +11,13 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 67 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 68 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+On a clean profile, confirm the first-launch welcome credits Martin Rotter as the original application creator and Neil Sampson with `Neil1454@yahoo.com` for the torrent-related feature concept, direction and design. Confirm the same separate, non-replacing credits appear under **Help > About application**.
+
+Confirm **File > Export/backup settings** explains that Settings includes every torrent section and encrypted credentials. Restore that backup into a separate portable copy and verify clients, credentials, notification choice, rules, routing, retries, schedules, storage limits, cleanup, retention, protections, processed history, managed allocations and pending work are retained after restart.
+
+Export the safe JSON from **Torrent automation**, inspect that it contains all non-secret client options, usernames, the success-notification preference and the full automation configuration, and verify it contains no password or API token. Import into a clean profile and verify every portable option is restored. Import a v1 file for backward compatibility; change a client's endpoint in the file and confirm its capability results require a fresh test.
 
 Confirm dry-run notification pop-ups use a prominent outcome heading, clean line-separated sections and an explicit **TEST ONLY** footer for sends, waits, duplicates, blocked routes and cleanup outcomes.
 

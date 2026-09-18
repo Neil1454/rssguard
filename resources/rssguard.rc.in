@@ -30,6 +30,7 @@ BEGIN
 
         BEGIN
             VALUE "CompanyName", "@APP_AUTHOR@"
+            VALUE "Comments", "Torrent-related features: @TORRENT_FEATURE_AUTHOR@ <@TORRENT_FEATURE_EMAIL@>"
             VALUE "FileDescription", "@APP_NAME@"
             VALUE "FileVersion","@CMAKE_PROJECT_VERSION@"
             VALUE "InternalName", "@CMAKE_PROJECT_NAME@"

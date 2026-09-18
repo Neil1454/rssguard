@@ -10,6 +10,10 @@
 
 FormRestoreDatabaseSettings::FormRestoreDatabaseSettings(QWidget& parent) : QDialog(&parent) {
   m_ui.setupUi(this);
+  m_ui.m_groupSettings->setTitle(tr("Restore settings (including all torrent settings)"));
+  m_ui.m_groupSettings->setToolTip(
+    tr("Restores the complete application settings backup, including torrent clients, encrypted credentials and "
+       "tokens, automation rules, routing, storage, cleanup, retention, protection settings and automation state."));
   m_ui.m_lblResult->setStatus(WidgetWithStatus::StatusType::Warning,
                               tr("Only %1 %2 backups are supported.").arg(QSL(APP_NAME), QSL(APP_VERSION_MAJOR)),
                               tr("No operation executed yet."));
@@ -47,7 +51,8 @@ void FormRestoreDatabaseSettings::performRestoration() {
                                     ? m_ui.m_listSettings->currentItem()->data(Qt::UserRole).toString()
                                     : QString());
     m_ui.m_lblResult->setStatus(WidgetWithStatus::StatusType::Ok,
-                                tr("Restoration was initiated. Restart to proceed."),
+                                tr("Restoration was initiated. Restart to proceed. Restored settings include every "
+                                   "torrent section contained in the selected backup."),
                                 tr("You need to restart the application for restoration process to finish."));
   }
   catch (const ApplicationException& ex) {
