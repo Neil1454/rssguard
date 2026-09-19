@@ -71,6 +71,49 @@ void TorrentAutomationEngine::processNewArticles(const QHash<Feed*, QList<Messag
   engine->enqueue(articles);
 }
 
+bool TorrentAutomationEngine::paused() const {
+  return TorrentAutomationConfig::load(qApp->settings()).paused;
+}
+
+void TorrentAutomationEngine::setPaused(bool pausedState) {
+  TorrentAutomationConfig config = TorrentAutomationConfig::load(qApp->settings());
+  config.paused = pausedState;
+  config.save(qApp->settings());
+  m_config.paused = pausedState;
+  Job event;
+  event.title = pausedState ? tr("Automation paused") : tr("Automation resumed");
+  record(pausedState ? QStringLiteral("paused") : QStringLiteral("resumed"), event, {},
+         pausedState ? tr("New automatic sends, cleanup, retention and retries are held. Existing client transfers continue.")
+                     : tr("Queued work will be checked again against current limits and live client status."));
+  if (!pausedState && !m_deferredJobs.isEmpty() && !m_busy) {
+    for (Job job : std::as_const(m_deferredJobs)) {
+      job.nextAttempt = {};
+      m_jobs.enqueue(job);
+    }
+    m_deferredJobs.clear();
+    saveRuntime();
+    beginBatch();
+  }
+}
+
+QString TorrentAutomationEngine::storageOverview() const {
+  QStringList lines;
+  for (int index = 0; index < m_clients.size(); ++index) {
+    const TorrentClientStatus status = index < m_statuses.size() ? m_statuses.at(index) : TorrentClientStatus();
+    const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(index).id);
+    if (status.freeBytes >= 0) {
+      lines.append(tr("%1: %2 GiB available%3")
+        .arg(m_clients.at(index).name)
+        .arg(status.freeBytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', 1)
+        .arg(status.liveSpace ? tr(" (live)") : tr(" (estimated)")));
+    }
+    else if (policy.configuredCapacityBytes > 0)
+      lines.append(tr("%1: capacity configured; available space awaits a status check").arg(m_clients.at(index).name));
+    else lines.append(tr("%1: available space unavailable").arg(m_clients.at(index).name));
+  }
+  return lines.isEmpty() ? tr("Storage: status not checked yet") : lines.join(QLatin1Char('\n'));
+}
+
 void TorrentAutomationEngine::processApprovedArticles(Feed* feed,
                                                        const QList<Message>& articles,
                                                        QWidget* dialogParent,
@@ -361,10 +404,19 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
                    tr("No enabled RSS automation rule matched this torrent, so it would not be routed, queued or cleaned up."));
           continue;
         }
-        if (forceDryRun || !wasProcessed(job.key)) m_jobs.enqueue(job);
+        if (forceDryRun || !wasProcessed(job.key)) {
+          if (m_config.paused && !manualApproval && !forceDryRun) {
+            job.nextAttempt = QDateTime::currentDateTimeUtc().addSecs(60);
+            job.queueReason = tr("Automation is paused");
+            m_deferredJobs.append(job);
+            record(QStringLiteral("paused"), job, {}, tr("Held safely until automation is resumed."));
+          }
+          else m_jobs.enqueue(job);
+        }
       }
     }
   }
+  if (m_config.paused && !m_deferredJobs.isEmpty()) saveRuntime();
   if (!m_jobs.isEmpty() && !m_busy) beginBatch();
   else if (forceDryRun && !m_busy) {
     Job summary;
@@ -588,6 +640,9 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
       const double downloadMiB = qMax<qint64>(0, status.downloadBytesPerSecond) / (1024.0 * 1024.0);
       score = freeRatio * 1000.0 - status.activeDownloads * 200.0 - status.queuedDownloads * 80.0 -
               downloadMiB * 3.0 - policy.priority * 25.0;
+      if (m_clients.at(index).id == m_lastSelectedClientId &&
+          m_consecutiveAssignments >= m_config.maximumConsecutiveAssignments && eligible.size() > 1)
+        score -= 1000.0;
     }
     if (score > bestScore) { bestScore = score; best = index; }
   }
@@ -655,6 +710,15 @@ void TorrentAutomationEngine::processNextJob() {
          wasProcessed(m_jobs.head().key)) m_jobs.dequeue();
   if (m_jobs.isEmpty()) { finishBatch(); return; }
   const Job job = m_jobs.dequeue();
+  if (m_config.paused && !job.directOverride && !job.manualApproval && !m_forcedDryRun) {
+    Job held = job;
+    held.nextAttempt = QDateTime::currentDateTimeUtc().addSecs(60);
+    held.queueReason = tr("Automation is paused");
+    m_deferredJobs.append(held);
+    saveRuntime();
+    processNextJob();
+    return;
+  }
   if (job.retentionCleanup) {
     m_lastRetentionCheck = QDateTime::currentDateTimeUtc();
     if (processRetentionCleanup(job)) return;
@@ -771,6 +835,9 @@ void TorrentAutomationEngine::processNextJob() {
     }
     selected = decision;
   }
+  const QString selectedId = m_clients.at(selected).id;
+  if (selectedId == m_lastSelectedClientId) ++m_consecutiveAssignments;
+  else { m_lastSelectedClientId = selectedId; m_consecutiveAssignments = 1; }
   sendJob(job, selected);
 }
 
@@ -1210,6 +1277,12 @@ bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
     const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(clientIndex).id);
     const TorrentClientStatus& status = m_statuses.at(clientIndex);
     if (!policy.allowCleanup || !status.reachable) continue;
+    if (m_config.deleteData && m_clients.at(clientIndex).type == TorrentClientType::RTorrent) {
+      if (m_config.dryRun)
+        record(QStringLiteral("DRY RUN — DELETE BLOCKED"), job, m_clients.at(clientIndex).id,
+               tr("rTorrent XML-RPC can remove a job but cannot prove that its downloaded files were deleted. Data cleanup is blocked for this client."));
+      continue;
+    }
 
     for (const TorrentRemoteItem& item : status.torrents) {
       if (!item.managedByAutomation || item.hash.isEmpty() || item.progress < 1.0 || item.downloading) continue;
@@ -1279,12 +1352,13 @@ bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
       const ExpiredItem& candidate = expired.at(index);
       record(QStringLiteral("DRY RUN — WOULD REMOVE EXPIRED"), job,
              m_clients.at(candidate.clientIndex).id,
-             tr("Would remove expired torrent “%1” from %2 after %3 hours (limit %4 hours)%5. This is time-based and does not depend on free-space pressure. No changes were made.")
+             tr("Would remove expired torrent “%1” from %2 after %3 hours (limit %4 hours)%5. Age source: %6. This is time-based and does not depend on free-space pressure. No changes were made.")
                .arg(candidate.item.name, m_clients.at(candidate.clientIndex).name)
                .arg(candidate.ageBasis.secsTo(now) / 3600)
                .arg(m_config.maximumRetentionHours)
                .arg(m_config.deleteData ? tr(" and permanently delete its downloaded data")
-                                        : tr(" while keeping its downloaded files")));
+                                        : tr(" while keeping its downloaded files"))
+               .arg(candidate.item.ageSource.isEmpty() ? tr("client completion/added timestamp") : candidate.item.ageSource));
     }
     m_cleanupCount += proposed;
     if (expired.size() > proposed)
@@ -1302,11 +1376,13 @@ bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
   const ExpiredItem candidate = expired.first();
   if (m_config.cleanupRequireConfirmation || m_config.deleteData) {
     const auto answer = QMessageBox::warning(qApp->mainFormWidget(), tr("Confirm expired torrent removal"),
-      tr("“%1” on %2 has reached its %3-hour maximum retention time.%4\n\nRemove it now? This action cannot be undone.")
+      tr("“%1” on %2 has reached its %3-hour maximum retention time.%4\n\nAge measured from: %5 (%6).\n\nRemove it now? This action cannot be undone.")
         .arg(candidate.item.name, m_clients.at(candidate.clientIndex).name)
         .arg(m_config.maximumRetentionHours)
         .arg(m_config.deleteData ? tr(" Its downloaded data will also be permanently deleted.")
-                                 : tr(" Its downloaded files will be kept.")),
+                                 : tr(" Its downloaded files will be kept."))
+        .arg(candidate.item.ageSource.isEmpty() ? tr("client completion/added timestamp") : candidate.item.ageSource,
+             candidate.ageBasis.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm"))),
       QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes) {
       // Avoid asking about the same expired item every maintenance tick.
@@ -1916,7 +1992,8 @@ void TorrentAutomationEngine::saveRuntime() {
 }
 
 void TorrentAutomationEngine::notify(const QString& title, const QString& detail, bool warning) {
-  if (!m_config.showNotifications) return;
+  if (!m_config.showNotifications || m_config.silentNotifications ||
+      qApp->property("torrentSessionSilent").toBool()) return;
   qApp->showGuiMessage(Notification::Event::GeneralEvent,
                        GuiMessage(title, detail, warning ? QSystemTrayIcon::Warning : QSystemTrayIcon::Information));
 }

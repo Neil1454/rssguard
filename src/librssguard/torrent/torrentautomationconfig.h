@@ -53,6 +53,13 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool enabled = false;
   bool dryRun = true;
   bool showNotifications = true;
+  bool paused = false;
+  bool silentNotifications = false;
+  bool ignoreInitialFeedBatch = false;
+  bool markInitialFeedBatchRead = false;
+  int notificationDurationSeconds = 0;
+  int maximumConsecutiveAssignments = 1;
+  QString speedDisplayUnit = QStringLiteral("MiB/s");
   TorrentRoutingStrategy strategy = TorrentRoutingStrategy::Balanced;
   int retryMinutes = 1;
   bool retryEnabled = true;

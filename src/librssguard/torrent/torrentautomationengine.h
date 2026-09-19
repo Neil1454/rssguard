@@ -42,6 +42,9 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     void cancelPending(int index);
     void cancelAllPending();
     void clearActivityHistory();
+    bool paused() const;
+    void setPaused(bool paused);
+    QString storageOverview() const;
 
   signals:
     void activityAdded(const QString& text);
@@ -134,6 +137,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QHash<Feed*, QList<Message>> m_lastArticles;
     QDateTime m_lastReconcile;
     QDateTime m_lastRetentionCheck;
+    QString m_lastSelectedClientId;
+    int m_consecutiveAssignments = 0;
 };
 
 #endif // TORRENTAUTOMATIONENGINE_H

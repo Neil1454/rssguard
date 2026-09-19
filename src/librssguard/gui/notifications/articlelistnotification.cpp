@@ -58,6 +58,16 @@ ArticleListNotification::ArticleListNotification(QWidget* parent)
   m_torrentActionsLayout->setColumnStretch(0, 1);
   m_torrentActionsLayout->setColumnStretch(1, 1);
   m_ui.formLayout->insertRow(2, torrentActions);
+  m_countdownTimer.setInterval(1000);
+  connect(&m_countdownTimer, &QTimer::timeout, this, [this]() {
+    if (m_countdownSeconds > 0) --m_countdownSeconds;
+    if (m_receivedStatus != nullptr) {
+      const QString received = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm"));
+      m_receivedStatus->setText(m_countdownSeconds > 0
+        ? tr("Received %1 · closes in %2s").arg(received).arg(m_countdownSeconds)
+        : tr("Received %1").arg(received));
+    }
+  });
 
   connect(m_model,
           &ArticleListNotificationModel::nextPagePossibleChanged,
@@ -182,6 +192,10 @@ void ArticleListNotification::loadPreview(bool includeTorrentButtons) {
   m_preview = true;
   m_previewTorrentButtons = includeTorrentButtons;
   setupTimedClosing(false);
+  m_countdownSeconds = notificationTimeoutSeconds();
+  if (m_countdownSeconds <= 0 && !staysOpenUntilDismissed())
+    m_countdownSeconds = qApp->settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt();
+  if (m_countdownSeconds > 0) m_countdownTimer.start();
   m_ui.m_cmbFeeds->clear();
   m_ui.m_cmbFeeds->addItem(tr("Example RSS feed"));
   m_ui.m_lblTitle->setText(tr("1 feed fetched"));
@@ -203,7 +217,12 @@ void ArticleListNotification::loadPreview(bool includeTorrentButtons) {
 }
 
 bool ArticleListNotification::staysOpenUntilDismissed() const {
+  if (TorrentAutomationConfig::load(qApp->settings()).notificationDurationSeconds > 0) return false;
   return qApp->settings()->value(GROUP(GUI), SETTING(GUI::KeepArticleNotificationsOpen)).toBool();
+}
+
+int ArticleListNotification::notificationTimeoutSeconds() const {
+  return TorrentAutomationConfig::load(qApp->settings()).notificationDurationSeconds;
 }
 
 void ArticleListNotification::rebuildTorrentActions() {
@@ -219,6 +238,38 @@ void ArticleListNotification::rebuildTorrentActions() {
     TorrentClientConfig::enabledInPriorityOrder(TorrentClientConfig::load(qApp->settings()));
   TorrentSendHistory* history = TorrentSendHistory::instance(qApp);
   if (m_preview && !m_previewTorrentButtons) return;
+  const TorrentAutomationConfig automation = TorrentAutomationConfig::load(qApp->settings());
+  m_receivedStatus = new QLabel(tr("Received %1%2").arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm")),
+    m_countdownSeconds > 0 ? tr(" · closes in %1s").arg(m_countdownSeconds) : QString()), this);
+  m_receivedStatus->setToolTip(tr("The local time this notification was received. A date is shown when it differs from today."));
+  auto* pause = new QPushButton(automation.paused ? tr("Resume automation") : tr("Pause automation"), this);
+  auto* silent = new QPushButton(tr("Go silent this session"), this);
+  pause->setToolTip(tr("Pause new automatic sends, cleanup, retention and retries. Existing transfers continue."));
+  silent->setToolTip(tr("Suppress later torrent popups until RSS Guard is restarted. Automation and logging continue."));
+  if (!m_preview) {
+    connect(pause, &QPushButton::clicked, this, [this, pause]() {
+      TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
+      engine->setPaused(!engine->paused());
+      pause->setText(engine->paused() ? tr("Resume automation") : tr("Pause automation"));
+    });
+    connect(silent, &QPushButton::clicked, this, [this]() {
+      qApp->setProperty("torrentSessionSilent", true);
+      closeNotification();
+    });
+  }
+  m_torrentActionsLayout->addWidget(m_receivedStatus, 0, 0);
+  m_torrentActionsLayout->addWidget(pause, 0, 1);
+  m_torrentActionsLayout->addWidget(silent, 1, 0, 1, 2);
+  auto* storage = new QLabel(TorrentAutomationEngine::instance(qApp)->storageOverview(), this);
+  storage->setWordWrap(true);
+  storage->setToolTip(tr("Live values come from the client API. Estimates and unavailable values are clearly labelled."));
+  auto* reviewSpace = new QPushButton(tr("Review space cleanup (dry run)"), this);
+  reviewSpace->setToolTip(tr("Run a read-only assessment. Existing protections still apply and nothing is deleted."));
+  if (!m_preview) connect(reviewSpace, &QPushButton::clicked, this, []() {
+    TorrentAutomationEngine::instance(qApp)->runDryTest();
+  });
+  m_torrentActionsLayout->addWidget(storage, 2, 0);
+  m_torrentActionsLayout->addWidget(reviewSpace, 2, 1);
   bool allAlreadyProcessed = !messages.isEmpty();
   for (const Message& message : messages)
     if (!history->wasSentToAnyClient(message.m_id)) { allAlreadyProcessed = false; break; }
@@ -236,7 +287,7 @@ void ArticleListNotification::rebuildTorrentActions() {
     stopTimedClosing();
     TorrentAutomationEngine::processApprovedArticles(selectedFeed(), messages, this, qApp);
   });
-  m_torrentActionsLayout->addWidget(automatic, 0, 0, 1, 2);
+  m_torrentActionsLayout->addWidget(automatic, 3, 0, 1, 2);
   int buttonIndex = 0;
   for (const TorrentClientConfig& config : clients) {
     bool alreadySent = !messages.isEmpty();
@@ -285,7 +336,7 @@ void ArticleListNotification::rebuildTorrentActions() {
       button->setEnabled(false);
       sendSelectedToTorrentClient(config);
     });
-    m_torrentActionsLayout->addWidget(button, 1 + buttonIndex / 2, buttonIndex % 2);
+    m_torrentActionsLayout->addWidget(button, 4 + buttonIndex / 2, buttonIndex % 2);
     ++buttonIndex;
   }
 }

@@ -11,7 +11,18 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 69 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 70 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 70 pause, rotation and rTorrent regression checks
+
+1. Enable first-fetch baselining on a newly added feed. Confirm its existing entries produce no popup or automatic send, then publish/fetch a later item and confirm normal processing.
+2. Pause from the RSS popup. Confirm new matches and retries are held, cleanup/retention does not run, manual named-client sending still works, and existing transfers continue. Resume and verify held work is reassessed.
+3. Select silence for this session and verify later RSS/torrent popups are suppressed until restart. Test Always silent separately and confirm Activity continues to record decisions.
+4. Apply each Super Quick preset and inspect the exact values before saving. Keep Dry run enabled and confirm Popularity Chaser uses 10 hours, Ratio Builder 24 hours, and Hard Cutoff 2 hours.
+5. Submit two close arrivals with two equally healthy clients. Confirm Balanced routing avoids assigning both to the same client unless the alternative is restricted or unavailable.
+6. On rTorrent, add a newly created torrent and verify its retention age is based on `d.timestamp.started`/`d.timestamp.finished`, not the torrent metadata creation date. The confirmation must show the source and local timestamp.
+7. With rTorrent and Delete downloaded data enabled, verify cleanup is blocked with an explicit capability explanation rather than claiming files or space were recovered.
+8. Switch an upload threshold among KiB/s, MiB/s, KB/s, MB/s, kbit/s and Mbit/s. Save/reopen and confirm the underlying threshold remains equivalent.
 
 On a clean profile, confirm the first-launch welcome credits Martin Rotter as the original application creator and Neil Sampson with `Neil1454@yahoo.com` for the torrent-related feature concept, direction and design. Confirm the same separate, non-replacing credits appear under **Help > About application**.
 

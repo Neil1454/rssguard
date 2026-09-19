@@ -1,5 +1,18 @@
 # Torrent integration changelog
 
+## Build 70
+
+- Added three fully explained Super Quick presets: Popularity Chaser (10-hour cap), Ratio Builder (24-hour cap), and Hard Cutoff (2-hour default). All begin in Dry run with confirmation enabled.
+- Added a persistent automation Pause switch and a Pause/Resume control on RSS notifications. Pausing holds new sends, retries, retention and cleanup while existing client transfers continue; queued work is rechecked on resume.
+- Added persistent Silent mode and a notification button for silence until the next launch. Automation and Activity logging continue, and safety confirmations are not silently approved.
+- Torrent notifications now show their received time and may use a torrent-specific duration or inherit the existing global notification duration. Toasts are explicitly non-modal.
+- Added first-fetch baselining per feed so existing entries can be ignored by both popups and torrent automation while later entries continue normally.
+- Balanced routing now discourages consecutive assignments to one client when another eligible client is available. Super Quick presets also set one active automated download per client to protect disk I/O.
+- Fixed rTorrent retention age: RSS Guard now uses rTorrent's started and finished timestamps, never the torrent metadata creation date. Cleanup explanations show the timestamp source and exact local time.
+- rTorrent receives a visible `RSS Guard` label when no custom category is configured, while retaining the internal automation marker. Data-deletion cleanup remains blocked where XML-RPC cannot prove file deletion.
+- Upload-speed thresholds can be entered as KiB/s, MiB/s, KB/s, MB/s, kbit/s or Mbit/s and are converted to bytes per second internally.
+- Updated the guided wizard, Quick Set explanations, settings export/import coverage and test guidance for the new controls.
+
 ## Build 69
 
 - Redesigned the setup wizard's information, warning, form and group-box colours as matched high-contrast light/dark palettes, preventing theme-provided navy cards from displaying unreadable black text.

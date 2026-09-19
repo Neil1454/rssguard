@@ -16,6 +16,7 @@ class QListWidget;
 class QPushButton;
 class QSpinBox;
 class QTableWidget;
+class QTabWidget;
 
 class SettingsTorrentAutomation final : public SettingsPanel {
     Q_OBJECT
@@ -72,10 +73,12 @@ class SettingsTorrentAutomation final : public SettingsPanel {
                                const QString& detail);
 
     TorrentAutomationConfig m_config;
-    QCheckBox *m_enabled = nullptr, *m_dryRun = nullptr, *m_notifications = nullptr;
+    QCheckBox *m_enabled = nullptr, *m_dryRun = nullptr, *m_notifications = nullptr,
+              *m_paused = nullptr, *m_silent = nullptr, *m_ignoreInitial = nullptr;
     QComboBox *m_strategy = nullptr, *m_storageUnit = nullptr;
     QString m_currentStorageUnit = QStringLiteral("GiB");
-    QSpinBox* m_historyLimit = nullptr;
+    QSpinBox *m_historyLimit = nullptr, *m_notificationDuration = nullptr,
+             *m_maxConsecutive = nullptr;
     QDoubleSpinBox* m_unknownSizeGb = nullptr;
     QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;
     QSpinBox *m_retryAttempts = nullptr, *m_retryInitialSeconds = nullptr,
@@ -108,9 +111,11 @@ class SettingsTorrentAutomation final : public SettingsPanel {
              *m_cleanupGraceHours = nullptr, *m_minimumCopies = nullptr;
     QCheckBox *m_cleanupGrace = nullptr, *m_smartCleanup = nullptr,
               *m_minimumCopiesEnabled = nullptr, *m_cleanupSchedule = nullptr;
-    QComboBox *m_cleanupScheduleStart = nullptr, *m_cleanupScheduleEnd = nullptr;
+    QComboBox *m_cleanupScheduleStart = nullptr, *m_cleanupScheduleEnd = nullptr,
+              *m_speedUnit = nullptr;
     QLineEdit *m_protectedTags = nullptr, *m_protectedTrackers = nullptr;
     QDoubleSpinBox* m_cleanupBatchPercent = nullptr;
+    QTabWidget* m_tabs = nullptr;
 };
 
 #endif // SETTINGSTORRENTAUTOMATION_H

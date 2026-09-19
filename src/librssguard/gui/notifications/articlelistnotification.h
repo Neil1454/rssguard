@@ -14,6 +14,7 @@
 class Feed;
 class ArticleListNotificationModel;
 class QGridLayout;
+class QLabel;
 struct TorrentClientConfig;
 
 class ArticleListNotification : public BaseToastNotification {
@@ -47,6 +48,7 @@ class ArticleListNotification : public BaseToastNotification {
 
   protected:
     bool staysOpenUntilDismissed() const override;
+    int notificationTimeoutSeconds() const override;
 
   private:
     Feed* selectedFeed(int index = -1) const;
@@ -60,6 +62,9 @@ class ArticleListNotification : public BaseToastNotification {
     QGridLayout* m_torrentActionsLayout = nullptr;
     bool m_preview = false;
     bool m_previewTorrentButtons = false;
+    QLabel* m_receivedStatus = nullptr;
+    QTimer m_countdownTimer;
+    int m_countdownSeconds = 0;
 };
 
 #endif // ARTICLELISTNOTIFICATION_H

@@ -19,6 +19,8 @@ using namespace std::chrono_literals;
 BaseToastNotification::BaseToastNotification(QWidget* parent) : QDialog(parent), m_timerId(-1) {
   setAttribute(Qt::WidgetAttribute::WA_ShowWithoutActivating);
   setFocusPolicy(Qt::FocusPolicy::NoFocus);
+  setWindowModality(Qt::NonModal);
+  setModal(false);
   setAttribute(Qt::WidgetAttribute::WA_DeleteOnClose, false);
 
   setWindowFlags(
@@ -82,7 +84,9 @@ void BaseToastNotification::setupTimedClosing(bool want_shorter_timeout) {
   }
 
   if (m_timerId < 0) {
-    auto timeout_ms = qApp->settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt() * 1000;
+    const int overrideSeconds = notificationTimeoutSeconds();
+    auto timeout_ms = (overrideSeconds > 0 ? overrideSeconds :
+      qApp->settings()->value(GROUP(GUI), SETTING(GUI::ToastNotificationsDuration)).toInt()) * 1000;
     m_timerId = startTimer(want_shorter_timeout ? int(timeout_ms / 2) : timeout_ms);
     qDebugNN << LOGSEC_NOTIFICATIONS << "Starting timed closing for notification.";
   }
@@ -115,6 +119,8 @@ bool BaseToastNotification::eventFilter(QObject* watched, QEvent* event) {
 bool BaseToastNotification::staysOpenUntilDismissed() const {
   return false;
 }
+
+int BaseToastNotification::notificationTimeoutSeconds() const { return 0; }
 
 void BaseToastNotification::closeEvent(QCloseEvent* event) {
   Q_UNUSED(event)

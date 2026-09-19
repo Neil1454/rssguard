@@ -24,6 +24,7 @@ struct RSSGUARD_DLLSPEC TorrentRemoteItem {
   QDateTime added;
   QDateTime completed;
   QDateTime lastActivity;
+  QString ageSource;
   qint64 downloadBytesPerSecond = -1;
   qint64 uploadBytesPerSecond = -1;
   bool downloading = false;

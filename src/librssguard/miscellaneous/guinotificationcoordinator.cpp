@@ -376,11 +376,35 @@ void GuiNotificationCoordinator::onFeedUpdatesProgress(const Feed* feed, int cur
 }
 
 void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults& results) {
+  FeedDownloadResults visibleResults = results;
+  QHash<Feed*, QList<Message>> automationArticles = results.updatedFeeds();
+  const TorrentAutomationConfig torrentConfig = TorrentAutomationConfig::load(m_application->settings());
+  if (torrentConfig.ignoreInitialFeedBatch) {
+    QStringList baselined = m_application->settings()->value(QStringLiteral("TorrentAutomation"),
+                                                             QStringLiteral("baselinedFeedIds")).toStringList();
+    visibleResults.clear();
+    visibleResults.setFeedRequestCount(results.feedRequestCount());
+    for (auto it = results.erroredFeeds().constBegin(); it != results.erroredFeeds().constEnd(); ++it)
+      visibleResults.appendErroredFeed(it.key(), it.value());
+    for (auto it = results.updatedFeeds().constBegin(); it != results.updatedFeeds().constEnd(); ++it) {
+      const QString id = it.key() == nullptr ? QString() : it.key()->customId();
+      if (!id.isEmpty() && !baselined.contains(id)) {
+        baselined.append(id);
+        automationArticles.remove(it.key());
+        continue;
+      }
+      visibleResults.appendUpdatedFeed(it.key(), it.value());
+    }
+    m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
+                                        QStringLiteral("baselinedFeedIds"), baselined);
+  }
   // Automation is independent of whether desktop notifications are enabled or a feed is quiet.
   // Its own master switch, rules and dry-run guard are applied inside the engine.
-  TorrentAutomationEngine::processNewArticles(results.updatedFeeds(), m_application);
+  TorrentAutomationEngine::processNewArticles(automationArticles, m_application);
 
-  const bool some_unquiet_feed = qlinq::from(results.updatedFeeds().keys()).any([](Feed* feed) {
+  const bool some_unquiet_feed = !torrentConfig.silentNotifications &&
+    !qApp->property("torrentSessionSilent").toBool() &&
+    qlinq::from(visibleResults.updatedFeeds().keys()).any([](Feed* feed) {
     return !feed->isQuiet();
   });
 
@@ -389,10 +413,10 @@ void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults
                           QString(),
                           QSystemTrayIcon::MessageIcon::NoIcon};
     if (m_application->toastNotifications() != nullptr) {
-      message.m_feedFetchResults = results;
+      message.m_feedFetchResults = visibleResults;
     }
     else {
-      message.m_message = results.overview(10);
+      message.m_message = visibleResults.overview(10);
     }
     showGuiMessage(Notification::Event::NewUnreadArticlesFetched, message, {}, {}, nullptr);
   }

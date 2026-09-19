@@ -760,6 +760,8 @@ void RTorrentClient::addNext() {
   QStringList arguments{QString(), m_pending.dequeue()};
   if (!m_config.savePath.isEmpty()) arguments.append(QStringLiteral("d.directory.set=%1").arg(m_config.savePath));
   if (!m_config.category.isEmpty()) arguments.append(QStringLiteral("d.custom1.set=%1").arg(m_config.category));
+  else if (m_config.tags.contains(QStringLiteral("rssguard-auto")))
+    arguments.append(QStringLiteral("d.custom1.set=RSS Guard"));
   if (m_config.tags.contains(QStringLiteral("rssguard-auto")))
     arguments.append(QStringLiteral("d.custom.set=rssguard.automation,rssguard-auto"));
   call(QStringLiteral("load.start"), arguments, [this](QNetworkReply* reply, const QByteArray& body) {
@@ -772,7 +774,8 @@ void RTorrentClient::addNext() {
 void RTorrentClient::fetchStatus() {
   const QStringList methods{QStringLiteral("d.hash="), QStringLiteral("d.name="),
                             QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
-                            QStringLiteral("d.ratio="), QStringLiteral("d.creation_date="),
+                            QStringLiteral("d.ratio="), QStringLiteral("d.timestamp.started="),
+                            QStringLiteral("d.timestamp.finished="), QStringLiteral("d.timestamp.last_xfer="),
                             QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
                             QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
                             QStringLiteral("d.custom=rssguard.automation")};
@@ -798,7 +801,7 @@ void RTorrentClient::fetchStatus() {
     }
     else {
       for (const QStringList& values : xmlRpcRows(body)) {
-        if (values.size() < 10) continue;
+        if (values.size() < 12) continue;
         TorrentRemoteItem item;
         item.hash = values.at(0);
         item.name = values.at(1);
@@ -806,16 +809,22 @@ void RTorrentClient::fetchStatus() {
         const qint64 completedBytes = values.at(3).toLongLong();
         item.progress = item.sizeBytes > 0 ? double(completedBytes) / double(item.sizeBytes) : 0.0;
         item.ratio = values.at(4).toDouble() / 1000.0;
-        item.added = QDateTime::fromSecsSinceEpoch(values.at(5).toLongLong());
-        item.downloadBytesPerSecond = values.at(7).toLongLong();
-        item.uploadBytesPerSecond = values.at(8).toLongLong();
+        const qint64 startedAt = values.at(5).toLongLong();
+        const qint64 finishedAt = values.at(6).toLongLong();
+        const qint64 activeAt = values.at(7).toLongLong();
+        if (startedAt > 0) item.added = QDateTime::fromSecsSinceEpoch(startedAt, Qt::UTC);
+        if (finishedAt > 0) item.completed = QDateTime::fromSecsSinceEpoch(finishedAt, Qt::UTC);
+        if (activeAt > 0) item.lastActivity = QDateTime::fromSecsSinceEpoch(activeAt, Qt::UTC);
+        item.ageSource = finishedAt > 0 ? tr("rTorrent finished timestamp") : tr("rTorrent started timestamp");
+        item.downloadBytesPerSecond = values.at(9).toLongLong();
+        item.uploadBytesPerSecond = values.at(10).toLongLong();
         status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
         status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
-        const bool started = values.at(6).toInt() != 0;
-        const bool complete = values.at(9).toInt() != 0;
-        item.downloading = started && !complete && values.at(7).toLongLong() > 0;
+        const bool started = values.at(8).toInt() != 0;
+        const bool complete = values.at(11).toInt() != 0;
+        item.downloading = started && !complete && values.at(9).toLongLong() > 0;
         item.seeding = started && complete;
-        item.managedByAutomation = values.size() > 10 && values.at(10) == QStringLiteral("rssguard-auto");
+        item.managedByAutomation = values.size() > 12 && values.at(12) == QStringLiteral("rssguard-auto");
         status.activeDownloads += item.downloading ? 1 : 0;
         status.queuedDownloads += !started && !complete ? 1 : 0;
         status.seeding += item.seeding ? 1 : 0;

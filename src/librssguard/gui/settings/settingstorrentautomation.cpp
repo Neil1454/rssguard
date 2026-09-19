@@ -146,7 +146,10 @@ namespace {
     PresetBalanced = 2,
     PresetThirtyDay = 3,
     PresetQuickTurnaround = 4,
-    PresetLongSeed = 5
+    PresetSuperQuickPopular = 5,
+    PresetSuperQuickRatio = 6,
+    PresetSuperQuickCutoff = 7,
+    PresetLongSeed = 8
   };
 
   QString quickPresetName(int preset) {
@@ -155,6 +158,9 @@ namespace {
       case PresetBalanced: return QObject::tr("Balanced protected automation");
       case PresetThirtyDay: return QObject::tr("30-day automatic rotation");
       case PresetQuickTurnaround: return QObject::tr("Quick turnaround — 3-day seed / 7-day limit");
+      case PresetSuperQuickPopular: return QObject::tr("Super Quick — popularity chaser / 10-hour cap");
+      case PresetSuperQuickRatio: return QObject::tr("Super Quick — ratio builder");
+      case PresetSuperQuickCutoff: return QObject::tr("Super Quick — hard 2-hour cutoff");
       case PresetLongSeed: return QObject::tr("Long-term seeding");
       default: return QObject::tr("Choose a preset…");
     }
@@ -186,6 +192,24 @@ namespace {
         does = QObject::tr("Makes storage-pressure cleanup eligible after 72 hours completed, ratio 0.5 and 6 hours inactive; keeps cleaning until 60 GiB is free; uses a 6-hour grace period; and can remove up to three torrents per run. A firm 168-hour (7-day) deadline removes completed managed torrents even when space is healthy.");
         keeps = QObject::tr("Active and unknown uploads, uploads seen within 6 hours, protected tags/trackers and minimum-copy protection are retained before the deadline. Confirmation and Dry run start enabled. Clients, per-client capacities and RSS rules are preserved.");
         risk = QObject::tr("This is deliberately aggressive. A 0.5 ratio or 7-day firm deadline may be too short for private-tracker rules, bonus goals or slow swarms. At the deadline, upload and ratio delays no longer postpone removal. Once Dry run is disabled and a deletion is approved, the torrent job and downloaded files can be permanently deleted.");
+        break;
+      case PresetSuperQuickPopular:
+        title = QObject::tr("Keep busy new releases briefly, then recover space quickly");
+        does = QObject::tr("Protects meaningful upload activity, becomes eligible after 2 hours and 1 hour inactive, and applies a firm 10-hour maximum. Limits each client to one active automated download so close arrivals spread across healthy clients.");
+        keeps = QObject::tr("Dry run, confirmation, unknown-speed protection, protected tags/trackers and duplicate prevention remain enabled.");
+        risk = QObject::tr("The 10-hour deadline is firm. Check private-tracker minimum seed-time and ratio rules before live use.");
+        break;
+      case PresetSuperQuickRatio:
+        title = QObject::tr("Short-lived ratio building for active new torrents");
+        does = QObject::tr("Targets ratio 1.0, protects current/recent upload activity, becomes eligible after 2 hours and 1 hour inactive, and enforces a firm 24-hour cap.");
+        keeps = QObject::tr("Dry run and deletion confirmation start enabled. Client destinations and RSS rules are preserved.");
+        risk = QObject::tr("A torrent can be removed at 24 hours even if its target ratio was not reached.");
+        break;
+      case PresetSuperQuickCutoff:
+        title = QObject::tr("Absolute shortest predictable turnaround");
+        does = QObject::tr("Applies a firm configurable 2-hour deadline, with one active automated download per client and up to three removals per cleanup run.");
+        keeps = QObject::tr("Dry run, confirmation, protected tags/trackers and minimum-copy protection remain available.");
+        risk = QObject::tr("This deliberately ignores ratio and activity at the deadline. It can breach tracker rules unless you increase the hours.");
         break;
       case PresetLongSeed:
         title = QObject::tr("Keep torrents seeding for longer");
@@ -244,6 +268,7 @@ void SettingsTorrentAutomation::loadUi() {
   outer->addLayout(wizardRow);
 
   auto* tabs = new QTabWidget(this);
+  m_tabs = tabs;
   outer->addWidget(tabs, 1);
 
   auto* general = new QWidget(tabs);
@@ -289,6 +314,12 @@ void SettingsTorrentAutomation::loadUi() {
   m_enabled = new QCheckBox(tr("Enable torrent automation"), general);
   m_dryRun = new QCheckBox(tr("Dry run — report decisions without sending"), general);
   m_notifications = new QCheckBox(tr("Show automation notifications"), general);
+  m_paused = new QCheckBox(tr("Pause all unattended torrent automation"), general);
+  m_silent = new QCheckBox(tr("Always run silently (keep safety confirmations queued)"), general);
+  m_ignoreInitial = new QCheckBox(tr("Treat the first fetched batch from each feed as a baseline"), general);
+  m_notificationDuration = new QSpinBox(general); m_notificationDuration->setRange(0, 3600); m_notificationDuration->setSuffix(tr(" seconds"));
+  m_notificationDuration->setSpecialValueText(tr("Use global notification time"));
+  m_maxConsecutive = new QSpinBox(general); m_maxConsecutive->setRange(1, 20);
   m_strategy = new QComboBox(general);
   for (int i = 0; i <= static_cast<int>(TorrentRoutingStrategy::Balanced); ++i)
     m_strategy->addItem(TorrentAutomationConfig::strategyName(static_cast<TorrentRoutingStrategy>(i)), i);
@@ -313,6 +344,11 @@ void SettingsTorrentAutomation::loadUi() {
   generalForm->addRow(m_enabled);
   generalForm->addRow(m_dryRun);
   generalForm->addRow(m_notifications);
+  generalForm->addRow(m_paused);
+  generalForm->addRow(m_silent);
+  generalForm->addRow(m_ignoreInitial);
+  generalForm->addRow(tr("Torrent popup time:"), m_notificationDuration);
+  generalForm->addRow(tr("Consecutive assignments per client:"), m_maxConsecutive);
   generalForm->addRow(tr("Routing strategy:"), m_strategy);
   generalForm->addRow(tr("Activity history entries:"), m_historyLimit);
   generalForm->addRow(tr("Assumed size when unknown:"), m_unknownSizeGb);
@@ -540,6 +576,25 @@ void SettingsTorrentAutomation::loadUi() {
   m_cleanupStopGb = new QDoubleSpinBox(cleanupPage); m_cleanupStopGb->setRange(0, 1000000); m_cleanupStopGb->setSuffix(tr(" GB"));
   m_protectUploading = new QCheckBox(tr("Protect torrents uploading above"), cleanupPage);
   m_protectUploadKib = new QSpinBox(cleanupPage); m_protectUploadKib->setRange(1, 100000000); m_protectUploadKib->setSuffix(tr(" KiB/s"));
+  m_speedUnit = new QComboBox(cleanupPage);
+  m_speedUnit->addItem(tr("KiB/s (binary kilobytes)"), QStringLiteral("KiB/s"));
+  m_speedUnit->addItem(tr("MiB/s (binary megabytes)"), QStringLiteral("MiB/s"));
+  m_speedUnit->addItem(tr("KB/s (decimal kilobytes)"), QStringLiteral("KB/s"));
+  m_speedUnit->addItem(tr("MB/s (decimal megabytes)"), QStringLiteral("MB/s"));
+  m_speedUnit->addItem(tr("kbit/s (kilobits)"), QStringLiteral("kbit/s"));
+  m_speedUnit->addItem(tr("Mbit/s (megabits)"), QStringLiteral("Mbit/s"));
+  m_speedUnit->setProperty("previousUnit", QStringLiteral("KiB/s"));
+  connect(m_speedUnit, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+    const QHash<QString, double> factors{{QStringLiteral("KiB/s"), 1024.0}, {QStringLiteral("MiB/s"), 1048576.0},
+      {QStringLiteral("KB/s"), 1000.0}, {QStringLiteral("MB/s"), 1000000.0},
+      {QStringLiteral("kbit/s"), 125.0}, {QStringLiteral("Mbit/s"), 125000.0}};
+    const QString previous = m_speedUnit->property("previousUnit").toString();
+    const QString current = m_speedUnit->currentData().toString();
+    const qint64 bytes = qint64(m_protectUploadKib->value() * factors.value(previous, 1024.0));
+    m_protectUploadKib->setSuffix(QStringLiteral(" ") + current);
+    m_protectUploadKib->setValue(qMax(1, int(bytes / factors.value(current, 1024.0))));
+    m_speedUnit->setProperty("previousUnit", current);
+  });
   m_protectUnknownSpeed = new QCheckBox(tr("Protect a torrent when its upload speed is unavailable"), cleanupPage);
   m_protectRecentHours = new QSpinBox(cleanupPage); m_protectRecentHours->setRange(0, 8760); m_protectRecentHours->setSuffix(tr(" hours"));
   m_cleanupGrace = new QCheckBox(tr("Use a grace period before permanent removal"), cleanupPage);
@@ -606,7 +661,9 @@ void SettingsTorrentAutomation::loadUi() {
   cleanupForm->addRow(tr("Minimum inactivity:"), optionalControl(m_inactiveHoursEnabled, m_inactiveHours));
   cleanupForm->addRow(tr("Maximum removals per run:"), optionalControl(m_maxRemovalsEnabled, m_maxRemovals));
   cleanupForm->addRow(tr("Target free space after cleanup:"), optionalControl(m_cleanupStopGbEnabled, m_cleanupStopGb));
-  cleanupForm->addRow(m_protectUploading, m_protectUploadKib);
+  auto* uploadSpeedRow = new QWidget(cleanupPage); auto* uploadSpeedLayout = new QHBoxLayout(uploadSpeedRow);
+  uploadSpeedLayout->setContentsMargins(0, 0, 0, 0); uploadSpeedLayout->addWidget(m_protectUploadKib); uploadSpeedLayout->addWidget(m_speedUnit);
+  cleanupForm->addRow(m_protectUploading, uploadSpeedRow);
   cleanupForm->addRow(m_protectUnknownSpeed);
   cleanupForm->addRow(tr("Protect after recent upload:"), m_protectRecentHours);
   cleanupForm->addRow(m_cleanupGrace, m_cleanupGraceHours);
@@ -824,6 +881,11 @@ void SettingsTorrentAutomation::loadSettings() {
   m_enabled->setChecked(m_config.enabled);
   m_dryRun->setChecked(m_config.dryRun);
   m_notifications->setChecked(m_config.showNotifications);
+  m_paused->setChecked(m_config.paused);
+  m_silent->setChecked(m_config.silentNotifications);
+  m_ignoreInitial->setChecked(m_config.ignoreInitialFeedBatch);
+  m_notificationDuration->setValue(m_config.notificationDurationSeconds);
+  m_maxConsecutive->setValue(m_config.maximumConsecutiveAssignments);
   m_strategy->setCurrentIndex(m_strategy->findData(static_cast<int>(m_config.strategy)));
   m_retryEnabled->setChecked(m_config.retryEnabled);
   m_retryAttempts->setValue(m_config.retryAttempts);
@@ -867,7 +929,13 @@ void SettingsTorrentAutomation::loadSettings() {
   m_cleanupStopGbEnabled->setChecked(m_config.cleanupStopFreeEnabled);
   m_cleanupStopGb->setValue(m_config.cleanupStopFreeBytes / GiB);
   m_protectUploading->setChecked(m_config.protectUploadingEnabled);
-  m_protectUploadKib->setValue(int(m_config.protectUploadBytesPerSecond / 1024));
+  m_speedUnit->setCurrentIndex(m_speedUnit->findData(m_config.speedDisplayUnit));
+  m_speedUnit->setProperty("previousUnit", m_config.speedDisplayUnit);
+  const QHash<QString, double> speedFactors{{QStringLiteral("KiB/s"), 1024.0}, {QStringLiteral("MiB/s"), 1048576.0},
+    {QStringLiteral("KB/s"), 1000.0}, {QStringLiteral("MB/s"), 1000000.0},
+    {QStringLiteral("kbit/s"), 125.0}, {QStringLiteral("Mbit/s"), 125000.0}};
+  m_protectUploadKib->setSuffix(QStringLiteral(" ") + m_config.speedDisplayUnit);
+  m_protectUploadKib->setValue(qMax(1, int(m_config.protectUploadBytesPerSecond / speedFactors.value(m_config.speedDisplayUnit, 1024.0))));
   m_protectUnknownSpeed->setChecked(m_config.protectWhenSpeedUnknown);
   m_protectRecentHours->setValue(m_config.protectRecentUploadHours);
   m_cleanupGrace->setChecked(m_config.cleanupGraceEnabled);
@@ -893,6 +961,11 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.enabled = m_enabled->isChecked();
   m_config.dryRun = m_dryRun->isChecked();
   m_config.showNotifications = m_notifications->isChecked();
+  m_config.paused = m_paused->isChecked();
+  m_config.silentNotifications = m_silent->isChecked();
+  m_config.ignoreInitialFeedBatch = m_ignoreInitial->isChecked();
+  m_config.notificationDurationSeconds = m_notificationDuration->value();
+  m_config.maximumConsecutiveAssignments = m_maxConsecutive->value();
   m_config.strategy = static_cast<TorrentRoutingStrategy>(m_strategy->currentData().toInt());
   m_config.retryMinutes = qMax(1, m_retryInitialSeconds->value() / 60);
   m_config.retryEnabled = m_retryEnabled->isChecked();
@@ -932,7 +1005,11 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.cleanupStopFreeEnabled = m_cleanupStopGbEnabled->isChecked();
   m_config.cleanupStopFreeBytes = qint64(m_cleanupStopGb->value() * GiB);
   m_config.protectUploadingEnabled = m_protectUploading->isChecked();
-  m_config.protectUploadBytesPerSecond = qint64(m_protectUploadKib->value()) * 1024;
+  m_config.speedDisplayUnit = m_speedUnit->currentData().toString();
+  const QHash<QString, double> speedFactors{{QStringLiteral("KiB/s"), 1024.0}, {QStringLiteral("MiB/s"), 1048576.0},
+    {QStringLiteral("KB/s"), 1000.0}, {QStringLiteral("MB/s"), 1000000.0},
+    {QStringLiteral("kbit/s"), 125.0}, {QStringLiteral("Mbit/s"), 125000.0}};
+  m_config.protectUploadBytesPerSecond = qint64(m_protectUploadKib->value() * speedFactors.value(m_config.speedDisplayUnit, 1024.0));
   m_config.protectWhenSpeedUnknown = m_protectUnknownSpeed->isChecked();
   m_config.protectRecentUploadHours = m_protectRecentHours->value();
   m_config.cleanupGraceEnabled = m_cleanupGrace->isChecked();
@@ -1419,6 +1496,24 @@ void SettingsTorrentAutomation::applyQuickPreset(int preset) {
     m_retentionEnabled->setChecked(true);
     m_retentionHours->setValue(168);
     m_retentionStrict->setChecked(true);
+  }
+  else if (preset == PresetSuperQuickPopular || preset == PresetSuperQuickRatio ||
+           preset == PresetSuperQuickCutoff) {
+    m_seedHours->setValue(2);
+    m_ratio->setValue(preset == PresetSuperQuickRatio ? 1.0 : 0.0);
+    m_ratioEnabled->setChecked(preset == PresetSuperQuickRatio);
+    m_inactiveHours->setValue(1);
+    m_cleanupStopGb->setValue(60.0);
+    m_protectRecentHours->setValue(1);
+    m_cleanupGraceHours->setValue(1);
+    m_maxRemovals->setValue(3);
+    m_retentionEnabled->setChecked(true);
+    m_retentionHours->setValue(preset == PresetSuperQuickPopular ? 10 :
+                               preset == PresetSuperQuickRatio ? 24 : 2);
+    m_retentionStrict->setChecked(true);
+    m_maxConsecutive->setValue(1);
+    for (int row = 0; row < m_clients->rowCount(); ++row)
+      if (QSpinBox* limit = qobject_cast<QSpinBox*>(m_clients->cellWidget(row, 2))) limit->setValue(1);
   }
   else if (preset == PresetLongSeed) {
     m_seedHours->setValue(720);
@@ -1948,6 +2043,16 @@ void SettingsTorrentAutomation::runSetupWizard() {
         maxRemovals->setValue(3); retentionEnabled->setChecked(true);
         retentionHours->setValue(168); retentionStrict->setChecked(true);
       }
+      else if (preset == PresetSuperQuickPopular || preset == PresetSuperQuickRatio ||
+               preset == PresetSuperQuickCutoff) {
+        seedHours->setValue(2); ratio->setValue(preset == PresetSuperQuickRatio ? 1.0 : 0.0);
+        ratioEnabled->setChecked(preset == PresetSuperQuickRatio); inactiveHours->setValue(1);
+        stopSpace->setValue(60.0); recentUpload->setValue(1); graceHours->setValue(1);
+        maxRemovals->setValue(3); retentionEnabled->setChecked(true);
+        retentionHours->setValue(preset == PresetSuperQuickPopular ? 10 :
+                                 preset == PresetSuperQuickRatio ? 24 : 2);
+        retentionStrict->setChecked(true);
+      }
       else if (preset == PresetLongSeed) {
         seedHours->setValue(720); ratio->setValue(2.0); inactiveHours->setValue(72);
         graceHours->setValue(48); retentionEnabled->setChecked(true);
@@ -2075,19 +2180,49 @@ void SettingsTorrentAutomation::runReadinessAudit() {
   const int queued = TorrentAutomationEngine::instance(qApp)->pendingRetries().size();
   if (queued > 0) warnings.append(tr("%1 automation item(s) are currently queued.").arg(queued));
 
-  QMessageBox report(this);
-  report.setWindowTitle(tr("Torrent automation readiness"));
-  report.setIcon(errors.isEmpty() ? (warnings.isEmpty() ? QMessageBox::Information : QMessageBox::Warning)
-                                  : QMessageBox::Critical);
-  report.setText(errors.isEmpty() ? (warnings.isEmpty() ? tr("Ready for live automation.")
-                                                        : tr("Usable, but review the warnings before going live."))
-                                  : tr("Not ready for unattended live automation."));
-  QStringList detail;
-  if (!errors.isEmpty()) detail << tr("BLOCKING ISSUES:") << errors;
-  if (!warnings.isEmpty()) detail << QString() << tr("WARNINGS:") << warnings;
-  if (!passed.isEmpty()) detail << QString() << tr("PASSED:") << passed;
-  report.setDetailedText(detail.join(QLatin1Char('\n')));
-  report.exec();
+  QDialog report(this);
+  report.setWindowTitle(tr("Torrent automation readiness")); report.resize(760, 520);
+  auto* layout = new QVBoxLayout(&report);
+  auto* summary = new QLabel(errors.isEmpty() ? (warnings.isEmpty() ? tr("Ready for live automation.")
+                                                                  : tr("Usable, but review the warnings before going live."))
+                                             : tr("Not ready for unattended live automation."), &report);
+  summary->setWordWrap(true); layout->addWidget(summary);
+  auto* issues = new QListWidget(&report); issues->setWordWrap(true); layout->addWidget(issues, 1);
+  const auto targetTab = [](const QString& text) {
+    if (text.contains(QStringLiteral("client"), Qt::CaseInsensitive) || text.contains(QStringLiteral("disk"), Qt::CaseInsensitive)) return 3;
+    if (text.contains(QStringLiteral("rule"), Qt::CaseInsensitive)) return 4;
+    if (text.contains(QStringLiteral("cleanup"), Qt::CaseInsensitive) || text.contains(QStringLiteral("retention"), Qt::CaseInsensitive) || text.contains(QStringLiteral("removal"), Qt::CaseInsensitive)) return 7;
+    if (text.contains(QStringLiteral("queue"), Qt::CaseInsensitive)) return 6;
+    return 0;
+  };
+  const auto addItems = [issues, targetTab](const QString& heading, const QStringList& values, const QColor& colour) {
+    for (const QString& value : values) {
+      auto* item = new QListWidgetItem(QStringLiteral("%1  %2").arg(heading, value), issues);
+      item->setForeground(colour); item->setData(Qt::UserRole, targetTab(value));
+      item->setToolTip(QObject::tr("Double-click to open the relevant settings section."));
+    }
+  };
+  addItems(tr("BLOCKED:"), errors, QColor(QStringLiteral("#c62828")));
+  addItems(tr("WARNING:"), warnings, QColor(QStringLiteral("#c77700")));
+  addItems(tr("PASSED:"), passed, QColor(QStringLiteral("#2e7d32")));
+  connect(issues, &QListWidget::itemDoubleClicked, &report, [this, &report](QListWidgetItem* item) {
+    const int tab = item->data(Qt::UserRole).toInt();
+    report.accept();
+    if (m_tabs != nullptr && tab >= 0 && tab < m_tabs->count()) {
+      m_tabs->setCurrentIndex(tab);
+      QWidget* page = m_tabs->widget(tab);
+      page->setStyleSheet(QStringLiteral("QWidget { border: 2px solid #ffb300; }") );
+      QTimer::singleShot(1800, page, [page]() { page->setStyleSheet(QString()); });
+      page->setToolTip(tr("Review the highlighted section, change the setting if needed, then run readiness again."));
+    }
+  });
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &report);
+  auto* recheck = buttons->addButton(tr("Recheck"), QDialogButtonBox::ActionRole);
+  connect(buttons, &QDialogButtonBox::rejected, &report, &QDialog::reject);
+  connect(recheck, &QPushButton::clicked, &report, &QDialog::accept);
+  layout->addWidget(buttons);
+  if (report.exec() == QDialog::Accepted && report.result() == QDialog::Accepted && report.isVisible() == false &&
+      recheck->hasFocus()) QTimer::singleShot(0, this, &SettingsTorrentAutomation::runReadinessAudit);
 }
 
 void SettingsTorrentAutomation::exportConfiguration() {

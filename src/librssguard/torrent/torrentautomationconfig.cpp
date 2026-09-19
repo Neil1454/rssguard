@@ -43,6 +43,13 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.enabled = root.value(QStringLiteral("enabled")).toBool(false);
   config.dryRun = root.value(QStringLiteral("dryRun")).toBool(true);
   config.showNotifications = root.value(QStringLiteral("showNotifications")).toBool(true);
+  config.paused = root.value(QStringLiteral("paused")).toBool(false);
+  config.silentNotifications = root.value(QStringLiteral("silentNotifications")).toBool(false);
+  config.ignoreInitialFeedBatch = root.value(QStringLiteral("ignoreInitialFeedBatch")).toBool(false);
+  config.markInitialFeedBatchRead = root.value(QStringLiteral("markInitialFeedBatchRead")).toBool(false);
+  config.notificationDurationSeconds = qMax(0, root.value(QStringLiteral("notificationDurationSeconds")).toInt(0));
+  config.maximumConsecutiveAssignments = qMax(1, root.value(QStringLiteral("maximumConsecutiveAssignments")).toInt(1));
+  config.speedDisplayUnit = root.value(QStringLiteral("speedDisplayUnit")).toString(QStringLiteral("MiB/s"));
   config.strategy = static_cast<TorrentRoutingStrategy>(root.value(QStringLiteral("strategy")).toInt(5));
   config.retryMinutes = root.value(QStringLiteral("retryMinutes")).toInt(1);
   config.retryEnabled = root.value(QStringLiteral("retryEnabled")).toBool(true);
@@ -151,6 +158,13 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("enabled"), enabled);
   root.insert(QStringLiteral("dryRun"), dryRun);
   root.insert(QStringLiteral("showNotifications"), showNotifications);
+  root.insert(QStringLiteral("paused"), paused);
+  root.insert(QStringLiteral("silentNotifications"), silentNotifications);
+  root.insert(QStringLiteral("ignoreInitialFeedBatch"), ignoreInitialFeedBatch);
+  root.insert(QStringLiteral("markInitialFeedBatchRead"), markInitialFeedBatchRead);
+  root.insert(QStringLiteral("notificationDurationSeconds"), notificationDurationSeconds);
+  root.insert(QStringLiteral("maximumConsecutiveAssignments"), maximumConsecutiveAssignments);
+  root.insert(QStringLiteral("speedDisplayUnit"), speedDisplayUnit);
   root.insert(QStringLiteral("strategy"), static_cast<int>(strategy));
   root.insert(QStringLiteral("retryMinutes"), retryMinutes);
   root.insert(QStringLiteral("retryEnabled"), retryEnabled);
