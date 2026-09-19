@@ -46,6 +46,8 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTimer>
+#include <QUrl>
+#include <QUrlQuery>
 #include <QUuid>
 #include <QVBoxLayout>
 #include <QWizard>
@@ -88,6 +90,21 @@ namespace {
     if (!numberOk || number < 0.0) return 0;
     const QString unit = match.captured(2).isEmpty() ? defaultUnit : match.captured(2);
     return qint64(number * byteUnitFactor(unit));
+  }
+
+  QString sanitizedActivityUrl(const QString& raw) {
+    QUrl url(raw);
+    if (!url.isValid() || url.query().isEmpty()) return raw;
+    QUrlQuery source(url), safe;
+    static const QRegularExpression secretName(
+      QStringLiteral("^(torrent_?pass|passkey|auth|token|api_?key|key|password|secret)$"),
+      QRegularExpression::CaseInsensitiveOption);
+    for (const auto& item : source.queryItems(QUrl::FullyDecoded)) {
+      if (secretName.match(item.first).hasMatch()) safe.addQueryItem(item.first, QStringLiteral("[REDACTED]"));
+      else safe.addQueryItem(item.first, item.second);
+    }
+    url.setQuery(safe);
+    return url.toString(QUrl::FullyEncoded);
   }
 
   QString formatTransferRate(qint64 bytesPerSecond) {
@@ -554,13 +571,15 @@ void SettingsTorrentAutomation::loadUi() {
 
   auto* cleanupPage = new QWidget(tabs);
   auto* cleanupLayout = new QVBoxLayout(cleanupPage);
-  auto* warning = new QLabel(tr("Cleanup is destructive. It only considers completed torrents carrying RSS Guard's automation marker; manually added torrents are never eligible."), cleanupPage);
+  auto* warning = new QLabel(tr("Cleanup is destructive. By default it considers only completed torrents carrying RSS Guard's automation marker. An advanced option can include every completed torrent returned by the client."), cleanupPage);
   warning->setWordWrap(true);
   cleanupLayout->addWidget(warning);
   auto* cleanupForm = new QFormLayout();
   m_cleanup = new QCheckBox(tr("Allow automatic cleanup for storage pressure and/or maximum retention time"), cleanupPage);
   m_deleteData = new QCheckBox(tr("Delete downloaded data as well as the torrent"), cleanupPage);
   m_confirmCleanup = new QCheckBox(tr("Ask before every removal"), cleanupPage);
+  m_cleanupConfirmationSeconds = new QSpinBox(cleanupPage); m_cleanupConfirmationSeconds->setRange(5, 3600); m_cleanupConfirmationSeconds->setSuffix(tr(" seconds"));
+  m_includeUnmanaged = new QCheckBox(tr("Advanced: allow cleanup of manually added torrents too"), cleanupPage);
   m_retentionEnabled = new QCheckBox(tr("Remove completed managed torrents after a maximum time"), cleanupPage);
   m_retentionHours = new QSpinBox(cleanupPage); m_retentionHours->setRange(1, 100000); m_retentionHours->setSuffix(tr(" hours"));
   m_retentionStrict = new QCheckBox(tr("Treat the maximum time as a firm deadline"), cleanupPage);
@@ -599,7 +618,7 @@ void SettingsTorrentAutomation::loadUi() {
   m_protectRecentHours = new QSpinBox(cleanupPage); m_protectRecentHours->setRange(0, 8760); m_protectRecentHours->setSuffix(tr(" hours"));
   m_cleanupGrace = new QCheckBox(tr("Use a grace period before permanent removal"), cleanupPage);
   m_cleanupGraceHours = new QSpinBox(cleanupPage); m_cleanupGraceHours->setRange(1, 8760); m_cleanupGraceHours->setSuffix(tr(" hours"));
-  m_smartCleanup = new QCheckBox(tr("Use smart cleanup scoring"), cleanupPage);
+  m_smartCleanup = new QCheckBox(tr("Use ratio and size to break ties between equally old torrents"), cleanupPage);
   m_minimumCopiesEnabled = new QCheckBox(tr("Keep completed copies across all clients"), cleanupPage);
   m_minimumCopies = new QSpinBox(cleanupPage); m_minimumCopies->setRange(1, 20);
   m_protectedTags = new QLineEdit(cleanupPage);
@@ -617,6 +636,8 @@ void SettingsTorrentAutomation::loadUi() {
   m_cleanup->setToolTip(tr("Master switch for storage-pressure cleanup and fixed maximum-retention cleanup. Only completed RSS Guard-managed torrents on opted-in clients are considered."));
   m_deleteData->setToolTip(tr("Also erase downloaded files. Leave off to remove only the torrent job. This action cannot be undone."));
   m_confirmCleanup->setToolTip(tr("Ask for approval before every removal. Recommended while validating your rules and limits."));
+  m_cleanupConfirmationSeconds->setToolTip(tr("If the confirmation is unanswered, it closes at this countdown and safely keeps the torrent. Routing continues while the question is open."));
+  m_includeUnmanaged->setToolTip(tr("Inspect every completed torrent reported by the client, not only RSS Guard-managed torrents. Protected hashes, tags, trackers and all other safeguards still apply."));
   m_retentionEnabled->setToolTip(tr("Run periodic cleanup even when no disk space is needed. A completed managed torrent becomes due after the selected time."));
   m_retentionHours->setToolTip(tr("Maximum time after completion before removal. If completion time is unavailable, the client-reported added time is used. Examples: 24 hours = 1 day, 168 = 7 days, 720 = 30 days."));
   m_retentionStrict->setToolTip(tr("When enabled, the deadline overrides ratio, inactivity and upload-activity protections. Protected tags, protected trackers and minimum-copy protection still win."));
@@ -636,7 +657,7 @@ void SettingsTorrentAutomation::loadUi() {
   m_protectRecentHours->setToolTip(tr("Protect a torrent for this long after RSS Guard last observed it uploading. Zero disables historical upload protection."));
   m_cleanupGrace->setToolTip(tr("First mark a torrent as a cleanup candidate, then check it again after the grace period before removal."));
   m_cleanupGraceHours->setToolTip(tr("Minimum wait between selecting a cleanup candidate and allowing its permanent removal."));
-  m_smartCleanup->setToolTip(tr("Rank eligible torrents using age, recoverable size and ratio. Disable to use oldest-completed-first ordering."));
+  m_smartCleanup->setToolTip(tr("Cleanup always selects the oldest eligible completion first. When timestamps tie, this prefers the higher ratio and then the larger recoverable size."));
   m_minimumCopiesEnabled->setToolTip(tr("Do not remove a completed torrent if that would leave fewer than the selected number of completed copies across reachable clients."));
   m_minimumCopies->setToolTip(tr("Minimum completed copies retained across the configured client pool."));
   m_protectedTags->setToolTip(tr("Comma-separated exact tags or labels that must never be removed automatically, for example: keep, archive."));
@@ -654,6 +675,8 @@ void SettingsTorrentAutomation::loadUi() {
   cleanupForm->addRow(m_cleanup);
   cleanupForm->addRow(m_deleteData);
   cleanupForm->addRow(m_confirmCleanup);
+  cleanupForm->addRow(tr("Unanswered confirmation:"), m_cleanupConfirmationSeconds);
+  cleanupForm->addRow(m_includeUnmanaged);
   cleanupForm->addRow(m_retentionEnabled, m_retentionHours);
   cleanupForm->addRow(m_retentionStrict);
   cleanupForm->addRow(tr("Minimum completed/seeding age:"), optionalControl(m_seedHoursEnabled, m_seedHours));
@@ -740,7 +763,8 @@ void SettingsTorrentAutomation::loadUi() {
                                      m_circuitBreaker, m_breakerFailures, m_breakerCooldown,
                                      m_breakerRecoverySuccesses,
                                      m_schedule, m_scheduleStart, m_scheduleEnd,
-                                     m_cleanup, m_deleteData, m_confirmCleanup, m_retentionEnabled,
+                                     m_cleanup, m_deleteData, m_confirmCleanup, m_cleanupConfirmationSeconds,
+                                     m_includeUnmanaged, m_retentionEnabled,
                                      m_retentionHours, m_retentionStrict, m_seedHours, m_ratio,
                                      m_inactiveHours, m_maxRemovals, m_cleanupStopGb, m_seedHoursEnabled,
                                      m_ratioEnabled, m_inactiveHoursEnabled, m_maxRemovalsEnabled,
@@ -915,6 +939,8 @@ void SettingsTorrentAutomation::loadSettings() {
   m_cleanup->setChecked(m_config.cleanupEnabled);
   m_deleteData->setChecked(m_config.deleteData);
   m_confirmCleanup->setChecked(m_config.cleanupRequireConfirmation);
+  m_cleanupConfirmationSeconds->setValue(m_config.cleanupConfirmationSeconds);
+  m_includeUnmanaged->setChecked(m_config.cleanupIncludeUnmanaged);
   m_retentionEnabled->setChecked(m_config.maximumRetentionEnabled);
   m_retentionHours->setValue(m_config.maximumRetentionHours);
   m_retentionStrict->setChecked(m_config.maximumRetentionStrict);
@@ -991,6 +1017,8 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.cleanupEnabled = m_cleanup->isChecked();
   m_config.deleteData = m_deleteData->isChecked();
   m_config.cleanupRequireConfirmation = m_confirmCleanup->isChecked();
+  m_config.cleanupConfirmationSeconds = m_cleanupConfirmationSeconds->value();
+  m_config.cleanupIncludeUnmanaged = m_includeUnmanaged->isChecked();
   m_config.maximumRetentionEnabled = m_retentionEnabled->isChecked();
   m_config.maximumRetentionHours = m_retentionHours->value();
   m_config.maximumRetentionStrict = m_retentionStrict->isChecked();
@@ -1859,6 +1887,10 @@ void SettingsTorrentAutomation::runSetupWizard() {
   auto* cleanupEnabled = check(cleanup, tr("Enable automatic safe cleanup"), m_cleanup->isChecked(), tr("Leave off until dry-run cleanup outcomes have been reviewed."));
   auto* deleteData = check(cleanup, tr("Also delete downloaded data"), m_deleteData->isChecked(), tr("Permanent and cannot be undone. Off removes only the torrent job."));
   auto* confirmCleanup = check(cleanup, tr("Ask before every removal"), m_confirmCleanup->isChecked(), tr("Strongly recommended during setup."));
+  auto* confirmationSeconds = integer(cleanup, m_cleanupConfirmationSeconds->value(), 5, 3600, tr(" seconds"),
+                                      tr("An unanswered question safely keeps the torrent; other routing continues."));
+  auto* includeUnmanaged = check(cleanup, tr("Advanced: also consider manually added torrents"), m_includeUnmanaged->isChecked(),
+                                 tr("Off considers only torrents tagged as RSS Guard-managed. On inventories every completed torrent reported by the client, while protections still apply."));
   auto* seedEnabled = check(cleanup, tr("Require minimum completed/seeding age"), m_seedHoursEnabled->isChecked(), tr("Example: 168 hours is seven days."));
   auto* seedHours = integer(cleanup, m_seedHours->value(), 0, 100000, tr(" hours"), tr("Minimum completed/seeding age."));
   auto* ratioEnabled = check(cleanup, tr("Require minimum share ratio"), m_ratioEnabled->isChecked(), tr("Only torrents meeting the ratio can be considered."));
@@ -1870,19 +1902,22 @@ void SettingsTorrentAutomation::runSetupWizard() {
   auto* stopEnabled = check(cleanup, tr("Stop at a target free-space level"), m_cleanupStopGbEnabled->isChecked(), tr("Cleanup stops after reaching this free-space target."));
   auto* stopSpace = decimal(cleanup, m_cleanupStopGb->value(), 0.0, 1000000.0, 1, tr(" GiB"), tr("Example: 40 GiB."));
   cleanupForm->addRow(cleanupEnabled); cleanupForm->addRow(deleteData); cleanupForm->addRow(confirmCleanup);
+  cleanupForm->addRow(tr("No-answer countdown:"), confirmationSeconds); cleanupForm->addRow(includeUnmanaged);
   cleanupForm->addRow(seedEnabled, seedHours); cleanupForm->addRow(ratioEnabled, ratio);
   cleanupForm->addRow(inactiveEnabled, inactiveHours); cleanupForm->addRow(maxEnabled, maxRemovals);
   cleanupForm->addRow(stopEnabled, stopSpace);
   const auto updateCleanupEditors = [seedEnabled, seedHours, ratioEnabled, ratio, inactiveEnabled, inactiveHours,
                                       maxEnabled, maxRemovals, stopEnabled, stopSpace, cleanupEnabled, deleteData,
-                                      confirmCleanup]() {
+                                      confirmCleanup, confirmationSeconds, includeUnmanaged]() {
     seedHours->setEnabled(seedEnabled->isChecked()); ratio->setEnabled(ratioEnabled->isChecked());
     inactiveHours->setEnabled(inactiveEnabled->isChecked()); maxRemovals->setEnabled(maxEnabled->isChecked());
     stopSpace->setEnabled(stopEnabled->isChecked());
     if (!cleanupEnabled->isChecked()) { deleteData->setChecked(false); confirmCleanup->setChecked(true); }
     deleteData->setEnabled(cleanupEnabled->isChecked()); confirmCleanup->setEnabled(cleanupEnabled->isChecked());
+    confirmationSeconds->setEnabled(cleanupEnabled->isChecked() && confirmCleanup->isChecked());
+    includeUnmanaged->setEnabled(cleanupEnabled->isChecked());
   };
-  for (QCheckBox* option : {cleanupEnabled, seedEnabled, ratioEnabled, inactiveEnabled, maxEnabled, stopEnabled})
+  for (QCheckBox* option : {cleanupEnabled, confirmCleanup, seedEnabled, ratioEnabled, inactiveEnabled, maxEnabled, stopEnabled})
     connect(option, &QCheckBox::toggled, &wizard, updateCleanupEditors);
   updateCleanupEditors();
   auto* cleanupWarning = warning(cleanup, QString());
@@ -1896,7 +1931,7 @@ void SettingsTorrentAutomation::runSetupWizard() {
   connect(cleanupEnabled, &QCheckBox::toggled, &wizard, updateCleanupWarning);
   connect(deleteData, &QCheckBox::toggled, &wizard, updateCleanupWarning); updateCleanupWarning();
   note(cleanup, tr("<b>This page controls storage-pressure cleanup.</b> It acts only when a client needs room. The next page separately controls removal at a fixed age, even when storage is not low."));
-  detailedHelp.insert(wizard.pageIds().constLast(), tr("The cleanup master switch permits both cleanup types. Storage-pressure cleanup runs only when an opted-in client needs room for a new torrent and can recover space only when downloaded-data deletion is enabled. Minimum age, ratio and inactivity are separate gates; every enabled gate must pass. Maximum removals is a per-run emergency limit. The target free-space value tells cleanup when it has recovered enough room. Deleting data removes the actual files and cannot be undone."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("The cleanup master switch permits both cleanup types. Storage-pressure cleanup runs only when an opted-in client needs room for a new torrent and can recover space only when downloaded-data deletion is enabled. Confirmations do not block routing; an unanswered prompt defaults to Keep. Its dialog can enable silent future deletions or permanently protect that one torrent. By default only RSS Guard-managed torrents are eligible. The advanced inventory option includes manually added completed torrents, so use it only after reviewing a dry run. Minimum age, ratio and inactivity are separate gates; every enabled gate must pass. Maximum removals is a per-run emergency limit. Deleting data removes the actual files and cannot be undone."));
 
   QWizardPage* retention = page(tr("8. Maximum retention time"),
     tr("Choose whether a completed RSS Guard-managed torrent must be removed after a fixed time, regardless of whether storage space is needed."));
@@ -1940,7 +1975,7 @@ void SettingsTorrentAutomation::runSetupWizard() {
   auto* recentUpload = integer(protection, m_protectRecentHours->value(), 0, 100000, tr(" hours"), tr("Protect after RSS Guard last observed upload activity; zero disables."));
   auto* grace = check(protection, tr("Require a cleanup grace period"), m_cleanupGrace->isChecked(), tr("A candidate must remain eligible through a later check."));
   auto* graceHours = integer(protection, m_cleanupGraceHours->value(), 1, 100000, tr(" hours"), tr("Minimum delay between candidate marking and removal."));
-  auto* smartOrder = check(protection, tr("Use smart cleanup ordering"), m_smartCleanup->isChecked(), tr("Ranks by age, recoverable size and ratio."));
+  auto* smartOrder = check(protection, tr("Use ratio and size to break equal-age ties"), m_smartCleanup->isChecked(), tr("The oldest eligible completion is always first."));
   auto* copiesEnabled = check(protection, tr("Keep completed copies across clients"), m_minimumCopiesEnabled->isChecked(), tr("Prevents cleanup from removing the last required completed copy."));
   auto* copies = integer(protection, m_minimumCopies->value(), 1, 100, QString(), tr("Minimum completed copies retained."));
   auto* tags = new QLineEdit(m_protectedTags->text(), protection); tags->setToolTip(tr("Comma-separated exact tags, for example: keep, archive"));
@@ -2092,7 +2127,10 @@ void SettingsTorrentAutomation::runSetupWizard() {
   m_schedule->setChecked(schedule->isChecked()); m_scheduleStart->setCurrentIndex(m_scheduleStart->findData(scheduleStart->currentData()));
   m_scheduleEnd->setCurrentIndex(m_scheduleEnd->findData(scheduleEnd->currentData()));
   m_cleanup->setChecked(cleanupEnabled->isChecked()); m_deleteData->setChecked(deleteData->isChecked());
-  m_confirmCleanup->setChecked(confirmCleanup->isChecked()); m_seedHoursEnabled->setChecked(seedEnabled->isChecked());
+  m_confirmCleanup->setChecked(confirmCleanup->isChecked());
+  m_cleanupConfirmationSeconds->setValue(confirmationSeconds->value());
+  m_includeUnmanaged->setChecked(includeUnmanaged->isChecked());
+  m_seedHoursEnabled->setChecked(seedEnabled->isChecked());
   m_retentionEnabled->setChecked(retentionEnabled->isChecked()); m_retentionHours->setValue(retentionHours->value());
   m_retentionStrict->setChecked(retentionStrict->isChecked());
   m_seedHours->setValue(seedHours->value()); m_ratioEnabled->setChecked(ratioEnabled->isChecked()); m_ratio->setValue(ratio->value());
@@ -2416,16 +2454,23 @@ void SettingsTorrentAutomation::exportActivity() {
                                                      tr("JSON files (*.json)"));
   if (path.isEmpty()) return;
   TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(qApp);
-  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-activity-v1")},
+  QJsonArray safeHistory;
+  for (const QJsonValue& value : engine->activityHistory()) {
+    QJsonObject event = value.toObject();
+    if (event.contains(QStringLiteral("url")))
+      event.insert(QStringLiteral("url"), sanitizedActivityUrl(event.value(QStringLiteral("url")).toString()));
+    safeHistory.append(event);
+  }
+  const QJsonObject root{{QStringLiteral("format"), QStringLiteral("rssguard-torrent-activity-v2")},
                          {QStringLiteral("exportedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
-                         {QStringLiteral("history"), engine->activityHistory()},
+                         {QStringLiteral("history"), safeHistory},
                          {QStringLiteral("pendingQueue"), QJsonArray::fromStringList(engine->pendingRetries())}};
   QSaveFile file(path);
   if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
     QMessageBox::warning(this, tr("Activity export failed"), tr("The activity file could not be written.")); return;
   }
   QMessageBox::information(this, tr("Activity exported"),
-                           tr("The report contains automation decisions and may include torrent titles, URLs and client identifiers. It contains no stored passwords or tokens."));
+                           tr("The report contains automation decisions and may include torrent titles, redacted URLs and client identifiers. Known credential-like URL parameters were removed."));
 }
 
 void SettingsTorrentAutomation::clearActivity() {
@@ -2437,7 +2482,8 @@ void SettingsTorrentAutomation::clearActivity() {
 
 void SettingsTorrentAutomation::updateCleanupControls() {
   const bool enabled = m_cleanup->isChecked();
-  const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_retentionEnabled,
+  const QList<QWidget*> cleanup_widgets = {m_deleteData, m_confirmCleanup, m_cleanupConfirmationSeconds,
+                                            m_includeUnmanaged, m_retentionEnabled,
                                             m_retentionStrict, m_seedHoursEnabled, m_ratioEnabled,
                                             m_inactiveHoursEnabled, m_maxRemovalsEnabled, m_cleanupStopGbEnabled,
                                             m_protectUploading, m_protectUnknownSpeed, m_protectRecentHours,

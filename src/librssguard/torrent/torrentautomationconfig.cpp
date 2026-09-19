@@ -82,6 +82,10 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
   config.deleteData = root.value(QStringLiteral("deleteData")).toBool(false);
   config.cleanupRequireConfirmation = root.value(QStringLiteral("cleanupRequireConfirmation")).toBool(true);
+  config.cleanupConfirmationSeconds = qBound(5, root.value(QStringLiteral("cleanupConfirmationSeconds")).toInt(30), 3600);
+  config.cleanupIncludeUnmanaged = root.value(QStringLiteral("cleanupIncludeUnmanaged")).toBool(false);
+  for (const QJsonValue& value : root.value(QStringLiteral("protectedTorrentHashes")).toArray())
+    config.protectedTorrentHashes.append(value.toString().toLower());
   config.maximumRetentionEnabled = root.value(QStringLiteral("maximumRetentionEnabled")).toBool(false);
   config.maximumRetentionHours = qMax(1, root.value(QStringLiteral("maximumRetentionHours")).toInt(720));
   config.maximumRetentionStrict = root.value(QStringLiteral("maximumRetentionStrict")).toBool(true);
@@ -191,6 +195,9 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("cleanupEnabled"), cleanupEnabled);
   root.insert(QStringLiteral("deleteData"), deleteData);
   root.insert(QStringLiteral("cleanupRequireConfirmation"), cleanupRequireConfirmation);
+  root.insert(QStringLiteral("cleanupConfirmationSeconds"), cleanupConfirmationSeconds);
+  root.insert(QStringLiteral("cleanupIncludeUnmanaged"), cleanupIncludeUnmanaged);
+  root.insert(QStringLiteral("protectedTorrentHashes"), QJsonArray::fromStringList(protectedTorrentHashes));
   root.insert(QStringLiteral("maximumRetentionEnabled"), maximumRetentionEnabled);
   root.insert(QStringLiteral("maximumRetentionHours"), maximumRetentionHours);
   root.insert(QStringLiteral("maximumRetentionStrict"), maximumRetentionStrict);

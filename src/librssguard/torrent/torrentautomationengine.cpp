@@ -14,6 +14,7 @@
 
 #include <QCryptographicHash>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -37,6 +38,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <utility>
 
 namespace {
@@ -947,8 +949,10 @@ bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
 
     QList<TorrentRemoteItem> eligible;
     for (const TorrentRemoteItem& item : status.torrents) {
-      if (!item.managedByAutomation || item.hash.isEmpty()) continue;
+      if ((!item.managedByAutomation && !m_config.cleanupIncludeUnmanaged) || item.hash.isEmpty()) continue;
       QString reason;
+      if (m_config.protectedTorrentHashes.contains(item.hash.toLower()))
+        reason = tr("permanently protected by the user");
       if (item.progress < 1.0 || item.downloading) reason = tr("still downloading or incomplete");
       bool protectedByName = false;
       for (const QString& tag : item.tags)
@@ -962,8 +966,12 @@ bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
       if (reason.isEmpty() && m_config.minimumCopiesEnabled &&
           completedCopyCount(item.hash) <= m_config.minimumCopiesAcrossClients)
         reason = tr("minimum-copy protection would be breached");
+      const bool reliablyInactive = item.lastActivity.isValid() &&
+        (!m_config.minimumInactiveHoursEnabled ||
+         item.lastActivity.secsTo(now) >= qint64(m_config.minimumInactiveHours) * 3600);
       if (reason.isEmpty() && m_config.protectUploadingEnabled && item.uploadBytesPerSecond < 0 &&
-          m_config.protectWhenSpeedUnknown) reason = tr("upload speed is unknown and unknown speeds are protected");
+          m_config.protectWhenSpeedUnknown && !reliablyInactive)
+        reason = tr("upload speed is unknown and no reliable old inactivity timestamp is available");
       if (reason.isEmpty() && m_config.protectUploadingEnabled &&
           item.uploadBytesPerSecond >= m_config.protectUploadBytesPerSecond)
         reason = tr("uploading at %1 KiB/s, at or above the %2 KiB/s protection threshold")
@@ -1013,10 +1021,12 @@ bool TorrentAutomationEngine::simulateCleanup(const Job& job) {
       else eligible.append(item);
     }
 
-    std::sort(eligible.begin(), eligible.end(), [this, now](const TorrentRemoteItem& a, const TorrentRemoteItem& b) {
-      if (m_config.smartCleanupOrder) return cleanupScore(a, now) > cleanupScore(b, now);
+    std::sort(eligible.begin(), eligible.end(), [this](const TorrentRemoteItem& a, const TorrentRemoteItem& b) {
       const QDateTime aDate = a.completed.isValid() ? a.completed : a.added;
       const QDateTime bDate = b.completed.isValid() ? b.completed : b.added;
+      if (aDate != bDate) return !bDate.isValid() || (aDate.isValid() && aDate < bDate);
+      if (m_config.smartCleanupOrder && !qFuzzyCompare(a.ratio, b.ratio)) return a.ratio > b.ratio;
+      if (m_config.smartCleanupOrder && a.sizeBytes != b.sizeBytes) return a.sizeBytes > b.sizeBytes;
       return aDate < bDate;
     });
 
@@ -1252,6 +1262,97 @@ void TorrentAutomationEngine::armDeferredJob(const Job& job) {
   });
 }
 
+void TorrentAutomationEngine::requestCleanupConfirmation(
+    const Job& job, int clientIndex, const TorrentRemoteItem& item,
+    const QString& explanation, const std::function<void(bool)>& decision) {
+  const QString promptKey = m_clients.at(clientIndex).id + QLatin1Char('|') + item.hash.toLower();
+  if (m_pendingCleanupPrompts.contains(promptKey)) {
+    decision(false);
+    return;
+  }
+  m_pendingCleanupPrompts.insert(promptKey);
+
+  QWidget* promptParent = qApp->activeModalWidget();
+  if (promptParent == nullptr) promptParent = qApp->mainFormWidget();
+  QDialog* dialog = new QDialog(promptParent, Qt::Dialog | Qt::WindowStaysOnTopHint);
+  dialog->setAttribute(Qt::WA_DeleteOnClose);
+  dialog->setWindowTitle(tr("Confirm torrent deletion"));
+  dialog->setModal(false);
+  QVBoxLayout* layout = new QVBoxLayout(dialog);
+  QLabel* heading = new QLabel(tr("Delete “%1” from %2?").arg(item.name, m_clients.at(clientIndex).name), dialog);
+  QFont headingFont = heading->font();
+  headingFont.setBold(true);
+  heading->setFont(headingFont);
+  heading->setWordWrap(true);
+  layout->addWidget(heading);
+  QLabel* detail = new QLabel(explanation + QLatin1String("\n\n") +
+    (m_config.deleteData
+      ? tr("The torrent and its downloaded data will be permanently deleted.")
+      : tr("The torrent will be removed but its downloaded files will be kept.")), dialog);
+  detail->setWordWrap(true);
+  layout->addWidget(detail);
+
+  QCheckBox* alwaysDelete = new QCheckBox(
+    tr("From now on, automatically approve eligible deletions without asking"), dialog);
+  alwaysDelete->setToolTip(tr("This disables deletion confirmations. All safety, age, activity, ratio, protection and removal-limit rules still apply."));
+  layout->addWidget(alwaysDelete);
+  QCheckBox* protect = new QCheckBox(
+    tr("Leave this torrent alone permanently (never select it for automatic deletion)"), dialog);
+  protect->setToolTip(tr("Stores this torrent's unique hash in the protected list. Future removal must be manual unless protection is later cleared."));
+  layout->addWidget(protect);
+
+  const auto secondsLeft = std::make_shared<int>(qBound(5, m_config.cleanupConfirmationSeconds, 3600));
+  QLabel* countdown = new QLabel(dialog);
+  countdown->setWordWrap(true);
+  layout->addWidget(countdown);
+  QDialogButtonBox* buttons = new QDialogButtonBox(dialog);
+  QPushButton* deleteButton = buttons->addButton(tr("Delete now"), QDialogButtonBox::DestructiveRole);
+  QPushButton* keepButton = buttons->addButton(tr("Keep"), QDialogButtonBox::RejectRole);
+  deleteButton->setDefault(false);
+  keepButton->setDefault(true);
+  layout->addWidget(buttons);
+
+  QTimer* timer = new QTimer(dialog);
+  timer->setInterval(1000);
+  auto updateCountdown = [countdown, secondsLeft]() {
+    countdown->setText(QObject::tr("No response: this torrent will be kept in %1 second(s). Routing and other automation continue while this window is open.")
+                         .arg(*secondsLeft));
+  };
+  updateCountdown();
+  connect(timer, &QTimer::timeout, dialog, [dialog, secondsLeft, updateCountdown]() mutable {
+    --(*secondsLeft);
+    updateCountdown();
+    if (*secondsLeft <= 0) dialog->reject();
+  });
+
+  const auto finished = std::make_shared<bool>(false);
+  const auto finish = [this, dialog, alwaysDelete, protect, promptKey, item, job, clientIndex, decision, finished](bool remove) {
+    if (*finished) return;
+    *finished = true;
+    m_pendingCleanupPrompts.remove(promptKey);
+    if (!remove && protect->isChecked() && !item.hash.isEmpty()) {
+      const QString hash = item.hash.toLower();
+      if (!m_config.protectedTorrentHashes.contains(hash)) m_config.protectedTorrentHashes.append(hash);
+      m_config.save(qApp->settings());
+      record(QStringLiteral("cleanup-protected-permanently"), job, m_clients.at(clientIndex).id,
+             tr("“%1” was marked never to be selected for automatic deletion.").arg(item.name));
+    }
+    if (remove && alwaysDelete->isChecked()) {
+      m_config.cleanupRequireConfirmation = false;
+      m_config.save(qApp->settings());
+      record(QStringLiteral("cleanup-confirmations-disabled"), job, m_clients.at(clientIndex).id,
+             tr("Future eligible torrent deletions will proceed without confirmation."));
+    }
+    decision(remove);
+    dialog->close();
+  };
+  connect(deleteButton, &QPushButton::clicked, dialog, [finish]() { finish(true); });
+  connect(keepButton, &QPushButton::clicked, dialog, [finish]() { finish(false); });
+  connect(dialog, &QDialog::rejected, dialog, [finish]() { finish(false); });
+  timer->start();
+  dialog->open();
+}
+
 bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
   if (!m_config.cleanupEnabled || !m_config.maximumRetentionEnabled) return false;
   if (m_config.cleanupScheduleEnabled &&
@@ -1277,19 +1378,15 @@ bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
     const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(clientIndex).id);
     const TorrentClientStatus& status = m_statuses.at(clientIndex);
     if (!policy.allowCleanup || !status.reachable) continue;
-    if (m_config.deleteData && m_clients.at(clientIndex).type == TorrentClientType::RTorrent) {
-      if (m_config.dryRun)
-        record(QStringLiteral("DRY RUN — DELETE BLOCKED"), job, m_clients.at(clientIndex).id,
-               tr("rTorrent XML-RPC can remove a job but cannot prove that its downloaded files were deleted. Data cleanup is blocked for this client."));
-      continue;
-    }
-
     for (const TorrentRemoteItem& item : status.torrents) {
-      if (!item.managedByAutomation || item.hash.isEmpty() || item.progress < 1.0 || item.downloading) continue;
+      if ((!item.managedByAutomation && !m_config.cleanupIncludeUnmanaged) || item.hash.isEmpty() ||
+          item.progress < 1.0 || item.downloading) continue;
       const QDateTime ageBasis = item.completed.isValid() ? item.completed : item.added;
       if (!ageBasis.isValid() || ageBasis.secsTo(now) < retentionSeconds) continue;
 
       QString protection;
+      if (m_config.protectedTorrentHashes.contains(item.hash.toLower()))
+        protection = tr("permanently protected by the user");
       for (const QString& tag : item.tags) {
         if (m_config.protectedTags.contains(tag, Qt::CaseInsensitive)) {
           protection = tr("protected tag ‘%1’ matched").arg(tag);
@@ -1374,23 +1471,29 @@ bool TorrentAutomationEngine::processRetentionCleanup(const Job& job) {
 
   if (expired.isEmpty() || m_cleanupCount >= removalLimit) return false;
   const ExpiredItem candidate = expired.first();
-  if (m_config.cleanupRequireConfirmation || m_config.deleteData) {
-    const auto answer = QMessageBox::warning(qApp->mainFormWidget(), tr("Confirm expired torrent removal"),
-      tr("“%1” on %2 has reached its %3-hour maximum retention time.%4\n\nAge measured from: %5 (%6).\n\nRemove it now? This action cannot be undone.")
-        .arg(candidate.item.name, m_clients.at(candidate.clientIndex).name)
+  const QString approvalKey = m_clients.at(candidate.clientIndex).id + QLatin1Char('|') + candidate.item.hash.toLower();
+  if (m_config.cleanupRequireConfirmation && !m_approvedCleanupOnce.remove(approvalKey)) {
+    requestCleanupConfirmation(job, candidate.clientIndex, candidate.item,
+      tr("It reached the configured %1-hour maximum retention time. Age measured from %2 (%3).")
         .arg(m_config.maximumRetentionHours)
-        .arg(m_config.deleteData ? tr(" Its downloaded data will also be permanently deleted.")
-                                 : tr(" Its downloaded files will be kept."))
         .arg(candidate.item.ageSource.isEmpty() ? tr("client completion/added timestamp") : candidate.item.ageSource,
              candidate.ageBasis.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm"))),
-      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (answer != QMessageBox::Yes) {
-      // Avoid asking about the same expired item every maintenance tick.
-      m_lastRetentionCheck = now.addSecs(55 * 60);
-      record(QStringLiteral("retention-declined"), job, m_clients.at(candidate.clientIndex).id,
-             tr("Expired torrent removal was declined by the user; the next retention prompt is postponed for about one hour."));
-      return false;
-    }
+      [this, job, approvalKey, candidate, now](bool remove) {
+        if (remove) {
+          m_approvedCleanupOnce.insert(approvalKey);
+          m_jobs.prepend(job);
+        }
+        else {
+          m_lastRetentionCheck = now.addSecs(55 * 60);
+          record(QStringLiteral("retention-kept"), job, m_clients.at(candidate.clientIndex).id,
+                 tr("Expired torrent was kept. It may be offered again on a later cleanup pass."));
+        }
+        if (!m_busy && !m_jobs.isEmpty()) beginBatch();
+        else if (m_busy) processNextJob();
+      });
+    // This dialog is deliberately non-modal: process other routing work now.
+    processNextJob();
+    return true;
   }
 
   TorrentClient* client = TorrentClient::create(m_clients.at(candidate.clientIndex), this);
@@ -1483,7 +1586,11 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
       }
     };
     for (const TorrentRemoteItem& item : clientStatus.torrents) {
-      if (!item.managedByAutomation || item.hash.isEmpty()) continue;
+      if ((!item.managedByAutomation && !m_config.cleanupIncludeUnmanaged) || item.hash.isEmpty()) continue;
+      if (m_config.protectedTorrentHashes.contains(item.hash.toLower())) {
+        clearGraceCandidate(item.hash);
+        continue;
+      }
       if (item.progress < 1.0 || item.downloading) { clearGraceCandidate(item.hash); continue; }
       bool explicitlyProtected = false;
       for (const QString& tag : item.tags)
@@ -1500,8 +1607,11 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
         clearGraceCandidate(item.hash);
         continue;
       }
+      const bool reliablyInactive = item.lastActivity.isValid() &&
+        (!m_config.minimumInactiveHoursEnabled ||
+         item.lastActivity.secsTo(now) >= qint64(m_config.minimumInactiveHours) * 3600);
       if (m_config.protectUploadingEnabled &&
-          ((item.uploadBytesPerSecond < 0 && m_config.protectWhenSpeedUnknown) ||
+          ((item.uploadBytesPerSecond < 0 && m_config.protectWhenSpeedUnknown && !reliablyInactive) ||
            item.uploadBytesPerSecond >= m_config.protectUploadBytesPerSecond)) {
         ++protectedUploads;
         clearGraceCandidate(item.hash);
@@ -1531,10 +1641,12 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
                  .arg(protectedUploads));
       continue;
     }
-    std::sort(candidates.begin(), candidates.end(), [this, now](const TorrentRemoteItem& a, const TorrentRemoteItem& b) {
-      if (m_config.smartCleanupOrder) return cleanupScore(a, now) > cleanupScore(b, now);
+    std::sort(candidates.begin(), candidates.end(), [this](const TorrentRemoteItem& a, const TorrentRemoteItem& b) {
       const QDateTime aDate = a.completed.isValid() ? a.completed : a.added;
       const QDateTime bDate = b.completed.isValid() ? b.completed : b.added;
+      if (aDate != bDate) return !bDate.isValid() || (aDate.isValid() && aDate < bDate);
+      if (m_config.smartCleanupOrder && !qFuzzyCompare(a.ratio, b.ratio)) return a.ratio > b.ratio;
+      if (m_config.smartCleanupOrder && a.sizeBytes != b.sizeBytes) return a.sizeBytes > b.sizeBytes;
       return aDate < bDate;
     });
     const TorrentRemoteItem victim = candidates.first();
@@ -1570,14 +1682,31 @@ bool TorrentAutomationEngine::tryCleanup(const Job& job) {
         continue;
       }
     }
-    const bool noEligibilityFilters = !m_config.minimumSeedHoursEnabled && !m_config.minimumRatioEnabled &&
-                                      !m_config.minimumInactiveHoursEnabled;
-    if (m_config.cleanupRequireConfirmation || m_config.deleteData || noEligibilityFilters) {
-      const auto answer = QMessageBox::warning(qApp->mainFormWidget(), tr("Confirm automatic torrent cleanup"),
-        tr("Remove “%1” from %2%3 to make space for “%4”?\n\nThis action cannot be undone.")
-          .arg(victim.name, m_clients.at(i).name, m_config.deleteData ? tr(" and delete its downloaded data") : QString(), job.title),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-      if (answer != QMessageBox::Yes) { clearGraceCandidate(victim.hash); continue; }
+    const QString approvalKey = m_clients.at(i).id + QLatin1Char('|') + victim.hash.toLower();
+    if (m_config.cleanupRequireConfirmation && !m_approvedCleanupOnce.remove(approvalKey)) {
+      requestCleanupConfirmation(job, i, victim,
+        tr("This is the oldest eligible completed torrent and removing it would free approximately %1 GB for “%2”.")
+          .arg(victim.sizeBytes / 1000000000.0, 0, 'f', 1).arg(job.title),
+        [this, job, approvalKey, victim, i](bool remove) {
+          if (remove) {
+            m_approvedCleanupOnce.insert(approvalKey);
+            m_jobs.prepend(job);
+          }
+          else {
+            for (int index = m_cleanupCandidates.size() - 1; index >= 0; --index) {
+              const QJsonObject marked = m_cleanupCandidates.at(index).toObject();
+              if (marked.value(QStringLiteral("clientId")).toString() == m_clients.at(i).id &&
+                  marked.value(QStringLiteral("hash")).toString().compare(victim.hash, Qt::CaseInsensitive) == 0)
+                m_cleanupCandidates.removeAt(index);
+            }
+            record(QStringLiteral("cleanup-kept"), job, m_clients.at(i).id,
+                   tr("“%1” was kept. Other routing work was not blocked.").arg(victim.name));
+          }
+          if (!m_busy && !m_jobs.isEmpty()) beginBatch();
+          else if (m_busy) processNextJob();
+        });
+      processNextJob();
+      return true;
     }
     TorrentClient* client = TorrentClient::create(m_clients.at(i), this);
     connect(client, &TorrentClient::removeFinished, this, [this, client, job, i, victim](bool success, const QString& message) {

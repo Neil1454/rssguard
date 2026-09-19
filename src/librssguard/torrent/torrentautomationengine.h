@@ -13,6 +13,9 @@
 #include <QObject>
 #include <QPointer>
 #include <QQueue>
+#include <QSet>
+
+#include <functional>
 
 class Feed;
 class QWidget;
@@ -90,6 +93,11 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     void recordDryRunClientAssessments(const Job& job, int selected);
     bool simulateCleanup(const Job& job);
     bool processRetentionCleanup(const Job& job);
+    void requestCleanupConfirmation(const Job& job,
+                                    int clientIndex,
+                                    const TorrentRemoteItem& item,
+                                    const QString& explanation,
+                                    const std::function<void(bool)>& decision);
     QString cleanupEligibilityDetail(const TorrentRemoteItem& item, const QDateTime& now) const;
     void sendJob(const Job& job, int clientIndex);
     bool tryCleanup(const Job& job);
@@ -128,6 +136,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     QJsonArray m_cleanupCandidates;
     QJsonArray m_uploadActivity;
     QJsonArray m_clientHealth;
+    QSet<QString> m_pendingCleanupPrompts;
+    QSet<QString> m_approvedCleanupOnce;
     int m_pendingStatusQueries = 0;
     int m_cleanupCount = 0;
     bool m_busy = false;

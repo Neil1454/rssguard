@@ -839,7 +839,44 @@ void RTorrentClient::fetchStatus() {
 
 void RTorrentClient::removeTorrent(const QString& hash, bool deleteData) {
   if (deleteData) {
-    emit removeFinished(false, tr("This rTorrent XML-RPC endpoint can remove the torrent, but cannot safely prove that downloaded data was deleted. Disable ‘delete downloaded data’ for this client."));
+    QUrl url = endpoint(QString());
+    QString path = url.path();
+    if (path.contains(QStringLiteral("/plugins/httprpc/action.php"), Qt::CaseInsensitive)) {
+      // The configured ruTorrent HTTP-RPC action endpoint already supports
+      // removewithdata.
+    }
+    else if (path.contains(QStringLiteral("/plugins/rpc/rpc.php"), Qt::CaseInsensitive)) {
+      path.replace(QRegularExpression(QStringLiteral("/plugins/rpc/rpc\\.php$"),
+                                      QRegularExpression::CaseInsensitiveOption),
+                   QStringLiteral("/plugins/erasedata/action.php"));
+      url.setPath(path);
+    }
+    else {
+      emit removeFinished(false,
+        tr("Deleting rTorrent data safely requires a ruTorrent endpoint. Configure this client with its /plugins/rpc/rpc.php or /plugins/httprpc/action.php URL and enable the ruTorrent erasedata plug-in."));
+      return;
+    }
+
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader,
+                      QStringLiteral("application/x-www-form-urlencoded; charset=UTF-8"));
+    applyBasicAuthentication(request);
+    QUrlQuery form;
+    form.addQueryItem(QStringLiteral("mode"), QStringLiteral("removewithdata"));
+    form.addQueryItem(QStringLiteral("hash"), hash);
+    form.addQueryItem(QStringLiteral("v"), QStringLiteral("1"));
+    QNetworkReply* reply = m_network->post(request, form.toString(QUrl::FullyEncoded).toUtf8());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+      const QByteArray body = reply->readAll();
+      const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300 &&
+                      !body.toLower().contains("error");
+      emit removeFinished(ok,
+        ok ? tr("ruTorrent accepted the remove-with-data request.")
+           : tr("ruTorrent could not remove the torrent data. Check that its erasedata plug-in is enabled and writable. %1")
+               .arg(networkFailure(reply)));
+      reply->deleteLater();
+    });
     return;
   }
   call(QStringLiteral("d.erase"), {hash}, [this](QNetworkReply* reply, const QByteArray& body) {

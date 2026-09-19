@@ -1,5 +1,16 @@
 # Torrent integration changelog
 
+## Build 71
+
+- Deletion confirmation is now controlled solely by **Ask before every removal**; turning it off allows eligible cleanup to proceed silently while all configured safeguards remain active.
+- Confirmation windows are non-modal, have a configurable safe countdown that defaults to **Keep**, and no longer block routing decisions for incoming releases.
+- Each confirmation can enable silent future deletions or permanently protect that torrent from automatic deletion by its unique hash.
+- Cleanup selection is deterministic oldest-completed-first; ratio and recoverable size are used only to break equal-timestamp ties.
+- Added an advanced option, also explained in the setup wizard, to inventory and consider completed torrents not originally sent by RSS Guard. It remains off by default.
+- Old, reliably inactive torrents are no longer blocked merely because an adapter omitted a current upload-speed value.
+- rTorrent remove-with-data now uses ruTorrent's supported `removewithdata` endpoint when the configured URL identifies its `rpc` or `httprpc` plug-in. Direct XML-RPC configurations remain safely blocked from claiming that data was erased.
+- Activity exports now redact common credential-like URL query parameters, including private-tracker passkeys and tokens.
+
 ## Build 70
 
 - Added three fully explained Super Quick presets: Popularity Chaser (10-hour cap), Ratio Builder (24-hour cap), and Hard Cutoff (2-hour default). All begin in Dry run with confirmation enabled.

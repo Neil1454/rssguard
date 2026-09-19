@@ -11,7 +11,18 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 70 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 71 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 71 deletion and capacity regression checks
+
+1. With **Ask before every removal** off, verify an eligible Transmission torrent is removed with its data without a confirmation window.
+2. With confirmations on, leave the window untouched and verify it counts down to **Keep** while a separate incoming release is still routed.
+3. Tick permanent protection, keep the torrent, and verify later dry runs report it as protected.
+4. Tick automatic future approval, choose **Delete now**, and verify the saved confirmation setting is disabled.
+5. Verify oldest eligible completion is selected before newer idle torrents; equal timestamps may use ratio and size as tie-breakers.
+6. For ruTorrent, configure `/plugins/rpc/rpc.php` or `/plugins/httprpc/action.php`, enable `erasedata`, and verify remove-with-data deletes both the job and payload. Verify direct `/RPC2` refuses to claim file deletion.
+7. Compare dry runs with **consider manually added torrents** off and on; confirm incomplete, active, tagged, tracker-protected and permanently protected items remain excluded.
+8. Export Activity containing a test URL with a fake `torrent_pass` or `passkey` and confirm its value is replaced by `[REDACTED]`.
 
 ## Build 70 pause, rotation and rTorrent regression checks
 

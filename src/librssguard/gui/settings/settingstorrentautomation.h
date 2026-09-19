@@ -100,10 +100,12 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QListWidget* m_queue = nullptr;
     QPushButton *m_editRule = nullptr, *m_removeRule = nullptr;
     QCheckBox *m_cleanup = nullptr, *m_deleteData = nullptr, *m_confirmCleanup = nullptr,
+              *m_includeUnmanaged = nullptr,
               *m_retentionEnabled = nullptr, *m_retentionStrict = nullptr;
     QCheckBox *m_seedHoursEnabled = nullptr, *m_ratioEnabled = nullptr, *m_inactiveHoursEnabled = nullptr,
               *m_maxRemovalsEnabled = nullptr, *m_cleanupStopGbEnabled = nullptr;
     QSpinBox *m_retentionHours = nullptr, *m_seedHours = nullptr, *m_inactiveHours = nullptr,
+             *m_cleanupConfirmationSeconds = nullptr,
              *m_maxRemovals = nullptr;
     QDoubleSpinBox *m_ratio = nullptr, *m_cleanupStopGb = nullptr;
     QCheckBox *m_protectUploading = nullptr, *m_protectUnknownSpeed = nullptr;
