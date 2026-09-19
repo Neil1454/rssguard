@@ -1,22 +1,22 @@
 # <img width="22" src="resources/graphics/rssguard.png" alt="RSS Guard icon"> RSS Guard — Windows Torrent Automation Fork
 
 [![Windows portable build](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml/badge.svg?branch=feature%2Ftorrent-automation)](https://github.com/Neil1454/rssguard/actions/workflows/torrent-windows-portable.yml)
-[![Current test build](https://img.shields.io/badge/current%20test%20build-69-blue)](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-69)
+[![Current test build](https://img.shields.io/badge/current%20test%20build-70-blue)](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-70)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4)](BUILD-WINDOWS.md)
 [![License](https://img.shields.io/badge/license-GPLv3-green)](LICENSE.md)
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 69**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 70**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 69 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 70 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
 ## Download and install
 
-1. Open the permanent [Build 69 GitHub Release](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-69).
-2. Under **Assets**, download **RSSGuard-Torrent-Build-69-Windows-x64.7z**. The adjacent `.sha256` file is available for integrity checking.
+1. Open the permanent [Build 70 GitHub Release](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-70).
+2. Under **Assets**, download **RSSGuard-Torrent-Build-70-Windows-x64.7z**. The adjacent `.sha256` file is available for integrity checking.
 3. Extract the `.7z` archive into a new folder.
 4. Run `rssguard.exe`.
 
@@ -161,7 +161,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 69 — current candidate** | Fixes wizard and Quick Set colour contrast, adds the quick-turnaround preset and proxy privacy comparison, and publishes permanent documented GitHub Releases. |
+| **Build 70 — current candidate** | Adds pause and silent controls, first-fetch baselining, Super Quick profiles, stronger balanced routing, selectable speed units, and corrected rTorrent retention timestamps. |
+| **Build 69** | Fixes wizard and Quick Set colour contrast, adds the quick-turnaround preset and proxy privacy comparison, and publishes permanent documented GitHub Releases. |
 | **Build 68** | Adds Neil Sampson's torrent-feature credit to first launch, About, Windows file details and documentation; makes complete app import/export explicitly cover every torrent section; and expands portable torrent JSON transfer to include every non-secret client and automation option. |
 | **Build 67** | Adds fixed maximum-retention cleanup, safer all-torrent fallback accounting, correct retained-file space handling, and fully explained Quick Set presets on the main page and in the wizard. |
 | **Build 66** | Redesigns the setup wizard as a friendly, polished walkthrough with live safety banners, conditional questions, strategy explanations, per-column client help and in-depth help on every page. |
@@ -202,7 +203,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 69 passed the automated Windows compile, packaging and permanent-release workflow. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 70 passed the automated Windows compile, packaging and permanent-release workflow. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 
