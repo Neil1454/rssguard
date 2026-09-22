@@ -119,7 +119,7 @@ The adapter supports both pre-emptive HTTP Basic authentication and server/rever
 - Sending calls `load.start` asynchronously for each URL, with the required empty target argument.
 - Optional directory and category (`d.custom1`) commands are supported.
 
-rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/httprpc/action.php`, not the homepage; `/RPC2` is another common gateway. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
+rTorrent itself normally exposes SCGI, not HTTP. The configured URL must therefore be an authenticated HTTP(S) XML-RPC gateway provided by the user's web server/reverse proxy. For ruTorrent installations this is normally the ruTorrent web address followed by `/plugins/rpc/rpc.php`, not the homepage; `/RPC2` is another common gateway. Direct and challenged Basic/Digest authentication are supported. RSS Guard does not expose raw SCGI to the internet.
 
 ### Deluge
 

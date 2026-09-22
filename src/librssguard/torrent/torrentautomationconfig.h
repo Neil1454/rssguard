@@ -87,7 +87,7 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool cleanupEnabled = false;
   bool deleteData = false;
   bool cleanupRequireConfirmation = true;
-  int cleanupConfirmationSeconds = 30;
+  int cleanupConfirmationSeconds = 60;
   bool cleanupIncludeUnmanaged = false;
   QStringList protectedTorrentHashes;
   bool maximumRetentionEnabled = false;

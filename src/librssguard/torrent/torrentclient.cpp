@@ -83,6 +83,14 @@ namespace {
     return value > 100000000000LL ? QDateTime::fromMSecsSinceEpoch(value)
                                   : QDateTime::fromSecsSinceEpoch(value);
   }
+
+  QString xmlRpcFaultMessage(const QByteArray& body) {
+    const QString text = QString::fromUtf8(body);
+    const QRegularExpression expression(
+      QStringLiteral("<name>faultString</name>\\s*<value>\\s*<string>([^<]+)</string>"),
+      QRegularExpression::DotMatchesEverythingOption);
+    return expression.match(text).captured(1).trimmed();
+  }
 }
 
 TorrentClient::TorrentClient(TorrentClientConfig config, QObject* parent)
@@ -736,7 +744,13 @@ void RTorrentClient::testConnection() {
       message = tr("Connected successfully to rTorrent %1.").arg(version);
     }
     else if (reply->error() == QNetworkReply::ContentOperationNotPermittedError) {
-      message = tr("This URL does not accept XML-RPC requests. For ruTorrent, use its XML-RPC endpoint, usually the ruTorrent address followed by /plugins/httprpc/action.php. Some installations expose /RPC2 instead.");
+      message = tr("This URL does not accept XML-RPC requests. For ruTorrent, use its XML-RPC endpoint, usually the ruTorrent address followed by /plugins/rpc/rpc.php. Some installations expose /RPC2 instead.");
+    }
+    else if (reply->error() == QNetworkReply::NoError && body.contains("<fault>")) {
+      const QString fault = xmlRpcFaultMessage(body);
+      message = fault.isEmpty()
+                  ? tr("rTorrent returned an XML-RPC fault without a readable explanation.")
+                  : tr("rTorrent XML-RPC fault: %1").arg(fault);
     }
     else {
       message = networkFailure(reply);
@@ -749,12 +763,15 @@ void RTorrentClient::addTorrents(const QStringList& urls) {
   m_pending.clear();
   for (const QString& url : urls) m_pending.enqueue(url);
   m_added = m_failed = 0;
+  m_failureDetails.clear();
   addNext();
 }
 
 void RTorrentClient::addNext() {
   if (m_pending.isEmpty()) {
-    emit addFinished(m_added, m_failed, tr("rTorrent accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed));
+    QString message = tr("rTorrent accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed);
+    if (!m_failureDetails.isEmpty()) message += QLatin1Char(' ') + m_failureDetails.join(QStringLiteral("; "));
+    emit addFinished(m_added, m_failed, message);
     return;
   }
   QStringList arguments{QString(), m_pending.dequeue()};
@@ -766,19 +783,35 @@ void RTorrentClient::addNext() {
     arguments.append(QStringLiteral("d.custom.set=rssguard.automation,rssguard-auto"));
   call(QStringLiteral("load.start"), arguments, [this](QNetworkReply* reply, const QByteArray& body) {
     if (reply->error() == QNetworkReply::NoError && !body.contains("<fault>")) ++m_added;
-    else ++m_failed;
+    else {
+      ++m_failed;
+      QString detail = reply->error() == QNetworkReply::NoError ? xmlRpcFaultMessage(body) : networkFailure(reply);
+      if (detail.isEmpty()) detail = tr("The rTorrent XML-RPC endpoint rejected load.start without a readable fault message.");
+      m_failureDetails.append(detail);
+    }
     addNext();
   });
 }
 
 void RTorrentClient::fetchStatus() {
-  const QStringList methods{QStringLiteral("d.hash="), QStringLiteral("d.name="),
-                            QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
-                            QStringLiteral("d.ratio="), QStringLiteral("d.timestamp.started="),
-                            QStringLiteral("d.timestamp.finished="), QStringLiteral("d.timestamp.last_xfer="),
-                            QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
-                            QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
-                            QStringLiteral("d.custom=rssguard.automation")};
+  fetchStatusRequest(true);
+}
+
+void RTorrentClient::fetchStatusRequest(bool enhancedTimestamps) {
+  const QStringList methods = enhancedTimestamps
+    ? QStringList{QStringLiteral("d.hash="), QStringLiteral("d.name="),
+                  QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
+                  QStringLiteral("d.ratio="), QStringLiteral("d.timestamp.started="),
+                  QStringLiteral("d.timestamp.finished="), QStringLiteral("d.timestamp.last_xfer="),
+                  QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
+                  QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
+                  QStringLiteral("d.custom=rssguard.automation")}
+    : QStringList{QStringLiteral("d.hash="), QStringLiteral("d.name="),
+                  QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
+                  QStringLiteral("d.ratio="), QStringLiteral("d.creation_date="),
+                  QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
+                  QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
+                  QStringLiteral("d.custom=rssguard.automation")};
   QString xml = QStringLiteral("<?xml version=\"1.0\"?><methodCall><methodName>d.multicall2</methodName><params>"
                                "<param><value><string></string></value></param>"
                                "<param><value><string>main</string></value></param>");
@@ -790,8 +823,13 @@ void RTorrentClient::fetchStatus() {
   request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("text/xml"));
   applyBasicAuthentication(request);
   QNetworkReply* reply = m_network->post(request, xml.toUtf8());
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, enhancedTimestamps]() {
     const QByteArray body = reply->readAll();
+    if (enhancedTimestamps && reply->error() == QNetworkReply::NoError && body.contains("<fault>")) {
+      reply->deleteLater();
+      fetchStatusRequest(false);
+      return;
+    }
     TorrentClientStatus status;
     status.reachable = reply->error() == QNetworkReply::NoError && !body.contains("<fault>");
     if (!status.reachable) {
@@ -801,7 +839,8 @@ void RTorrentClient::fetchStatus() {
     }
     else {
       for (const QStringList& values : xmlRpcRows(body)) {
-        if (values.size() < 12) continue;
+        const int minimumValues = enhancedTimestamps ? 12 : 10;
+        if (values.size() < minimumValues) continue;
         TorrentRemoteItem item;
         item.hash = values.at(0);
         item.name = values.at(1);
@@ -810,27 +849,36 @@ void RTorrentClient::fetchStatus() {
         item.progress = item.sizeBytes > 0 ? double(completedBytes) / double(item.sizeBytes) : 0.0;
         item.ratio = values.at(4).toDouble() / 1000.0;
         const qint64 startedAt = values.at(5).toLongLong();
-        const qint64 finishedAt = values.at(6).toLongLong();
-        const qint64 activeAt = values.at(7).toLongLong();
+        const qint64 finishedAt = enhancedTimestamps ? values.at(6).toLongLong() : 0;
+        const qint64 activeAt = enhancedTimestamps ? values.at(7).toLongLong() : 0;
         if (startedAt > 0) item.added = QDateTime::fromSecsSinceEpoch(startedAt, Qt::UTC);
         if (finishedAt > 0) item.completed = QDateTime::fromSecsSinceEpoch(finishedAt, Qt::UTC);
         if (activeAt > 0) item.lastActivity = QDateTime::fromSecsSinceEpoch(activeAt, Qt::UTC);
-        item.ageSource = finishedAt > 0 ? tr("rTorrent finished timestamp") : tr("rTorrent started timestamp");
-        item.downloadBytesPerSecond = values.at(9).toLongLong();
-        item.uploadBytesPerSecond = values.at(10).toLongLong();
+        item.ageSource = enhancedTimestamps
+                           ? (finishedAt > 0 ? tr("rTorrent finished timestamp") : tr("rTorrent started timestamp"))
+                           : tr("rTorrent creation timestamp (compatibility mode)");
+        const int stateIndex = enhancedTimestamps ? 8 : 6;
+        const int downloadIndex = enhancedTimestamps ? 9 : 7;
+        const int uploadIndex = enhancedTimestamps ? 10 : 8;
+        const int completeIndex = enhancedTimestamps ? 11 : 9;
+        const int managedIndex = enhancedTimestamps ? 12 : 10;
+        item.downloadBytesPerSecond = values.at(downloadIndex).toLongLong();
+        item.uploadBytesPerSecond = values.at(uploadIndex).toLongLong();
         status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;
         status.uploadBytesPerSecond = qMax<qint64>(0, status.uploadBytesPerSecond) + item.uploadBytesPerSecond;
-        const bool started = values.at(8).toInt() != 0;
-        const bool complete = values.at(11).toInt() != 0;
-        item.downloading = started && !complete && values.at(9).toLongLong() > 0;
+        const bool started = values.at(stateIndex).toInt() != 0;
+        const bool complete = values.at(completeIndex).toInt() != 0;
+        item.downloading = started && !complete && values.at(downloadIndex).toLongLong() > 0;
         item.seeding = started && complete;
-        item.managedByAutomation = values.size() > 12 && values.at(12) == QStringLiteral("rssguard-auto");
+        item.managedByAutomation = values.size() > managedIndex && values.at(managedIndex) == QStringLiteral("rssguard-auto");
         status.activeDownloads += item.downloading ? 1 : 0;
         status.queuedDownloads += !started && !complete ? 1 : 0;
         status.seeding += item.seeding ? 1 : 0;
         status.torrents.append(item);
       }
-      status.detail = tr("Live rTorrent workload and torrent list; disk space requires configured capacity");
+      status.detail = enhancedTimestamps
+                        ? tr("Live rTorrent workload and torrent list; disk space requires configured capacity")
+                        : tr("Live rTorrent workload using compatibility timestamps; disk space requires configured capacity");
     }
     reply->deleteLater();
     emit statusFinished(status);
@@ -842,8 +890,10 @@ void RTorrentClient::removeTorrent(const QString& hash, bool deleteData) {
     QUrl url = endpoint(QString());
     QString path = url.path();
     if (path.contains(QStringLiteral("/plugins/httprpc/action.php"), Qt::CaseInsensitive)) {
-      // The configured ruTorrent HTTP-RPC action endpoint already supports
-      // removewithdata.
+      path.replace(QRegularExpression(QStringLiteral("/plugins/httprpc/action\\.php$"),
+                                      QRegularExpression::CaseInsensitiveOption),
+                   QStringLiteral("/plugins/erasedata/action.php"));
+      url.setPath(path);
     }
     else if (path.contains(QStringLiteral("/plugins/rpc/rpc.php"), Qt::CaseInsensitive)) {
       path.replace(QRegularExpression(QStringLiteral("/plugins/rpc/rpc\\.php$"),
@@ -851,9 +901,15 @@ void RTorrentClient::removeTorrent(const QString& hash, bool deleteData) {
                    QStringLiteral("/plugins/erasedata/action.php"));
       url.setPath(path);
     }
+    else if (path.contains(QStringLiteral("/rutorrent/rpc2.php"), Qt::CaseInsensitive)) {
+      path.replace(QRegularExpression(QStringLiteral("/rpc2\\.php$"),
+                                      QRegularExpression::CaseInsensitiveOption),
+                   QStringLiteral("/plugins/erasedata/action.php"));
+      url.setPath(path);
+    }
     else {
       emit removeFinished(false,
-        tr("Deleting rTorrent data safely requires a ruTorrent endpoint. Configure this client with its /plugins/rpc/rpc.php or /plugins/httprpc/action.php URL and enable the ruTorrent erasedata plug-in."));
+        tr("Deleting rTorrent data safely requires a recognised ruTorrent endpoint. Configure this client with its /plugins/rpc/rpc.php, /plugins/httprpc/action.php or /rutorrent/rpc2.php URL and enable the ruTorrent erasedata plug-in."));
       return;
     }
 

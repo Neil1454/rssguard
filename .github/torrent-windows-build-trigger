@@ -1,1 +1,1 @@
-Build 71 - non-blocking cleanup decisions, rTorrent data removal and capacity inventory
+Build 72 - restore explicit rTorrent and ruTorrent sending with compatibility status fallback

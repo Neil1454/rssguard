@@ -152,7 +152,9 @@ class RTorrentClient final : public TorrentClient {
     QByteArray methodCall(const QString& method, const QStringList& values = {}) const;
     void call(const QString& method, const QStringList& values, const std::function<void(QNetworkReply*, const QByteArray&)>& callback);
     void addNext();
+    void fetchStatusRequest(bool enhancedTimestamps);
     QQueue<QString> m_pending;
+    QStringList m_failureDetails;
     int m_added = 0;
     int m_failed = 0;
 };

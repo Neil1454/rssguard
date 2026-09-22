@@ -570,11 +570,14 @@ QString TorrentAutomationEngine::clientRestriction(int index,
   if (!job.allowedClientIds.isEmpty() && !job.allowedClientIds.contains(client.id))
     return tr("Not allowed by the matching RSS rule");
   if (job.attemptedClientIds.contains(client.id)) return tr("This destination already failed during this attempt");
+  // An explicit client button is an instruction to attempt that destination.
+  // A failed workload/listing probe must not silently suppress the actual add
+  // request; the add API will return its own useful success or error result.
+  if (job.directOverride) return {};
   if (!status.reachable) return status.detail.isEmpty() ? tr("Client is unavailable") : status.detail;
   if (status.freeBytes >= 0 && status.freeBytes < job.sizeBytes)
     return tr("Only %1 GB is free; the torrent needs approximately %2 GB")
       .arg(status.freeBytes / 1000000000.0, 0, 'f', 1).arg(job.sizeBytes / 1000000000.0, 0, 'f', 1);
-  if (job.directOverride) return {};
   if (policy.maxActiveDownloads > 0 && status.activeDownloads >= policy.maxActiveDownloads) {
     if (softRestriction != nullptr) *softRestriction = true;
     return tr("%1 active downloads; configured maximum is %2")
@@ -1301,28 +1304,40 @@ void TorrentAutomationEngine::requestCleanupConfirmation(
   protect->setToolTip(tr("Stores this torrent's unique hash in the protected list. Future removal must be manual unless protection is later cleared."));
   layout->addWidget(protect);
 
-  const auto secondsLeft = std::make_shared<int>(qBound(5, m_config.cleanupConfirmationSeconds, 3600));
+  const auto secondsLeft = std::make_shared<int>(qBound(60, m_config.cleanupConfirmationSeconds, 3600));
+  const auto countdownPaused = std::make_shared<bool>(false);
   QLabel* countdown = new QLabel(dialog);
   countdown->setWordWrap(true);
   layout->addWidget(countdown);
   QDialogButtonBox* buttons = new QDialogButtonBox(dialog);
   QPushButton* deleteButton = buttons->addButton(tr("Delete now"), QDialogButtonBox::DestructiveRole);
+  QPushButton* pauseButton = buttons->addButton(tr("Pause countdown"), QDialogButtonBox::ActionRole);
   QPushButton* keepButton = buttons->addButton(tr("Keep"), QDialogButtonBox::RejectRole);
+  pauseButton->setToolTip(tr("Pauses only this safe Keep countdown. Torrent routing and other automation continue."));
   deleteButton->setDefault(false);
   keepButton->setDefault(true);
   layout->addWidget(buttons);
 
   QTimer* timer = new QTimer(dialog);
   timer->setInterval(1000);
-  auto updateCountdown = [countdown, secondsLeft]() {
-    countdown->setText(QObject::tr("No response: this torrent will be kept in %1 second(s). Routing and other automation continue while this window is open.")
-                         .arg(*secondsLeft));
+  auto updateCountdown = [countdown, secondsLeft, countdownPaused]() {
+    countdown->setText(*countdownPaused
+      ? QObject::tr("Countdown paused with %1 second(s) remaining. Routing and other automation continue while you check this torrent.").arg(*secondsLeft)
+      : QObject::tr("No response: this torrent will be kept in %1 second(s). Routing and other automation continue while this window is open.").arg(*secondsLeft));
   };
   updateCountdown();
-  connect(timer, &QTimer::timeout, dialog, [dialog, secondsLeft, updateCountdown]() mutable {
+  connect(timer, &QTimer::timeout, dialog, [dialog, secondsLeft, countdownPaused, updateCountdown]() mutable {
+    if (*countdownPaused) return;
     --(*secondsLeft);
     updateCountdown();
     if (*secondsLeft <= 0) dialog->reject();
+  });
+  connect(pauseButton, &QPushButton::clicked, dialog,
+          [pauseButton, countdownPaused, updateCountdown]() {
+    *countdownPaused = !*countdownPaused;
+    pauseButton->setText(*countdownPaused ? QObject::tr("Resume countdown")
+                                          : QObject::tr("Pause countdown"));
+    updateCountdown();
   });
 
   const auto finished = std::make_shared<bool>(false);

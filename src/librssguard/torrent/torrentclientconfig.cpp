@@ -78,11 +78,11 @@ QString TorrentClientConfig::suggestedBaseUrl(TorrentClientType type, const QStr
       break;
     case TorrentClientType::RTorrent:
       if (path.isEmpty() || path == QStringLiteral("/")) {
-        path = QStringLiteral("/plugins/httprpc/action.php");
+        path = QStringLiteral("/plugins/rpc/rpc.php");
         changed = true;
       }
       else if (path.endsWith(QStringLiteral("/rutorrent"), Qt::CaseInsensitive)) {
-        path += QStringLiteral("/plugins/httprpc/action.php");
+        path += QStringLiteral("/plugins/rpc/rpc.php");
         changed = true;
       }
       break;

@@ -82,7 +82,7 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.cleanupEnabled = root.value(QStringLiteral("cleanupEnabled")).toBool(false);
   config.deleteData = root.value(QStringLiteral("deleteData")).toBool(false);
   config.cleanupRequireConfirmation = root.value(QStringLiteral("cleanupRequireConfirmation")).toBool(true);
-  config.cleanupConfirmationSeconds = qBound(5, root.value(QStringLiteral("cleanupConfirmationSeconds")).toInt(30), 3600);
+  config.cleanupConfirmationSeconds = qBound(60, root.value(QStringLiteral("cleanupConfirmationSeconds")).toInt(60), 3600);
   config.cleanupIncludeUnmanaged = root.value(QStringLiteral("cleanupIncludeUnmanaged")).toBool(false);
   for (const QJsonValue& value : root.value(QStringLiteral("protectedTorrentHashes")).toArray())
     config.protectedTorrentHashes.append(value.toString().toLower());

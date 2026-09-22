@@ -11,7 +11,16 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 71 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 72 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 72 rTorrent and settings regression checks
+
+1. In Torrent Automation > General, change Pause unattended automation, Always run silently, Treat first fetched batch as baseline, notification duration and maximum consecutive assignments one at a time. Confirm every change enables Apply and survives Apply/close/reopen.
+2. Configure ruTorrent with `/rutorrent/plugins/rpc/rpc.php`; verify Test connection, workload listing and automatic `load.start` importing all work.
+3. On an older or restricted rTorrent endpoint that rejects enhanced timestamp fields, verify the workload check falls back to compatibility timestamps and automatic routing still proceeds.
+4. Explicitly select an rTorrent destination while its workload probe is failing. Confirm the add request is still attempted and the exact XML-RPC/network failure appears in Activity if it fails.
+5. With `erasedata` enabled, verify remove-with-data through `rpc`, `httprpc` and ruTorrent `rpc2.php` configurations reaches `plugins/erasedata/action.php` and removes both the job and payload; verify a direct `/RPC2` endpoint continues to refuse an unprovable data deletion.
+6. Open a deletion confirmation and verify the default countdown is 60 seconds. Pause it, confirm the remaining time does not change while other routing continues, then resume and confirm an unanswered dialog safely chooses Keep.
 
 ## Build 71 deletion and capacity regression checks
 
@@ -104,7 +113,7 @@ Client-specific checks:
 - Test all: only enabled clients are checked and the combined dialog identifies every success and failure.
 - Notification preview: applying settings uses the configured screen, position, width and opacity; the optional button preview matches enabled clients and priority order.
 - Windows palette: unselected client rows do not display forced dark alternate bands.
-- rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/httprpc/action.php` and `/RPC2`; incorrect homepage URL guidance; directory/custom1 commands.
+- rTorrent/ruTorrent: XML-RPC fault response; direct and challenged Basic/Digest authentication; ruTorrent `/plugins/rpc/rpc.php` and `/RPC2`; incorrect homepage URL guidance; directory/custom1 commands; compatibility fallback when enhanced timestamp methods are unavailable; explicit sends despite a failed status probe.
 - Deluge: Web password login, automatic configured-daemon connection, version/status test, magnet/URL add, remote download location, and invalid-password error.
 - rQBit: server/version detection, optional Basic authentication, magnet/URL add, output folder, and rejected credentials.
 - Porla: required JWT authentication, `sys.versions`, magnet add, remote `.torrent` download/base64 submission, save path, preset, and invalid-token response.

@@ -7,16 +7,16 @@
 
 This is Neil1454's Windows-focused fork of [Martin Rotter's RSS Guard](https://github.com/martinrotter/rssguard). It retains RSS Guard's full feed-reader functionality and adds native manual and automated routing of recognised torrent RSS entries to multiple remote torrent clients or seedboxes.
 
-The current test candidate is **Build 71**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
+The current test candidate is **Build 72**, based on RSS Guard **5.2.6 development source**. It is a portable test build, not a separately installed service, and it runs only while RSS Guard and Windows are running.
 
-The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 71 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
+The current application source is on **[`feature/torrent-automation`](https://github.com/Neil1454/rssguard/tree/feature/torrent-automation)**. The repository keeps `master` as its GitHub default branch for upstream history, but `master` does not contain the current Build 72 application code. Clone or download the feature branch when building this fork from source. Permanent Windows downloads and detailed notes are available on the **[GitHub Releases page](https://github.com/Neil1454/rssguard/releases)**; test candidates are clearly marked as pre-releases.
 
 > Use torrents only for material you are legally permitted to download and share. The integration is intended for lawful use. Automatic cleanup can remove torrent jobs and, when explicitly enabled, downloaded data. Start with dry-run mode and keep a backup of your RSS Guard profile.
 
 ## Download and install
 
-1. Open the permanent [Build 71 GitHub Release](https://github.com/Neil1454/rssguard/releases/tag/torrent-build-71).
-2. Under **Assets**, download **RSSGuard-Torrent-Build-70-Windows-x64.7z**. The adjacent `.sha256` file is available for integrity checking.
+1. Open the permanent [GitHub Releases page](https://github.com/Neil1454/rssguard/releases) and select **Build 72** once its Windows workflow is verified and published.
+2. Under **Assets**, download **RSSGuard-Torrent-Build-72-Windows-x64.7z**. The adjacent `.sha256` file is available for integrity checking.
 3. Extract the `.7z` archive into a new folder.
 4. Run `rssguard.exe`.
 
@@ -46,7 +46,7 @@ To retain an existing portable profile, close both copies of RSS Guard and copy 
 | qBittorrent | Web UI username/password; no API key | Web UI root, such as `http://host:8080` |
 | Transmission 3.x/4.x | RPC or reverse-proxy username/password | Usually `https://host/transmission/rpc` |
 | Flood / RFlood | Username/password or Flood JWT | Flood web root; do not add `/api` |
-| rTorrent / ruTorrent | XML-RPC gateway authentication | ruTorrent commonly uses `/plugins/httprpc/action.php`; some hosts provide `/RPC2` |
+| rTorrent / ruTorrent | XML-RPC gateway authentication | ruTorrent commonly uses `/rutorrent/plugins/rpc/rpc.php`; some hosts provide `/RPC2` |
 | Deluge | Deluge Web password | Deluge Web root, commonly port `8112` |
 | rQBit | Optional HTTP Basic authentication | HTTP API root; do not add `/api` |
 | Porla | Porla bearer JWT | JSON-RPC server root; do not add `/api` |
@@ -161,7 +161,8 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 71 — current candidate** | Adds non-blocking deletion decisions, silent-delete controls, permanent per-torrent protection, oldest-first cleanup, optional full-client inventory, ruTorrent data deletion, and safer diagnostic exports. |
+| **Build 72 — current candidate** | Retains Build 71's safer cleanup controls, repairs rTorrent/ruTorrent sending and status compatibility, reports exact XML-RPC failures, and fixes Apply-button signalling for every torrent-automation General control. |
+| Build 71 | Adds non-blocking deletion decisions, silent-delete controls, permanent per-torrent protection, oldest-first cleanup, optional full-client inventory, ruTorrent data deletion, and safer diagnostic exports. |
 | **Build 70** | Adds pause and silent controls, first-fetch baselining, Super Quick profiles, stronger balanced routing, selectable speed units, and corrected rTorrent retention timestamps. |
 | **Build 69** | Fixes wizard and Quick Set colour contrast, adds the quick-turnaround preset and proxy privacy comparison, and publishes permanent documented GitHub Releases. |
 | **Build 68** | Adds Neil Sampson's torrent-feature credit to first launch, About, Windows file details and documentation; makes complete app import/export explicitly cover every torrent section; and expands portable torrent JSON transfer to include every non-secret client and automation option. |
@@ -204,7 +205,7 @@ It remains in the feature branch's history, so the source can be checked out at 
 
 ## Testing status and reporting problems
 
-Build 71 must pass the automated Windows compile, packaging and permanent-release workflow before it is offered as ready to download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
+Build 72 must pass the automated Windows compile, packaging and permanent-release workflow before it is offered as ready to download. Real torrent-client behaviour still depends on server versions, reverse proxies, authentication policies and API permissions. Before replacing an existing copy, test the portable build separately using the [testing checklist](TESTING-TORRENT-INTEGRATION.md).
 
 When reporting a problem, include:
 

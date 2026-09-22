@@ -211,7 +211,7 @@ namespace {
             break;
           case TorrentClientType::Flood: urlExample = QStringLiteral("http://server.example:3000"); break;
           case TorrentClientType::RTorrent:
-            urlExample = QStringLiteral("https://server.example/plugins/httprpc/action.php");
+            urlExample = QStringLiteral("https://server.example/rutorrent/plugins/rpc/rpc.php");
             break;
           case TorrentClientType::Deluge: urlExample = QStringLiteral("http://server.example:8112"); break;
           case TorrentClientType::RQBit: urlExample = QStringLiteral("http://server.example:3030"); break;

@@ -9,7 +9,7 @@ class TestTorrentClientConfig : public QObject {
 
   private slots:
     void suggestsTransmissionRpcEndpoint();
-    void suggestsRuTorrentHttpRpcEndpoint();
+    void suggestsRuTorrentRpcEndpoint();
     void preservesCustomEndpoint();
     void stripsQBittorrentApiSuffix();
 };
@@ -23,10 +23,10 @@ void TestTorrentClientConfig::suggestsTransmissionRpcEndpoint() {
            QStringLiteral("http://192.0.2.1:9091/transmission/rpc"));
 }
 
-void TestTorrentClientConfig::suggestsRuTorrentHttpRpcEndpoint() {
+void TestTorrentClientConfig::suggestsRuTorrentRpcEndpoint() {
   QCOMPARE(TorrentClientConfig::suggestedBaseUrl(TorrentClientType::RTorrent,
                                                   QStringLiteral("https://seed.example/rutorrent/")),
-           QStringLiteral("https://seed.example/rutorrent/plugins/httprpc/action.php"));
+           QStringLiteral("https://seed.example/rutorrent/plugins/rpc/rpc.php"));
 }
 
 void TestTorrentClientConfig::preservesCustomEndpoint() {

@@ -578,7 +578,7 @@ void SettingsTorrentAutomation::loadUi() {
   m_cleanup = new QCheckBox(tr("Allow automatic cleanup for storage pressure and/or maximum retention time"), cleanupPage);
   m_deleteData = new QCheckBox(tr("Delete downloaded data as well as the torrent"), cleanupPage);
   m_confirmCleanup = new QCheckBox(tr("Ask before every removal"), cleanupPage);
-  m_cleanupConfirmationSeconds = new QSpinBox(cleanupPage); m_cleanupConfirmationSeconds->setRange(5, 3600); m_cleanupConfirmationSeconds->setSuffix(tr(" seconds"));
+  m_cleanupConfirmationSeconds = new QSpinBox(cleanupPage); m_cleanupConfirmationSeconds->setRange(60, 3600); m_cleanupConfirmationSeconds->setSuffix(tr(" seconds"));
   m_includeUnmanaged = new QCheckBox(tr("Advanced: allow cleanup of manually added torrents too"), cleanupPage);
   m_retentionEnabled = new QCheckBox(tr("Remove completed managed torrents after a maximum time"), cleanupPage);
   m_retentionHours = new QSpinBox(cleanupPage); m_retentionHours->setRange(1, 100000); m_retentionHours->setSuffix(tr(" hours"));
@@ -756,7 +756,13 @@ void SettingsTorrentAutomation::loadUi() {
   const int activityTab = tabs->addTab(activityPage, tr("Activity"));
   tabs->setTabToolTip(activityTab, tr("Review what automation decided and why. Dry-run decisions are recorded here too."));
 
-  const QList<QObject*> dirtyObjects{m_enabled, m_dryRun, m_notifications, m_strategy, m_historyLimit, m_unknownSizeGb,
+  // Keep this list exhaustive for every user-editable control owned by this
+  // panel. SettingsPanel only enables Apply after dirtifySettings() runs, so a
+  // control omitted here looks broken even though saveSettings() can persist it.
+  const QList<QObject*> dirtyObjects{m_enabled, m_dryRun, m_notifications,
+                                     m_paused, m_silent, m_ignoreInitial,
+                                     m_notificationDuration, m_maxConsecutive,
+                                     m_strategy, m_historyLimit, m_unknownSizeGb,
                                      m_retryEnabled, m_retryAttempts, m_retryInitialSeconds, m_retryMaximumSeconds,
                                      m_retryBackoff, m_requestTimeoutSeconds,
                                      m_reconciliation, m_reserveRemaining, m_preventDuplicates, m_reconciliationMinutes,
@@ -773,7 +779,7 @@ void SettingsTorrentAutomation::loadUi() {
                                      m_cleanupGraceHours, m_smartCleanup, m_minimumCopiesEnabled,
                                      m_minimumCopies, m_protectedTags, m_protectedTrackers,
                                      m_cleanupSchedule, m_cleanupScheduleStart, m_cleanupScheduleEnd,
-                                     m_cleanupBatchPercent, m_clients};
+                                     m_cleanupBatchPercent, m_speedUnit, m_clients};
   for (QObject* object : dirtyObjects) {
     if (auto* box = qobject_cast<QCheckBox*>(object)) connect(box, &QCheckBox::toggled, this, &SettingsTorrentAutomation::dirtifySettings);
     else if (auto* combo = qobject_cast<QComboBox*>(object)) connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SettingsTorrentAutomation::dirtifySettings);
@@ -1887,7 +1893,7 @@ void SettingsTorrentAutomation::runSetupWizard() {
   auto* cleanupEnabled = check(cleanup, tr("Enable automatic safe cleanup"), m_cleanup->isChecked(), tr("Leave off until dry-run cleanup outcomes have been reviewed."));
   auto* deleteData = check(cleanup, tr("Also delete downloaded data"), m_deleteData->isChecked(), tr("Permanent and cannot be undone. Off removes only the torrent job."));
   auto* confirmCleanup = check(cleanup, tr("Ask before every removal"), m_confirmCleanup->isChecked(), tr("Strongly recommended during setup."));
-  auto* confirmationSeconds = integer(cleanup, m_cleanupConfirmationSeconds->value(), 5, 3600, tr(" seconds"),
+  auto* confirmationSeconds = integer(cleanup, m_cleanupConfirmationSeconds->value(), 60, 3600, tr(" seconds"),
                                       tr("An unanswered question safely keeps the torrent; other routing continues."));
   auto* includeUnmanaged = check(cleanup, tr("Advanced: also consider manually added torrents"), m_includeUnmanaged->isChecked(),
                                  tr("Off considers only torrents tagged as RSS Guard-managed. On inventories every completed torrent reported by the client, while protections still apply."));

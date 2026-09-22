@@ -1,5 +1,15 @@
 # Torrent integration changelog
 
+## Build 72
+
+- Wired every editable general torrent-automation control into the settings dirty-state system, including pause, silent mode, first-fetch baseline, notification duration and consecutive-assignment limit, so changing any of them enables Apply.
+- Extended deletion confirmations to a 60-second minimum/default and added Pause/Resume countdown controls without pausing routing or other automation.
+- Explicitly selecting an rTorrent/ruTorrent destination now attempts the actual send even when the preceding workload/status probe failed. The add request reports its own result instead of being silently suppressed.
+- rTorrent status checks now retry with the older `d.creation_date` field set when enhanced finished/last-transfer timestamp methods are rejected by an older or restricted XML-RPC server.
+- Failed `load.start` requests now expose the XML-RPC fault or network error in Activity and the failure notification.
+- New ruTorrent configurations use the established `/rutorrent/plugins/rpc/rpc.php` XML-RPC gateway by default. `/RPC2` remains supported when provided by the host.
+- ruTorrent delete-with-data now maps `rpc`, `httprpc` and ruTorrent `rpc2.php` gateways to the actual `erasedata/action.php` endpoint instead of posting an erase command to the XML-RPC gateway.
+
 ## Build 71
 
 - Deletion confirmation is now controlled solely by **Ask before every removal**; turning it off allows eligible cleanup to proceed silently while all configured safeguards remain active.
