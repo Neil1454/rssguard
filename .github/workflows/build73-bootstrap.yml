@@ -23,10 +23,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          gzip -dc .github/workflows/build73.patch.gz | git am
-          rm .github/workflows/build73.patch.gz .github/workflows/build73-bootstrap.yml
-          git add -A
-          git commit -m "Remove Build 73 publisher"
+          gzip -dc .github/workflows/build73-tree.patch.gz | git apply --index -
+          git commit -m "Add exclusive RSS batch mode for Build 73"
           git push origin HEAD:feature/torrent-automation
 
       - name: Start Windows Build 73
