@@ -1,5 +1,16 @@
 # Torrent integration changelog
 
+## Build 73
+
+- Added a separate **Exclusive Batch Mode** with a simple sleep → baseline → collect → send cycle.
+- Added configurable sleep interval, strict publication-time freshness allowance, monitoring duration, RSS refresh interval, target batch size and partial-batch behaviour.
+- Exclusive mode rejects old and undated items rather than treating retrieval time as proof that a release is new.
+- Normal unattended routing, queued retries, reconciliation, retention, cleanup and deletion are frozen for the entire time exclusive mode is enabled, including sleep periods. Manual sends remain available.
+- Fresh exclusive batches are distributed across enabled clients using the existing priority-biased weighting and live safety limits. The mode never deletes torrents or downloaded data.
+- Added live exclusive-mode state, collected count and next-wake information to its own Torrent Automation tab.
+- Added a fully explained Exclusive Batch Mode page to the guided setup wizard.
+- rTorrent/ruTorrent submissions now include an explicit final `d.start` command so gateways that accept `load.start` but leave the item stopped are told to start it immediately.
+
 ## Build 72
 
 - Wired every editable general torrent-automation control into the settings dirty-state system, including pause, silent mode, first-fetch baseline, notification duration and consecutive-assignment limit, so changing any of them enables Apply.

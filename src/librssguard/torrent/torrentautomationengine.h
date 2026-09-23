@@ -26,6 +26,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
   public:
     static TorrentAutomationEngine* instance(QObject* parent = nullptr);
     static void processNewArticles(const QHash<Feed*, QList<Message>>& articles, QObject* parent = nullptr);
+    static void processExclusiveArticles(const QHash<Feed*, QList<Message>>& articles, QObject* parent = nullptr);
+    static void recordExclusiveState(const QString& state, const QString& detail, QObject* parent = nullptr);
     static void processApprovedArticles(Feed* feed,
                                         const QList<Message>& articles,
                                         QWidget* dialogParent = nullptr,
@@ -77,7 +79,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     void enqueue(const QHash<Feed*, QList<Message>>& articles,
                  bool forceDryRun = false,
                  bool manualApproval = false,
-                 bool forceEnabled = false);
+                 bool forceEnabled = false,
+                 bool exclusiveBatch = false);
     bool ruleMatches(const TorrentAutomationRule& rule,
                      const QString& feedId,
                      const Message& message,
@@ -142,6 +145,7 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     int m_cleanupCount = 0;
     bool m_busy = false;
     bool m_forcedDryRun = false;
+    bool m_exclusiveBatch = false;
     QList<Job> m_deferredJobs;
     QPointer<QWidget> m_manualDialogParent;
     QHash<Feed*, QList<Message>> m_lastArticles;

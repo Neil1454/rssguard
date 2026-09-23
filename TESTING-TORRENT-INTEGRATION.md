@@ -11,7 +11,18 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 72 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 73 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 73 exclusive-mode and ruTorrent checks
+
+1. Enable Exclusive Batch Mode with a short test sleep, a 3-minute freshness allowance, a 5-minute monitoring window and target batch size 5.
+2. Confirm the state progresses through Sleeping, Baselining and Collecting, and that the displayed next wake uses local time.
+3. Provide a baseline feed containing an older release, an undated release and a release inside the freshness allowance. Confirm only the reliably dated fresh release is counted.
+4. Add fresh releases during monitoring and confirm the batch begins when the target count is reached.
+5. With partial-batch sending enabled, let time expire below the target and confirm the collected fresh releases are sent. Disable the option and confirm a later incomplete batch is discarded.
+6. Confirm normal automatic routing, pending retries, reconciliation, retention and all cleanup/deletion remain frozen during Sleeping, Baselining, Collecting and Sending. Confirm a manual named-client send still works.
+7. Confirm the batch is distributed across participating clients according to their automation priorities and safety limits, with no cleanup attempted when a client lacks capacity.
+8. Send a magnet and a `.torrent` URL to rTorrent/ruTorrent and confirm each begins downloading rather than remaining stopped.
 
 ## Build 72 rTorrent and settings regression checks
 

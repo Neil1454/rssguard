@@ -47,6 +47,13 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.silentNotifications = root.value(QStringLiteral("silentNotifications")).toBool(false);
   config.ignoreInitialFeedBatch = root.value(QStringLiteral("ignoreInitialFeedBatch")).toBool(false);
   config.markInitialFeedBatchRead = root.value(QStringLiteral("markInitialFeedBatchRead")).toBool(false);
+  config.exclusiveModeEnabled = root.value(QStringLiteral("exclusiveModeEnabled")).toBool(false);
+  config.exclusiveSleepMinutes = qBound(1, root.value(QStringLiteral("exclusiveSleepMinutes")).toInt(60), 10080);
+  config.exclusiveFreshnessMinutes = qBound(0, root.value(QStringLiteral("exclusiveFreshnessMinutes")).toInt(3), 1440);
+  config.exclusiveMonitoringMinutes = qBound(1, root.value(QStringLiteral("exclusiveMonitoringMinutes")).toInt(15), 1440);
+  config.exclusivePollMinutes = qBound(1, root.value(QStringLiteral("exclusivePollMinutes")).toInt(1), 60);
+  config.exclusiveBatchSize = qBound(1, root.value(QStringLiteral("exclusiveBatchSize")).toInt(5), 1000);
+  config.exclusiveSendPartialBatch = root.value(QStringLiteral("exclusiveSendPartialBatch")).toBool(true);
   config.notificationDurationSeconds = qMax(0, root.value(QStringLiteral("notificationDurationSeconds")).toInt(0));
   config.maximumConsecutiveAssignments = qMax(1, root.value(QStringLiteral("maximumConsecutiveAssignments")).toInt(1));
   config.speedDisplayUnit = root.value(QStringLiteral("speedDisplayUnit")).toString(QStringLiteral("MiB/s"));
@@ -166,6 +173,13 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("silentNotifications"), silentNotifications);
   root.insert(QStringLiteral("ignoreInitialFeedBatch"), ignoreInitialFeedBatch);
   root.insert(QStringLiteral("markInitialFeedBatchRead"), markInitialFeedBatchRead);
+  root.insert(QStringLiteral("exclusiveModeEnabled"), exclusiveModeEnabled);
+  root.insert(QStringLiteral("exclusiveSleepMinutes"), exclusiveSleepMinutes);
+  root.insert(QStringLiteral("exclusiveFreshnessMinutes"), exclusiveFreshnessMinutes);
+  root.insert(QStringLiteral("exclusiveMonitoringMinutes"), exclusiveMonitoringMinutes);
+  root.insert(QStringLiteral("exclusivePollMinutes"), exclusivePollMinutes);
+  root.insert(QStringLiteral("exclusiveBatchSize"), exclusiveBatchSize);
+  root.insert(QStringLiteral("exclusiveSendPartialBatch"), exclusiveSendPartialBatch);
   root.insert(QStringLiteral("notificationDurationSeconds"), notificationDurationSeconds);
   root.insert(QStringLiteral("maximumConsecutiveAssignments"), maximumConsecutiveAssignments);
   root.insert(QStringLiteral("speedDisplayUnit"), speedDisplayUnit);

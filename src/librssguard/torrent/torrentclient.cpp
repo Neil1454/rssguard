@@ -781,6 +781,10 @@ void RTorrentClient::addNext() {
     arguments.append(QStringLiteral("d.custom1.set=RSS Guard"));
   if (m_config.tags.contains(QStringLiteral("rssguard-auto")))
     arguments.append(QStringLiteral("d.custom.set=rssguard.automation,rssguard-auto"));
+  // Some ruTorrent XML-RPC gateways accept load.start but leave the new
+  // torrent stopped after applying additional load commands. Explicitly run
+  // d.start on the newly loaded item as the final command as well.
+  arguments.append(QStringLiteral("d.start="));
   call(QStringLiteral("load.start"), arguments, [this](QNetworkReply* reply, const QByteArray& body) {
     if (reply->error() == QNetworkReply::NoError && !body.contains("<fault>")) ++m_added;
     else {

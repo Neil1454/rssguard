@@ -22,6 +22,7 @@
 #include "qtlinq/qtlinq.h"
 #include "services/abstract/feed.h"
 #include "torrent/torrentautomationengine.h"
+#include "torrent/torrentextractor.h"
 
 #if defined(Q_OS_WIN)
 #include "miscellaneous/windowstaskbar.h"
@@ -49,6 +50,175 @@ GuiNotificationCoordinator::GuiNotificationCoordinator(Application* application)
   // produced new articles. This allows maximum-retention deadlines to be
   // checked while RSS Guard is simply left running.
   QTimer::singleShot(0, this, [application]() { TorrentAutomationEngine::instance(application); });
+  m_exclusiveTimer = new QTimer(this);
+  m_exclusiveTimer->setInterval(5000);
+  connect(m_exclusiveTimer, &QTimer::timeout, this, &GuiNotificationCoordinator::updateExclusiveMode);
+  m_exclusiveTimer->start();
+  QTimer::singleShot(0, this, &GuiNotificationCoordinator::updateExclusiveMode);
+}
+
+void GuiNotificationCoordinator::storeExclusiveStatus(const QString& state) {
+  m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
+                                      QStringLiteral("exclusiveRuntimeState"), state);
+  m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
+                                      QStringLiteral("exclusiveCollectedCount"), m_exclusiveArticleKeys.size());
+  m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
+                                      QStringLiteral("exclusiveNextWakeUtc"),
+                                      m_exclusiveNextWake.toUTC().toString(Qt::ISODate));
+}
+
+void GuiNotificationCoordinator::enterExclusiveSleep(const QString& detail) {
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
+  m_exclusiveState = ExclusiveState::Sleeping;
+  m_exclusiveCycleStart = {};
+  m_exclusiveCutoff = {};
+  m_exclusiveMonitorEnd = {};
+  m_exclusiveNextPoll = {};
+  m_exclusiveArticles.clear();
+  m_exclusiveArticleKeys.clear();
+  m_exclusiveDispatchStarted = false;
+  m_exclusiveNextWake = QDateTime::currentDateTimeUtc().addSecs(qMax(1, config.exclusiveSleepMinutes) * 60);
+  storeExclusiveStatus(tr("Sleeping"));
+  TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-sleeping"),
+    detail + tr(" Next wake: %1.").arg(m_exclusiveNextWake.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm"))),
+    m_application);
+}
+
+void GuiNotificationCoordinator::startExclusiveCycle() {
+  if (m_application->feedReader() == nullptr || m_application->feedReader()->isFeedUpdateRunning()) return;
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
+  m_exclusiveState = ExclusiveState::Baselining;
+  m_exclusiveCycleStart = QDateTime::currentDateTimeUtc();
+  m_exclusiveCutoff = m_exclusiveCycleStart.addSecs(-qMax(0, config.exclusiveFreshnessMinutes) * 60);
+  m_exclusiveMonitorEnd = {};
+  m_exclusiveNextPoll = {};
+  m_exclusiveNextWake = {};
+  m_exclusiveArticles.clear();
+  m_exclusiveArticleKeys.clear();
+  storeExclusiveStatus(tr("Baselining"));
+  TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-baselining"),
+    tr("Exclusive cycle woke at %1. Existing items older than %2 are ignored completely; normal routing, retries, retention and cleanup remain frozen.")
+      .arg(m_exclusiveCycleStart.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")),
+           m_exclusiveCutoff.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss"))),
+    m_application);
+  m_application->feedReader()->updateAllFeeds();
+}
+
+void GuiNotificationCoordinator::collectExclusiveArticles(const QHash<Feed*, QList<Message>>& articles,
+                                                           bool baseline) {
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  for (auto feedIt = articles.constBegin(); feedIt != articles.constEnd(); ++feedIt) {
+    for (const Message& message : feedIt.value()) {
+      if (TorrentExtractor::extract(message).isEmpty()) continue;
+      const QDateTime published = message.m_created.toUTC();
+      const bool reliablePublished = message.m_createdFromFeed && published.isValid();
+      const bool withinFreshness = reliablePublished && published >= m_exclusiveCutoff && published <= now.addSecs(300);
+      Q_UNUSED(baseline)
+      // Fail closed: retrieval time only tells us when RSS Guard saw an item,
+      // not when it was published. Without a trustworthy feed timestamp the
+      // mode cannot prove freshness, so the item is ignored.
+      if (!withinFreshness) continue;
+      const QString key = !message.m_customId.isEmpty()
+                            ? message.m_customId
+                            : QStringLiteral("%1|%2|%3").arg(message.m_feedCustomId,
+                                                               message.m_url,
+                                                               message.m_title);
+      if (m_exclusiveArticleKeys.contains(key)) continue;
+      m_exclusiveArticleKeys.insert(key);
+      m_exclusiveArticles[feedIt.key()].append(message);
+    }
+  }
+  storeExclusiveStatus(m_exclusiveState == ExclusiveState::Baselining ? tr("Baselining") : tr("Collecting"));
+}
+
+void GuiNotificationCoordinator::beginExclusiveDispatch(const QString& reason) {
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
+  if (m_exclusiveArticleKeys.isEmpty()) {
+    enterExclusiveSleep(tr("The monitoring window ended without a fresh torrent release, so nothing was sent."));
+    return;
+  }
+  if (m_exclusiveArticleKeys.size() < config.exclusiveBatchSize && !config.exclusiveSendPartialBatch) {
+    enterExclusiveSleep(tr("The monitoring window ended with %1 of %2 releases. Partial-batch sending is disabled, so the batch was discarded.")
+                          .arg(m_exclusiveArticleKeys.size()).arg(config.exclusiveBatchSize));
+    return;
+  }
+  m_exclusiveState = ExclusiveState::Sending;
+  m_exclusiveDispatchStarted = false;
+  storeExclusiveStatus(tr("Sending"));
+  TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-sending"),
+    tr("%1 Sending %2 fresh release(s) using the enabled clients' configured routing priorities. No deletion or cleanup can run.")
+      .arg(reason).arg(m_exclusiveArticleKeys.size()), m_application);
+}
+
+void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadResults& results) {
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
+  if (!config.exclusiveModeEnabled) return;
+  if (m_exclusiveState == ExclusiveState::Baselining) {
+    collectExclusiveArticles(results.updatedFeeds(), true);
+    m_exclusiveState = ExclusiveState::Collecting;
+    m_exclusiveMonitorEnd = QDateTime::currentDateTimeUtc().addSecs(qMax(1, config.exclusiveMonitoringMinutes) * 60);
+    m_exclusiveNextPoll = QDateTime::currentDateTimeUtc().addSecs(qMax(1, config.exclusivePollMinutes) * 60);
+    storeExclusiveStatus(tr("Collecting"));
+    TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-collecting"),
+      tr("Baseline complete. %1 fresh release(s) qualified. Monitoring until %2 or until %3 release(s) are collected.")
+        .arg(m_exclusiveArticleKeys.size())
+        .arg(m_exclusiveMonitorEnd.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")))
+        .arg(config.exclusiveBatchSize), m_application);
+  }
+  else if (m_exclusiveState == ExclusiveState::Collecting) {
+    collectExclusiveArticles(results.updatedFeeds(), false);
+  }
+  if (m_exclusiveState == ExclusiveState::Collecting &&
+      m_exclusiveArticleKeys.size() >= config.exclusiveBatchSize)
+    beginExclusiveDispatch(tr("The target batch size was reached."));
+}
+
+void GuiNotificationCoordinator::updateExclusiveMode() {
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
+  if (!config.exclusiveModeEnabled) {
+    if (m_exclusiveState != ExclusiveState::Disabled) {
+      m_exclusiveState = ExclusiveState::Disabled;
+      m_exclusiveArticles.clear();
+      m_exclusiveArticleKeys.clear();
+      m_exclusiveNextWake = {};
+      storeExclusiveStatus(tr("Disabled"));
+      TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-disabled"),
+        tr("Exclusive Batch Mode was disabled. Normal unattended automation and pending retries may resume."),
+        m_application);
+    }
+    return;
+  }
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  if (m_exclusiveState == ExclusiveState::Disabled) {
+    enterExclusiveSleep(tr("Exclusive Batch Mode enabled. Normal unattended automation is frozen for the whole sleep/collect/send cycle."));
+    return;
+  }
+  if (m_exclusiveState == ExclusiveState::Sleeping && now >= m_exclusiveNextWake) {
+    startExclusiveCycle();
+    return;
+  }
+  if (m_exclusiveState == ExclusiveState::Collecting) {
+    if (now >= m_exclusiveMonitorEnd) {
+      beginExclusiveDispatch(tr("The monitoring time expired."));
+      return;
+    }
+    if (now >= m_exclusiveNextPoll && m_application->feedReader() != nullptr &&
+        !m_application->feedReader()->isFeedUpdateRunning()) {
+      m_exclusiveNextPoll = now.addSecs(qMax(1, config.exclusivePollMinutes) * 60);
+      m_application->feedReader()->updateAllFeeds();
+    }
+    return;
+  }
+  if (m_exclusiveState == ExclusiveState::Sending) {
+    TorrentAutomationEngine* engine = TorrentAutomationEngine::instance(m_application);
+    if (!m_exclusiveDispatchStarted && !engine->busy()) {
+      m_exclusiveDispatchStarted = true;
+      TorrentAutomationEngine::processExclusiveArticles(m_exclusiveArticles, m_application);
+    }
+    else if (m_exclusiveDispatchStarted && !engine->busy()) {
+      enterExclusiveSleep(tr("The fresh exclusive batch finished processing."));
+    }
+  }
 }
 
 GuiNotificationCoordinator::~GuiNotificationCoordinator() {
@@ -398,9 +568,10 @@ void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults
     m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
                                         QStringLiteral("baselinedFeedIds"), baselined);
   }
-  // Automation is independent of whether desktop notifications are enabled or a feed is quiet.
-  // Its own master switch, rules and dry-run guard are applied inside the engine.
-  TorrentAutomationEngine::processNewArticles(automationArticles, m_application);
+  // Exclusive mode owns unattended routing for its entire lifetime, including
+  // sleep periods. Normal automation must never run alongside it.
+  if (torrentConfig.exclusiveModeEnabled) handleExclusiveFeedResults(results);
+  else TorrentAutomationEngine::processNewArticles(automationArticles, m_application);
 
   const bool some_unquiet_feed = !torrentConfig.silentNotifications &&
     !qApp->property("torrentSessionSilent").toBool() &&

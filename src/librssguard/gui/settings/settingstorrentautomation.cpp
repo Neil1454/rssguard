@@ -393,6 +393,70 @@ void SettingsTorrentAutomation::loadUi() {
   const int generalTab = tabs->addTab(general, tr("General"));
   tabs->setTabToolTip(generalTab, tr("Turn automation on, select its routing method, and configure history and unknown-size reservations."));
 
+  auto* exclusivePage = new QWidget(tabs);
+  auto* exclusiveLayout = new QVBoxLayout(exclusivePage);
+  auto* exclusiveIntro = new QLabel(
+    tr("<b>Exclusive Batch Mode</b> wakes at a set interval, establishes a fresh RSS baseline, collects only releases inside the configured freshness window, sends a batch across enabled clients, then sleeps again. While enabled it freezes all normal unattended routing, retries, retention, cleanup and deletion—even while sleeping. Manual sends remain available."),
+    exclusivePage);
+  exclusiveIntro->setWordWrap(true);
+  exclusiveIntro->setTextFormat(Qt::RichText);
+  exclusiveIntro->setStyleSheet(informationCardStyle(exclusiveIntro->palette(), QStringLiteral("exclusiveIntro")));
+  exclusiveLayout->addWidget(exclusiveIntro);
+  auto* exclusiveForm = new QFormLayout();
+  m_exclusiveMode = new QCheckBox(tr("Enable Exclusive Batch Mode"), exclusivePage);
+  m_exclusiveSleepMinutes = new QSpinBox(exclusivePage);
+  m_exclusiveSleepMinutes->setRange(1, 10080); m_exclusiveSleepMinutes->setSuffix(tr(" minutes"));
+  m_exclusiveFreshnessMinutes = new QSpinBox(exclusivePage);
+  m_exclusiveFreshnessMinutes->setRange(0, 1440); m_exclusiveFreshnessMinutes->setSuffix(tr(" minutes"));
+  m_exclusiveMonitoringMinutes = new QSpinBox(exclusivePage);
+  m_exclusiveMonitoringMinutes->setRange(1, 1440); m_exclusiveMonitoringMinutes->setSuffix(tr(" minutes"));
+  m_exclusivePollMinutes = new QSpinBox(exclusivePage);
+  m_exclusivePollMinutes->setRange(1, 60); m_exclusivePollMinutes->setSuffix(tr(" minutes"));
+  m_exclusiveBatchSize = new QSpinBox(exclusivePage);
+  m_exclusiveBatchSize->setRange(1, 1000); m_exclusiveBatchSize->setSuffix(tr(" releases"));
+  m_exclusiveSendPartial = new QCheckBox(tr("Send a partial batch when monitoring time expires"), exclusivePage);
+  m_exclusiveMode->setToolTip(tr("Makes this the only unattended torrent-automation mode. Normal automation settings are preserved but cannot run until this mode is disabled."));
+  m_exclusiveSleepMinutes->setToolTip(tr("How long the mode sleeps after each batch before beginning another fresh RSS cycle. Example: 60 minutes."));
+  m_exclusiveFreshnessMinutes->setToolTip(tr("At wake-up, only reliably dated releases this many minutes old or newer may enter the batch. Older items are ignored completely. Example: 3 minutes protects against missing a release posted just before wake-up."));
+  m_exclusiveMonitoringMinutes->setToolTip(tr("Maximum time to collect fresh releases after the baseline check. The batch is sent sooner when the target count is reached."));
+  m_exclusivePollMinutes->setToolTip(tr("How often RSS Guard refreshes all feeds during the short monitoring window."));
+  m_exclusiveBatchSize->setToolTip(tr("Send as soon as this many fresh releases have been collected. They are spread using the enabled clients' configured automation priorities."));
+  m_exclusiveSendPartial->setToolTip(tr("Recommended. If only 3 of a target 5 releases arrive before time expires, send those 3 instead of discarding them."));
+  exclusiveForm->addRow(m_exclusiveMode);
+  exclusiveForm->addRow(tr("Sleep between cycles:"), m_exclusiveSleepMinutes);
+  exclusiveForm->addRow(tr("Wake-up freshness allowance:"), m_exclusiveFreshnessMinutes);
+  exclusiveForm->addRow(tr("Monitoring window:"), m_exclusiveMonitoringMinutes);
+  exclusiveForm->addRow(tr("RSS refresh interval while monitoring:"), m_exclusivePollMinutes);
+  exclusiveForm->addRow(tr("Send when batch reaches:"), m_exclusiveBatchSize);
+  exclusiveForm->addRow(m_exclusiveSendPartial);
+  exclusiveLayout->addLayout(exclusiveForm);
+  m_exclusiveStatus = new QLabel(exclusivePage);
+  m_exclusiveStatus->setWordWrap(true);
+  m_exclusiveStatus->setStyleSheet(informationCardStyle(m_exclusiveStatus->palette(), QStringLiteral("exclusiveStatus")));
+  exclusiveLayout->addWidget(m_exclusiveStatus);
+  auto updateExclusiveStatus = [this]() {
+    const QString state = settings()->value(QStringLiteral("TorrentAutomation"),
+                                             QStringLiteral("exclusiveRuntimeState")).toString();
+    const int collected = settings()->value(QStringLiteral("TorrentAutomation"),
+                                             QStringLiteral("exclusiveCollectedCount")).toInt();
+    const QDateTime nextWake = QDateTime::fromString(
+      settings()->value(QStringLiteral("TorrentAutomation"), QStringLiteral("exclusiveNextWakeUtc")).toString(),
+      Qt::ISODate);
+    QString text = tr("<b>Current state:</b> %1<br><b>Collected:</b> %2 release(s)")
+                     .arg((state.isEmpty() ? tr("Not started") : state).toHtmlEscaped()).arg(collected);
+    if (nextWake.isValid())
+      text += tr("<br><b>Next wake:</b> %1").arg(nextWake.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")));
+    m_exclusiveStatus->setText(text);
+  };
+  updateExclusiveStatus();
+  auto* exclusiveStatusTimer = new QTimer(exclusivePage);
+  exclusiveStatusTimer->setInterval(5000);
+  connect(exclusiveStatusTimer, &QTimer::timeout, exclusivePage, updateExclusiveStatus);
+  exclusiveStatusTimer->start();
+  exclusiveLayout->addStretch();
+  const int exclusiveTab = tabs->addTab(exclusivePage, tr("Exclusive mode"));
+  tabs->setTabToolTip(exclusiveTab, tr("Configure a send-only wake, collect, distribute and sleep cycle that blocks all other unattended torrent automation."));
+
   auto* retriesPage = new QWidget(tabs);
   auto* retriesLayout = new QVBoxLayout(retriesPage);
   auto* retriesForm = new QFormLayout();
@@ -761,6 +825,9 @@ void SettingsTorrentAutomation::loadUi() {
   // control omitted here looks broken even though saveSettings() can persist it.
   const QList<QObject*> dirtyObjects{m_enabled, m_dryRun, m_notifications,
                                      m_paused, m_silent, m_ignoreInitial,
+                                     m_exclusiveMode, m_exclusiveSleepMinutes,
+                                     m_exclusiveFreshnessMinutes, m_exclusiveMonitoringMinutes,
+                                     m_exclusivePollMinutes, m_exclusiveBatchSize, m_exclusiveSendPartial,
                                      m_notificationDuration, m_maxConsecutive,
                                      m_strategy, m_historyLimit, m_unknownSizeGb,
                                      m_retryEnabled, m_retryAttempts, m_retryInitialSeconds, m_retryMaximumSeconds,
@@ -788,6 +855,10 @@ void SettingsTorrentAutomation::loadUi() {
     else if (auto* line = qobject_cast<QLineEdit*>(object)) connect(line, &QLineEdit::textChanged, this, &SettingsTorrentAutomation::dirtifySettings);
   }
   connect(m_clients, &QTableWidget::cellChanged, this, &SettingsTorrentAutomation::dirtifySettings);
+  connect(m_exclusiveMode, &QCheckBox::clicked, this, [this](bool checked) {
+    if (checked) QMessageBox::information(this, tr("Exclusive Batch Mode"),
+      tr("After you press Apply or OK, normal unattended routing, queued retries, reconciliation, retention and cleanup will remain frozen until Exclusive Batch Mode is disabled. Existing torrents are never deleted by this mode."));
+  });
   connect(m_clients, &QTableWidget::currentCellChanged, this, [this]() { updateCapabilityDisplay(); });
   connect(m_storageUnit, QOverload<int>::of(&QComboBox::currentIndexChanged),
           this, &SettingsTorrentAutomation::changeStorageUnit);
@@ -914,6 +985,13 @@ void SettingsTorrentAutomation::loadSettings() {
   m_paused->setChecked(m_config.paused);
   m_silent->setChecked(m_config.silentNotifications);
   m_ignoreInitial->setChecked(m_config.ignoreInitialFeedBatch);
+  m_exclusiveMode->setChecked(m_config.exclusiveModeEnabled);
+  m_exclusiveSleepMinutes->setValue(m_config.exclusiveSleepMinutes);
+  m_exclusiveFreshnessMinutes->setValue(m_config.exclusiveFreshnessMinutes);
+  m_exclusiveMonitoringMinutes->setValue(m_config.exclusiveMonitoringMinutes);
+  m_exclusivePollMinutes->setValue(m_config.exclusivePollMinutes);
+  m_exclusiveBatchSize->setValue(m_config.exclusiveBatchSize);
+  m_exclusiveSendPartial->setChecked(m_config.exclusiveSendPartialBatch);
   m_notificationDuration->setValue(m_config.notificationDurationSeconds);
   m_maxConsecutive->setValue(m_config.maximumConsecutiveAssignments);
   m_strategy->setCurrentIndex(m_strategy->findData(static_cast<int>(m_config.strategy)));
@@ -996,6 +1074,13 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.paused = m_paused->isChecked();
   m_config.silentNotifications = m_silent->isChecked();
   m_config.ignoreInitialFeedBatch = m_ignoreInitial->isChecked();
+  m_config.exclusiveModeEnabled = m_exclusiveMode->isChecked();
+  m_config.exclusiveSleepMinutes = m_exclusiveSleepMinutes->value();
+  m_config.exclusiveFreshnessMinutes = m_exclusiveFreshnessMinutes->value();
+  m_config.exclusiveMonitoringMinutes = m_exclusiveMonitoringMinutes->value();
+  m_config.exclusivePollMinutes = m_exclusivePollMinutes->value();
+  m_config.exclusiveBatchSize = m_exclusiveBatchSize->value();
+  m_config.exclusiveSendPartialBatch = m_exclusiveSendPartial->isChecked();
   m_config.notificationDurationSeconds = m_notificationDuration->value();
   m_config.maximumConsecutiveAssignments = m_maxConsecutive->value();
   m_config.strategy = static_cast<TorrentRoutingStrategy>(m_strategy->currentData().toInt());
@@ -1455,6 +1540,7 @@ void SettingsTorrentAutomation::applyQuickPreset(int preset) {
   // Common reliable foundation. Presets deliberately do not overwrite RSS
   // rules, configured clients, per-client storage limits or protected names.
   m_enabled->setChecked(true);
+  m_exclusiveMode->setChecked(false);
   m_dryRun->setChecked(true);
   m_notifications->setChecked(true);
   m_strategy->setCurrentIndex(m_strategy->findData(static_cast<int>(TorrentRoutingStrategy::Balanced)));
@@ -1726,6 +1812,35 @@ void SettingsTorrentAutomation::runSetupWizard() {
                   "After setup, run a dry test and review the Simple results before considering live mode."));
   detailedHelp.insert(wizard.pageIds().constLast(), tr("Enable torrent automation is the master switch. Dry run keeps the complete decision process active but replaces sends and deletions with reports. Notifications show important outcomes on screen. Activity history controls only how many audit entries are remembered; it does not limit feed articles or torrents."));
   basics->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
+
+  QWizardPage* exclusive = page(tr("Exclusive Batch Mode (optional)"),
+    tr("Use a simple send-only cycle that sleeps, accepts only genuinely fresh RSS releases, distributes a batch, then sleeps again."));
+  auto* exclusiveForm = form(exclusive);
+  auto* exclusiveEnabled = check(exclusive, tr("Enable Exclusive Batch Mode"), m_exclusiveMode->isChecked(),
+    tr("While enabled, normal unattended routing, retries, retention, cleanup and deletion are frozen—even while this mode sleeps."));
+  auto* exclusiveSleep = integer(exclusive, m_exclusiveSleepMinutes->value(), 1, 10080, tr(" minutes"),
+    tr("Example: 60 minutes between completed batches."));
+  auto* exclusiveFreshness = integer(exclusive, m_exclusiveFreshnessMinutes->value(), 0, 1440, tr(" minutes"),
+    tr("Only reliably dated items this old or newer can qualify during the wake-up baseline. Older items are ignored completely."));
+  auto* exclusiveMonitor = integer(exclusive, m_exclusiveMonitoringMinutes->value(), 1, 1440, tr(" minutes"),
+    tr("Collect fresh releases for this long unless the batch target is reached first."));
+  auto* exclusivePoll = integer(exclusive, m_exclusivePollMinutes->value(), 1, 60, tr(" minutes"),
+    tr("How frequently all feeds are refreshed during the monitoring window."));
+  auto* exclusiveTarget = integer(exclusive, m_exclusiveBatchSize->value(), 1, 1000, tr(" releases"),
+    tr("The fresh batch is sent immediately when this count is reached."));
+  auto* exclusivePartial = check(exclusive, tr("Send what arrived when monitoring time expires"),
+    m_exclusiveSendPartial->isChecked(), tr("Recommended: send 3 releases when a target of 5 was not reached in time."));
+  exclusiveForm->addRow(exclusiveEnabled);
+  exclusiveForm->addRow(tr("Sleep between cycles:"), exclusiveSleep);
+  exclusiveForm->addRow(tr("Freshness allowance:"), exclusiveFreshness);
+  exclusiveForm->addRow(tr("Monitoring window:"), exclusiveMonitor);
+  exclusiveForm->addRow(tr("RSS refresh interval:"), exclusivePoll);
+  exclusiveForm->addRow(tr("Target batch size:"), exclusiveTarget);
+  exclusiveForm->addRow(exclusivePartial);
+  warning(exclusive, tr("OLD-FEED SAFETY — on wake-up, undated baseline items and anything older than the freshness allowance are rejected. This mode never performs deletion or cleanup."));
+  note(exclusive, tr("<b>Example:</b> sleep 60 minutes, allow releases posted during the last 3 minutes, monitor every minute for up to 15 minutes, and send as soon as 5 fresh releases arrive. The enabled clients' priority values control the weighted distribution."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("Exclusive Batch Mode owns unattended torrent automation for its full enabled lifetime. Its first wake-up refresh establishes a timestamp boundary. Only releases carrying a trustworthy feed publication time inside the freshness allowance may qualify. Older or undated entries are rejected because retrieval time cannot prove that a release is new. Fresh items are collected until the count or time limit is reached. Normal queued work is preserved but frozen. Manual client buttons remain usable."));
+  exclusive->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
   QWizardPage* routing = page(tr("2. Routing and size estimates"),
     tr("Decide how RSS Guard selects between eligible clients and how it reserves space when a feed does not provide a torrent size."));
@@ -2017,10 +2132,11 @@ void SettingsTorrentAutomation::runSetupWizard() {
                   "Before live use: test every enabled client, run a dry test, inspect Simple and Activity, and use Check readiness for live automation. "
                   "The wizard never sends a torrent or performs cleanup."));
   auto* finishDry = new QLabel(finish); finishDry->setWordWrap(true); finish->layout()->addWidget(finishDry);
-  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finishPageId, finishDry, dryRun, cleanupEnabled, deleteData, retentionEnabled, retentionHours](int id) {
+  connect(&wizard, &QWizard::currentIdChanged, &wizard, [finishPageId, finishDry, dryRun, cleanupEnabled, deleteData, retentionEnabled, retentionHours, exclusiveEnabled](int id) {
     if (id != finishPageId) return;
-    finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Cleanup: %2 · Delete downloaded data: %3 · Maximum retention: %4")
+    finishDry->setText(QObject::tr("<b>Selected safety state:</b> Dry run: %1 · Exclusive mode: %2 · Cleanup: %3 · Delete downloaded data: %4 · Maximum retention: %5")
       .arg(dryRun->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
+           exclusiveEnabled->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
            cleanupEnabled->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
            deleteData->isChecked() ? QObject::tr("ON") : QObject::tr("OFF"),
            retentionEnabled->isChecked() ? QObject::tr("%1 hours").arg(retentionHours->value()) : QObject::tr("OFF")));
@@ -2116,6 +2232,13 @@ void SettingsTorrentAutomation::runSetupWizard() {
 
   m_enabled->setChecked(enabled->isChecked()); m_dryRun->setChecked(dryRun->isChecked());
   m_notifications->setChecked(notifications->isChecked()); m_historyLimit->setValue(history->value());
+  m_exclusiveMode->setChecked(exclusiveEnabled->isChecked());
+  m_exclusiveSleepMinutes->setValue(exclusiveSleep->value());
+  m_exclusiveFreshnessMinutes->setValue(exclusiveFreshness->value());
+  m_exclusiveMonitoringMinutes->setValue(exclusiveMonitor->value());
+  m_exclusivePollMinutes->setValue(exclusivePoll->value());
+  m_exclusiveBatchSize->setValue(exclusiveTarget->value());
+  m_exclusiveSendPartial->setChecked(exclusivePartial->isChecked());
   m_strategy->setCurrentIndex(m_strategy->findData(strategy->currentData()));
   m_unknownSizeGb->setValue(unknownSize->value());
   m_storageUnit->setCurrentIndex(m_storageUnit->findData(storageUnit->currentData()));

@@ -70,7 +70,26 @@ TorrentAutomationEngine* TorrentAutomationEngine::instance(QObject* parent) {
 void TorrentAutomationEngine::processNewArticles(const QHash<Feed*, QList<Message>>& articles, QObject* parent) {
   TorrentAutomationEngine* engine = instance(parent);
   engine->m_lastArticles = articles;
+  if (TorrentAutomationConfig::load(qApp->settings()).exclusiveModeEnabled) return;
   engine->enqueue(articles);
+}
+
+void TorrentAutomationEngine::processExclusiveArticles(const QHash<Feed*, QList<Message>>& articles,
+                                                        QObject* parent) {
+  if (articles.isEmpty()) return;
+  TorrentAutomationEngine* engine = instance(parent);
+  engine->m_lastArticles = articles;
+  engine->enqueue(articles, false, false, true, true);
+}
+
+void TorrentAutomationEngine::recordExclusiveState(const QString& state,
+                                                    const QString& detail,
+                                                    QObject* parent) {
+  TorrentAutomationEngine* engine = instance(parent);
+  engine->m_config = TorrentAutomationConfig::load(qApp->settings());
+  Job event;
+  event.title = tr("Exclusive Batch Mode");
+  engine->record(state, event, {}, detail);
 }
 
 bool TorrentAutomationEngine::paused() const {
@@ -225,6 +244,7 @@ TorrentAutomationEngine::TorrentAutomationEngine(QObject* parent) : QObject(pare
     if (m_busy) return;
     m_config = TorrentAutomationConfig::load(qApp->settings());
     if (!m_config.enabled) return;
+    if (m_config.exclusiveModeEnabled) return;
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool reconciliationDue = !m_config.dryRun && m_config.reconciliationEnabled &&
       (!m_lastReconcile.isValid() || m_lastReconcile.secsTo(now) >= qMax(1, m_config.reconciliationMinutes) * 60);
@@ -355,9 +375,24 @@ bool TorrentAutomationEngine::ruleMatches(const TorrentAutomationRule& rule,
 void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articles,
                                       bool forceDryRun,
                                       bool manualApproval,
-                                      bool forceEnabled) {
+                                      bool forceEnabled,
+                                      bool exclusiveBatch) {
   m_config = TorrentAutomationConfig::load(qApp->settings());
   m_forcedDryRun = forceDryRun;
+  m_exclusiveBatch = exclusiveBatch;
+  if (exclusiveBatch) {
+    // Exclusive mode is send-only. It deliberately cannot invoke normal
+    // scheduling, retries, reconciliation, retention or cleanup.
+    m_config.enabled = true;
+    m_config.paused = false;
+    m_config.strategy = TorrentRoutingStrategy::Weighted;
+    m_config.scheduleEnabled = false;
+    m_config.retryEnabled = false;
+    m_config.reconciliationEnabled = false;
+    m_config.cleanupEnabled = false;
+    m_config.maximumRetentionEnabled = false;
+    m_config.rules.clear();
+  }
   if (forceDryRun) {
     m_config.enabled = true;
     m_config.dryRun = true;
@@ -442,6 +477,17 @@ void TorrentAutomationEngine::beginBatch() {
   emit busyChanged(true);
   m_config = TorrentAutomationConfig::load(qApp->settings());
   if (m_forcedDryRun) m_config.dryRun = true;
+  if (m_exclusiveBatch) {
+    m_config.enabled = true;
+    m_config.paused = false;
+    m_config.strategy = TorrentRoutingStrategy::Weighted;
+    m_config.scheduleEnabled = false;
+    m_config.retryEnabled = false;
+    m_config.reconciliationEnabled = false;
+    m_config.cleanupEnabled = false;
+    m_config.maximumRetentionEnabled = false;
+    m_config.rules.clear();
+  }
   m_clients.clear();
   QStringList forcedClientIds;
   for (const Job& job : std::as_const(m_jobs))
@@ -615,7 +661,7 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
   if (m_config.strategy == TorrentRoutingStrategy::RoundRobin) {
     const int selected = eligible.at(m_config.roundRobinCursor % eligible.size());
     ++m_config.roundRobinCursor;
-    if (!m_config.dryRun) m_config.save(qApp->settings());
+    if (!m_config.dryRun && !m_exclusiveBatch) m_config.save(qApp->settings());
     return selected;
   }
   if (m_config.strategy == TorrentRoutingStrategy::Weighted) {
@@ -625,7 +671,7 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
     for (int index : eligible)
       total += qMax(1, highestPriority + 1 - m_config.policyFor(m_clients.at(index).id).priority);
     int point = m_config.roundRobinCursor++ % total;
-    if (!m_config.dryRun) m_config.save(qApp->settings());
+    if (!m_config.dryRun && !m_exclusiveBatch) m_config.save(qApp->settings());
     for (int index : eligible) {
       point -= qMax(1, highestPriority + 1 - m_config.policyFor(m_clients.at(index).id).priority);
       if (point < 0) return index;
@@ -1253,6 +1299,19 @@ void TorrentAutomationEngine::armDeferredJob(const Job& job) {
   const qint64 delayMs = qMax<qint64>(1000, QDateTime::currentDateTimeUtc().msecsTo(job.nextAttempt));
   QTimer::singleShot(int(qMin<qint64>(delayMs, std::numeric_limits<int>::max())), this,
                      [this, key = job.key, attempt = job.attempt]() {
+    if (TorrentAutomationConfig::load(qApp->settings()).exclusiveModeEnabled) {
+      for (int index = 0; index < m_deferredJobs.size(); ++index) {
+        if (m_deferredJobs.at(index).key == key && m_deferredJobs.at(index).attempt == attempt) {
+          Job frozen = m_deferredJobs.at(index);
+          frozen.nextAttempt = QDateTime::currentDateTimeUtc().addSecs(60);
+          m_deferredJobs[index] = frozen;
+          saveRuntime();
+          armDeferredJob(frozen);
+          return;
+        }
+      }
+      return;
+    }
     for (int index = 0; index < m_deferredJobs.size(); ++index) {
       if (m_deferredJobs.at(index).key != key || m_deferredJobs.at(index).attempt != attempt) continue;
       Job due = m_deferredJobs.takeAt(index);
@@ -1787,6 +1846,7 @@ void TorrentAutomationEngine::finishBatch() {
   m_busy = false;
   emit busyChanged(false);
   m_forcedDryRun = false;
+  m_exclusiveBatch = false;
   m_manualDialogParent.clear();
 }
 
