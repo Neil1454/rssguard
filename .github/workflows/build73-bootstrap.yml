@@ -1,0 +1,35 @@
+name: Build 73 publisher
+
+on:
+  push:
+    branches:
+      - feature/torrent-automation
+    paths:
+      - .github/workflows/build73-bootstrap.yml
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply Build 73 source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gzip -dc .github/workflows/build73.patch.gz | git am
+          rm .github/workflows/build73.patch.gz .github/workflows/build73-bootstrap.yml
+          git add -A
+          git commit -m "Remove Build 73 publisher"
+          git push origin HEAD:feature/torrent-automation
+
+      - name: Start Windows Build 73
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run torrent-windows-portable.yml --ref feature/torrent-automation
