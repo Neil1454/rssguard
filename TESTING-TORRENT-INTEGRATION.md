@@ -11,7 +11,15 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 73 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 74 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 74 startup and rTorrent verification checks
+
+1. Upgrade from Build 73 with Exclusive Batch Mode previously enabled. Confirm Build 74 starts with the mode disabled/unarmed and sends no exclusive batch before the user deliberately enables it and presses Apply or OK.
+2. Enable and save Exclusive Batch Mode, restart RSS Guard and confirm the intentionally armed mode resumes with a normal sleep period before its first feed refresh.
+3. Untick the mode and press Apply. Confirm its runtime state changes to Disabled and normal automation resumes without restarting RSS Guard.
+4. Send a magnet and a `.torrent` URL to rTorrent/ruTorrent. Confirm RSS Guard snapshots the torrent list, identifies the newly registered hash and explicitly starts it when its returned state is stopped.
+5. Add another torrent independently at nearly the same time and confirm RSS Guard refuses to guess between multiple new hashes rather than starting an unrelated stopped torrent.
 
 ## Build 73 exclusive-mode and ruTorrent checks
 

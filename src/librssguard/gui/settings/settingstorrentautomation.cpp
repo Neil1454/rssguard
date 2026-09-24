@@ -985,7 +985,7 @@ void SettingsTorrentAutomation::loadSettings() {
   m_paused->setChecked(m_config.paused);
   m_silent->setChecked(m_config.silentNotifications);
   m_ignoreInitial->setChecked(m_config.ignoreInitialFeedBatch);
-  m_exclusiveMode->setChecked(m_config.exclusiveModeEnabled);
+  m_exclusiveMode->setChecked(m_config.exclusiveModeEnabled && m_config.exclusiveModeArmed);
   m_exclusiveSleepMinutes->setValue(m_config.exclusiveSleepMinutes);
   m_exclusiveFreshnessMinutes->setValue(m_config.exclusiveFreshnessMinutes);
   m_exclusiveMonitoringMinutes->setValue(m_config.exclusiveMonitoringMinutes);
@@ -1075,6 +1075,7 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.silentNotifications = m_silent->isChecked();
   m_config.ignoreInitialFeedBatch = m_ignoreInitial->isChecked();
   m_config.exclusiveModeEnabled = m_exclusiveMode->isChecked();
+  m_config.exclusiveModeArmed = m_exclusiveMode->isChecked();
   m_config.exclusiveSleepMinutes = m_exclusiveSleepMinutes->value();
   m_config.exclusiveFreshnessMinutes = m_exclusiveFreshnessMinutes->value();
   m_config.exclusiveMonitoringMinutes = m_exclusiveMonitoringMinutes->value();

@@ -58,6 +58,7 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool ignoreInitialFeedBatch = false;
   bool markInitialFeedBatchRead = false;
   bool exclusiveModeEnabled = false;
+  bool exclusiveModeArmed = false;
   int exclusiveSleepMinutes = 60;
   int exclusiveFreshnessMinutes = 3;
   int exclusiveMonitoringMinutes = 15;

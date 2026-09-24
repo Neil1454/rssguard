@@ -774,6 +774,10 @@ void RTorrentClient::addNext() {
     emit addFinished(m_added, m_failed, message);
     return;
   }
+  fetchTorrentHashes([this](bool ok, const QSet<QString>& hashes) { loadNext(hashes, ok); });
+}
+
+void RTorrentClient::loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable) {
   QStringList arguments{QString(), m_pending.dequeue()};
   if (!m_config.savePath.isEmpty()) arguments.append(QStringLiteral("d.directory.set=%1").arg(m_config.savePath));
   if (!m_config.category.isEmpty()) arguments.append(QStringLiteral("d.custom1.set=%1").arg(m_config.category));
@@ -785,8 +789,15 @@ void RTorrentClient::addNext() {
   // torrent stopped after applying additional load commands. Explicitly run
   // d.start on the newly loaded item as the final command as well.
   arguments.append(QStringLiteral("d.start="));
-  call(QStringLiteral("load.start"), arguments, [this](QNetworkReply* reply, const QByteArray& body) {
-    if (reply->error() == QNetworkReply::NoError && !body.contains("<fault>")) ++m_added;
+  call(QStringLiteral("load.start"), arguments, [this, previousHashes, snapshotAvailable](QNetworkReply* reply, const QByteArray& body) {
+    if (reply->error() == QNetworkReply::NoError && !body.contains("<fault>")) {
+      if (snapshotAvailable) {
+        QTimer::singleShot(500, this, [this, previousHashes]() { verifyNewTorrentStarted(previousHashes, 0); });
+        return;
+      }
+      finishLoadedTorrent(tr("rTorrent accepted the torrent, but its XML-RPC endpoint did not allow the post-load start verification. The in-load start command was still sent."));
+      return;
+    }
     else {
       ++m_failed;
       QString detail = reply->error() == QNetworkReply::NoError ? xmlRpcFaultMessage(body) : networkFailure(reply);
@@ -795,6 +806,78 @@ void RTorrentClient::addNext() {
     }
     addNext();
   });
+}
+
+void RTorrentClient::fetchTorrentHashes(const std::function<void(bool, const QSet<QString>&)>& callback) {
+  call(QStringLiteral("d.multicall2"),
+       {QString(), QStringLiteral("main"), QStringLiteral("d.hash=")},
+       [callback](QNetworkReply* reply, const QByteArray& body) {
+    QSet<QString> hashes;
+    const bool ok = reply->error() == QNetworkReply::NoError && !body.contains("<fault>");
+    if (ok) {
+      for (const QStringList& row : xmlRpcRows(body))
+        if (!row.isEmpty() && !row.first().isEmpty()) hashes.insert(row.first());
+    }
+    callback(ok, hashes);
+  });
+}
+
+void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes, int attempt) {
+  call(QStringLiteral("d.multicall2"),
+       {QString(), QStringLiteral("main"), QStringLiteral("d.hash="),
+        QStringLiteral("d.state=")},
+       [this, previousHashes, attempt](QNetworkReply* reply, const QByteArray& body) {
+    if (reply->error() != QNetworkReply::NoError || body.contains("<fault>")) {
+      finishLoadedTorrent(tr("rTorrent accepted the torrent, but the follow-up status check failed. The start command was sent during loading."));
+      return;
+    }
+
+    QList<QStringList> newRows;
+    for (const QStringList& row : xmlRpcRows(body))
+      if (row.size() >= 2 && !previousHashes.contains(row.at(0))) newRows.append(row);
+
+    if (newRows.isEmpty() && attempt < 5) {
+      QTimer::singleShot(500, this, [this, previousHashes, attempt]() {
+        verifyNewTorrentStarted(previousHashes, attempt + 1);
+      });
+      return;
+    }
+    if (newRows.isEmpty()) {
+      finishLoadedTorrent(tr("rTorrent accepted the torrent, but it did not appear in the torrent list in time to verify that it started."));
+      return;
+    }
+
+    QString hashToStart;
+    bool alreadyStarted = false;
+    if (newRows.size() == 1) {
+      alreadyStarted = newRows.first().at(1).toInt() != 0;
+      if (!alreadyStarted) hashToStart = newRows.first().at(0);
+    }
+    if (alreadyStarted) {
+      finishLoadedTorrent();
+      return;
+    }
+    if (hashToStart.isEmpty()) {
+      finishLoadedTorrent(tr("rTorrent accepted the torrent, but another torrent appeared at the same time and RSS Guard could not safely identify which one to start."));
+      return;
+    }
+
+    call(QStringLiteral("d.start"), {hashToStart}, [this](QNetworkReply* startReply, const QByteArray& startBody) {
+      if (startReply->error() == QNetworkReply::NoError && !startBody.contains("<fault>")) finishLoadedTorrent();
+      else {
+        QString detail = startReply->error() == QNetworkReply::NoError
+                           ? xmlRpcFaultMessage(startBody) : networkFailure(startReply);
+        finishLoadedTorrent(tr("The torrent was added, but rTorrent rejected the explicit post-load start command: %1")
+                              .arg(detail.isEmpty() ? tr("unknown XML-RPC error") : detail));
+      }
+    });
+  });
+}
+
+void RTorrentClient::finishLoadedTorrent(const QString& warning) {
+  ++m_added;
+  if (!warning.isEmpty()) m_failureDetails.append(warning);
+  addNext();
 }
 
 void RTorrentClient::fetchStatus() {

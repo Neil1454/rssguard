@@ -152,7 +152,7 @@ void GuiNotificationCoordinator::beginExclusiveDispatch(const QString& reason) {
 
 void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadResults& results) {
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
-  if (!config.exclusiveModeEnabled) return;
+  if (!config.exclusiveModeEnabled || !config.exclusiveModeArmed) return;
   if (m_exclusiveState == ExclusiveState::Baselining) {
     collectExclusiveArticles(results.updatedFeeds(), true);
     m_exclusiveState = ExclusiveState::Collecting;
@@ -175,7 +175,7 @@ void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadRe
 
 void GuiNotificationCoordinator::updateExclusiveMode() {
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
-  if (!config.exclusiveModeEnabled) {
+  if (!config.exclusiveModeEnabled || !config.exclusiveModeArmed) {
     if (m_exclusiveState != ExclusiveState::Disabled) {
       m_exclusiveState = ExclusiveState::Disabled;
       m_exclusiveArticles.clear();
@@ -570,7 +570,8 @@ void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults
   }
   // Exclusive mode owns unattended routing for its entire lifetime, including
   // sleep periods. Normal automation must never run alongside it.
-  if (torrentConfig.exclusiveModeEnabled) handleExclusiveFeedResults(results);
+  if (torrentConfig.exclusiveModeEnabled && torrentConfig.exclusiveModeArmed)
+    handleExclusiveFeedResults(results);
   else TorrentAutomationEngine::processNewArticles(automationArticles, m_application);
 
   const bool some_unquiet_feed = !torrentConfig.silentNotifications &&

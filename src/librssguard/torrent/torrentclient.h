@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QQueue>
+#include <QSet>
 
 #include <functional>
 
@@ -152,6 +153,10 @@ class RTorrentClient final : public TorrentClient {
     QByteArray methodCall(const QString& method, const QStringList& values = {}) const;
     void call(const QString& method, const QStringList& values, const std::function<void(QNetworkReply*, const QByteArray&)>& callback);
     void addNext();
+    void loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable);
+    void fetchTorrentHashes(const std::function<void(bool, const QSet<QString>&)>& callback);
+    void verifyNewTorrentStarted(const QSet<QString>& previousHashes, int attempt);
+    void finishLoadedTorrent(const QString& warning = {});
     void fetchStatusRequest(bool enhancedTimestamps);
     QQueue<QString> m_pending;
     QStringList m_failureDetails;

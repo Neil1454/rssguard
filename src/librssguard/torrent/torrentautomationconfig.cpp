@@ -48,6 +48,10 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.ignoreInitialFeedBatch = root.value(QStringLiteral("ignoreInitialFeedBatch")).toBool(false);
   config.markInitialFeedBatchRead = root.value(QStringLiteral("markInitialFeedBatchRead")).toBool(false);
   config.exclusiveModeEnabled = root.value(QStringLiteral("exclusiveModeEnabled")).toBool(false);
+  // Build 74 deliberately requires an explicit post-upgrade Apply/OK before
+  // Exclusive Batch Mode can run. This prevents an incomplete or stale Build
+  // 73 value from starting the mode during application startup.
+  config.exclusiveModeArmed = root.value(QStringLiteral("exclusiveModeArmed")).toBool(false);
   config.exclusiveSleepMinutes = qBound(1, root.value(QStringLiteral("exclusiveSleepMinutes")).toInt(60), 10080);
   config.exclusiveFreshnessMinutes = qBound(0, root.value(QStringLiteral("exclusiveFreshnessMinutes")).toInt(3), 1440);
   config.exclusiveMonitoringMinutes = qBound(1, root.value(QStringLiteral("exclusiveMonitoringMinutes")).toInt(15), 1440);
@@ -174,6 +178,7 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("ignoreInitialFeedBatch"), ignoreInitialFeedBatch);
   root.insert(QStringLiteral("markInitialFeedBatchRead"), markInitialFeedBatchRead);
   root.insert(QStringLiteral("exclusiveModeEnabled"), exclusiveModeEnabled);
+  root.insert(QStringLiteral("exclusiveModeArmed"), exclusiveModeArmed);
   root.insert(QStringLiteral("exclusiveSleepMinutes"), exclusiveSleepMinutes);
   root.insert(QStringLiteral("exclusiveFreshnessMinutes"), exclusiveFreshnessMinutes);
   root.insert(QStringLiteral("exclusiveMonitoringMinutes"), exclusiveMonitoringMinutes);

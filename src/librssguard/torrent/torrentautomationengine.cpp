@@ -70,7 +70,8 @@ TorrentAutomationEngine* TorrentAutomationEngine::instance(QObject* parent) {
 void TorrentAutomationEngine::processNewArticles(const QHash<Feed*, QList<Message>>& articles, QObject* parent) {
   TorrentAutomationEngine* engine = instance(parent);
   engine->m_lastArticles = articles;
-  if (TorrentAutomationConfig::load(qApp->settings()).exclusiveModeEnabled) return;
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(qApp->settings());
+  if (config.exclusiveModeEnabled && config.exclusiveModeArmed) return;
   engine->enqueue(articles);
 }
 
@@ -244,7 +245,7 @@ TorrentAutomationEngine::TorrentAutomationEngine(QObject* parent) : QObject(pare
     if (m_busy) return;
     m_config = TorrentAutomationConfig::load(qApp->settings());
     if (!m_config.enabled) return;
-    if (m_config.exclusiveModeEnabled) return;
+    if (m_config.exclusiveModeEnabled && m_config.exclusiveModeArmed) return;
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool reconciliationDue = !m_config.dryRun && m_config.reconciliationEnabled &&
       (!m_lastReconcile.isValid() || m_lastReconcile.secsTo(now) >= qMax(1, m_config.reconciliationMinutes) * 60);
@@ -1299,7 +1300,8 @@ void TorrentAutomationEngine::armDeferredJob(const Job& job) {
   const qint64 delayMs = qMax<qint64>(1000, QDateTime::currentDateTimeUtc().msecsTo(job.nextAttempt));
   QTimer::singleShot(int(qMin<qint64>(delayMs, std::numeric_limits<int>::max())), this,
                      [this, key = job.key, attempt = job.attempt]() {
-    if (TorrentAutomationConfig::load(qApp->settings()).exclusiveModeEnabled) {
+    const TorrentAutomationConfig currentConfig = TorrentAutomationConfig::load(qApp->settings());
+    if (currentConfig.exclusiveModeEnabled && currentConfig.exclusiveModeArmed) {
       for (int index = 0; index < m_deferredJobs.size(); ++index) {
         if (m_deferredJobs.at(index).key == key && m_deferredJobs.at(index).attempt == attempt) {
           Job frozen = m_deferredJobs.at(index);

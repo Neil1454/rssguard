@@ -1,5 +1,12 @@
 # Torrent integration changelog
 
+## Build 74
+
+- rTorrent/ruTorrent sending now snapshots the torrent list before upload, waits for the new torrent to register, verifies its state and issues an explicit `d.start(hash)` when the new item is stopped.
+- The original in-load `d.start=` command remains in place as the first start attempt, while the post-load verification handles gateways that apply it too early.
+- Exclusive Batch Mode now requires a separately persisted armed state. Existing Build 73 settings are treated as unarmed after upgrade, preventing a stale or incomplete value from starting exclusive processing during application startup.
+- The mode becomes armed only when **Enable Exclusive Batch Mode** is deliberately selected and the settings are saved with Apply or OK. Unticking and saving disarms it immediately.
+
 ## Build 73
 
 - Added a separate **Exclusive Batch Mode** with a simple sleep → baseline → collect → send cycle.
