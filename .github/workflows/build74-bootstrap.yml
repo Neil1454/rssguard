@@ -1,0 +1,33 @@
+name: Build 74 publisher
+
+on:
+  push:
+    branches:
+      - feature/torrent-automation
+    paths:
+      - .github/workflows/build74-bootstrap.yml
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply Build 74 source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gzip -dc .github/workflows/build74-tree.patch.gz | git apply --index -
+          git commit -m "Verify rTorrent starts and arm exclusive mode for Build 74"
+          git push origin HEAD:feature/torrent-automation
+
+      - name: Start Windows Build 74
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run torrent-windows-portable.yml --ref feature/torrent-automation
