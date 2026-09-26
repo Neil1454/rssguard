@@ -104,7 +104,10 @@ namespace {
 TorrentClient::TorrentClient(TorrentClientConfig config, QObject* parent)
   : QObject(parent), m_config(std::move(config)), m_network(new BaseNetworkAccessManager(this)) {
   if (!m_config.useRssGuardProxy) m_network->setProxy(QNetworkProxy::NoProxy);
-  m_network->setTransferTimeout(qMax(5, m_config.requestTimeoutSeconds) * 1000);
+  // Exclusive mode deliberately uses a very short request timeout so a dead
+  // seedbox cannot hold a fresh release for the general five-second floor.
+  // The configured value is already bounded by its settings loader.
+  m_network->setTransferTimeout(qMax(1, m_config.requestTimeoutSeconds) * 1000);
 }
 
 TorrentClient::~TorrentClient() = default;

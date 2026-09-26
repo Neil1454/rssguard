@@ -2,7 +2,7 @@
 
 ## Build 75
 
-- Exclusive sends now use a configurable short request timeout (2 seconds by default), three immediate attempts on the selected client for definite temporary failures, and prompt failover to another eligible client. A failed status probe no longer suppresses the real add request.
+- Exclusive sends now use a configurable short request timeout (2 seconds by default), three immediate attempts on the selected client for definite temporary failures, and prompt failover to another eligible client. A failed status probe no longer suppresses the real add request, and the former hidden five-second network-timeout floor no longer overrides the Exclusive setting.
 - The Exclusive Mode tab and guided wizard now expose and explain the request timeout, rapid-attempt count and retry delay. The default delay is zero for back-to-back attempts; ambiguous timeouts still follow duplicate-safety handling.
 - Balanced routing now enforces the configured consecutive-send limit whenever another healthy, eligible client exists. A large free-space advantage can no longer cause one client to receive every closely spaced release.
 - Exclusive Batch Mode is rechecked before every normal automation action. Enabling it during an existing batch freezes remaining normal sends and retries and prevents retention or space cleanup from running alongside the exclusive cycle.
