@@ -13,10 +13,13 @@ function(add_rssguard_test TEST_TARGET)
   )
 
   if(WIN32)
+    # Do not bake the configure-time PATH into CTestTestfile.cmake. Doing so
+    # replaces (rather than extends) the PATH supplied when CTest is run and
+    # prevents CI/developer test harnesses from adding transitive DLL folders.
+    # The rssguard and Qt runtime locations are supplied by the caller's PATH.
     add_test(NAME ${TEST_TARGET}
       COMMAND ${CMAKE_COMMAND} -E env
         "QT_QPA_PLATFORM=offscreen"
-        "PATH=$<TARGET_FILE_DIR:rssguard>$<SEMICOLON>$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>$<SEMICOLON>$ENV{PATH}"
         $<TARGET_FILE:${TEST_TARGET}>
     )
   else()
