@@ -1,1 +1,1 @@
-Build 75 retry 6 - resilient Qt download and external 7-Zip extraction
+Build 75 retry 7 - preserve runtime DLL path during CTest
