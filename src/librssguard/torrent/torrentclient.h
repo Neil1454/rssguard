@@ -138,7 +138,7 @@ class FloodClient final : public TorrentClient {
     QByteArray m_cookie;
 };
 
-class RTorrentClient final : public TorrentClient {
+class RSSGUARD_DLLSPEC RTorrentClient final : public TorrentClient {
     Q_OBJECT
   public:
     explicit RTorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
