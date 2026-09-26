@@ -11,7 +11,7 @@
 - Exclusive Mode begins its first monitoring cycle immediately after Apply/OK instead of sleeping first. Its own tab now contains separate routing and maximum-consecutive-send controls, with Even distribution as the safe default.
 - The first torrent-bearing batch from every feed is baselined separately on every RSS Guard launch. Old or undated startup torrents are excluded from both unattended routing and torrent pop-ups, while reliably dated releases published after launch remain eligible.
 - Pending torrent jobs from a previous application session are discarded on startup so expired RSS opportunities cannot flood clients after restarting RSS Guard. The event is recorded in Activity.
-- The Windows release workflow now builds and runs the automated test suite before packaging or publishing, with the Windows Qt and RSS Guard DLL directories supplied to CTest. Regression tests cover exclusive-mode arming, forced balanced-routing alternation, startup-feed age filtering, and the ruTorrent add/start command set.
+- The Windows release workflow now builds and runs the automated test suite before packaging or publishing, with every generated/downloaded runtime-DLL directory supplied to CTest for Qt, ICU, OpenSSL, QXmpp and libmpv transitive dependencies. Regression tests cover exclusive-mode arming, forced balanced-routing alternation, startup-feed age filtering, and the ruTorrent add/start command set.
 
 ## Build 74
 

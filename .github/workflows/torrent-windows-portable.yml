@@ -48,10 +48,15 @@ jobs:
       - name: Run automated regression tests
         shell: pwsh
         run: |
-          $qtBin = (Resolve-Path ".\qt\*\msvc2022_64\bin").Path
-          $appBin = (Resolve-Path ".\rssguard-build\app").Path
-          $libraryBin = (Resolve-Path ".\rssguard-build\src\librssguard").Path
-          $env:PATH = "$appBin;$libraryBin;$qtBin;$env:PATH"
+          # The RSS Guard DLL loads Qt, ICU, OpenSSL, QXmpp and libmpv
+          # transitively. CTest launches from its own directory, so include
+          # every build/download directory that actually contains a DLL.
+          $dllDirectories = Get-ChildItem -Path . -Recurse -File -Filter "*.dll" |
+            ForEach-Object { $_.DirectoryName } |
+            Sort-Object -Unique
+          $env:PATH = (($dllDirectories -join ";") + ";" + $env:PATH)
+          $env:QT_PLUGIN_PATH = (Resolve-Path ".\rssguard-build\app").Path
+          Write-Host "CTest runtime DLL directories: $($dllDirectories.Count)"
           ctest --test-dir .\rssguard-build --output-on-failure --timeout 120
 
       - name: Package portable archive
