@@ -1,1 +1,1 @@
-Build 75 retry 7 - preserve runtime DLL path during CTest
+Build 75 retry 8 - serialize Qt extraction and preserve CTest runtime path
