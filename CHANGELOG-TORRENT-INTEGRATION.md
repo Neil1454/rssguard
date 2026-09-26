@@ -12,6 +12,7 @@
 - The first torrent-bearing batch from every feed is baselined separately on every RSS Guard launch. Old or undated startup torrents are excluded from both unattended routing and torrent pop-ups, while reliably dated releases published after launch remain eligible.
 - Pending torrent jobs from a previous application session are discarded on startup so expired RSS opportunities cannot flood clients after restarting RSS Guard. The event is recorded in Activity.
 - The Windows release workflow now builds and runs the automated test suite before packaging or publishing, with every generated/downloaded runtime-DLL directory supplied to CTest for Qt, ICU, OpenSSL, QXmpp and libmpv transitive dependencies. Regression tests cover exclusive-mode arming, forced balanced-routing alternation, startup-feed age filtering, and the ruTorrent add/start command set.
+- Windows CI now pins the Qt installer revision, uses the bundled external 7-Zip extractor instead of the failing Python extractor, and performs up to three clean download/extraction attempts so a corrupt mirror response cannot immediately kill the release build.
 
 ## Build 74
 

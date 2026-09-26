@@ -117,13 +117,40 @@ $ytdlp_path = "$old_pwd\$ytdlp_output"
 # Download Qt itself.
 $qt_path = "$old_pwd\qt"
 
-# Install "aqtinstall" from its master branch to have latest code.
+# Qt 6.11 uses the newer repository layout, so use a known aqt revision that
+# supports it instead of allowing the moving master branch to change mid-build.
 python -m pip install -U pip
-python -m pip install -I git+https://github.com/miurahr/aqtinstall
+python -m pip install -I git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7
+
+function Invoke-AqtWithRetry {
+  param(
+    [Parameter(Mandatory = $true)][scriptblock]$Action,
+    [Parameter(Mandatory = $true)][scriptblock]$Cleanup,
+    [Parameter(Mandatory = $true)][string]$Description
+  )
+
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    & $Cleanup
+    Write-Host "$Description (attempt $attempt of 3)"
+    & $Action
+    if ($LASTEXITCODE -eq 0) { return }
+    if ($attempt -lt 3) {
+      Write-Warning "$Description failed with exit code $LASTEXITCODE. Clearing partial files and retrying."
+      Start-Sleep -Seconds (5 * $attempt)
+    }
+  }
+  throw "$Description failed after three clean attempts."
+}
 
 if ($is_qt_6) {
-  aqt install-qt -O "$qt_path" windows desktop $qt_version $qt_arch -m qtimageformats qtmultimedia qt5compat qtwebengine qtwebchannel qtpositioning qtserialport
-  aqt install-src -O "$qt_path" windows desktop $qt_version --archives qtbase
+  Invoke-AqtWithRetry `
+    -Description "Install Qt $qt_version binaries and modules" `
+    -Cleanup { Remove-Item -Recurse -Force "$qt_path\$qt_version" -ErrorAction SilentlyContinue } `
+    -Action { aqt install-qt -E "$7za" --timeout 30 -O "$qt_path" windows desktop $qt_version $qt_arch -m qtimageformats qtmultimedia qt5compat qtwebengine qtwebchannel qtpositioning qtserialport }
+  Invoke-AqtWithRetry `
+    -Description "Install Qt $qt_version qtbase sources" `
+    -Cleanup { Remove-Item -Recurse -Force "$qt_path\$qt_version\Src" -ErrorAction SilentlyContinue } `
+    -Action { aqt install-src -E "$7za" --timeout 30 -O "$qt_path" windows desktop $qt_version --archives qtbase }
 }
 else {
   # Download Qt 5 and store in the same folder structure as Qt 6 from aqtinstall.
@@ -157,7 +184,10 @@ $qt_qmake = "$qt_path\$qt_version\$qt_arch_base\bin\qmake.exe"
 $env:PATH = "$qt_path\$qt_version\$qt_arch_base\bin\;" + $env:PATH
 
 # Download openssl 3.x.
-aqt install-tool -O "$qt_path" windows desktop tools_opensslv3_x64 qt.tools.opensslv3.win_x64
+Invoke-AqtWithRetry `
+  -Description "Install Qt OpenSSL tools" `
+  -Cleanup { Remove-Item -Recurse -Force "$qt_path\Tools\OpenSSLv3" -ErrorAction SilentlyContinue } `
+  -Action { aqt install-tool -E "$7za" --timeout 30 -O "$qt_path" windows desktop tools_opensslv3_x64 qt.tools.opensslv3.win_x64 }
 $openssl_base_path = "$qt_path\Tools\OpenSSLv3\Win_x64"
 
 # Build dependencies.
