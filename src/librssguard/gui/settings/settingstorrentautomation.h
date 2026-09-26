@@ -76,12 +76,13 @@ class SettingsTorrentAutomation final : public SettingsPanel {
     QCheckBox *m_enabled = nullptr, *m_dryRun = nullptr, *m_notifications = nullptr,
               *m_paused = nullptr, *m_silent = nullptr, *m_ignoreInitial = nullptr,
               *m_exclusiveMode = nullptr, *m_exclusiveSendPartial = nullptr;
-    QComboBox *m_strategy = nullptr, *m_storageUnit = nullptr;
+    QComboBox *m_strategy = nullptr, *m_exclusiveStrategy = nullptr, *m_storageUnit = nullptr;
     QString m_currentStorageUnit = QStringLiteral("GiB");
     QSpinBox *m_historyLimit = nullptr, *m_notificationDuration = nullptr,
              *m_maxConsecutive = nullptr, *m_exclusiveSleepMinutes = nullptr,
              *m_exclusiveFreshnessMinutes = nullptr, *m_exclusiveMonitoringMinutes = nullptr,
-             *m_exclusivePollMinutes = nullptr, *m_exclusiveBatchSize = nullptr;
+             *m_exclusivePollMinutes = nullptr, *m_exclusiveBatchSize = nullptr,
+             *m_exclusiveMaxConsecutive = nullptr;
     QLabel* m_exclusiveStatus = nullptr;
     QDoubleSpinBox* m_unknownSizeGb = nullptr;
     QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;

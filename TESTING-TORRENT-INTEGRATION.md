@@ -11,7 +11,20 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 74 with Qt 6, MSVC, and WebEngine on Windows. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 75 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 75 isolation, start and balancing checks
+
+1. Configure App Box (Transmission) and RapidRU (rTorrent/ruTorrent) as enabled and healthy, select Balanced routing, and set maximum consecutive assignments to 1. Submit four similarly sized fresh releases. Confirm both clients receive work and no client receives two consecutive releases while the other remains eligible.
+2. Repeat with RapidRU unreachable or below its safety capacity. Confirm App Box remains usable and the fairness rule does not force an unsafe destination. Restore RapidRU and confirm it becomes eligible again.
+3. Begin a normal multi-item automation batch, then enable and Apply Exclusive Batch Mode before the next item. Confirm remaining normal sends/retries are frozen and no retention or capacity cleanup runs during the exclusive sleep, collection or sending phases.
+4. Disable Exclusive Batch Mode. Confirm frozen normal work can resume without duplicating anything already sent.
+5. Enable Exclusive Mode and press Apply. Confirm it immediately enters Baselining/Collecting without waiting for the configured sleep interval. The sleep interval must apply only after a completed or empty cycle.
+6. Restart with five old unread torrent entries in a feed. Confirm none is routed or shown as a torrent notification. Add a reliably dated new entry after launch and confirm it is collected.
+7. Leave retry items queued, close RSS Guard and reopen it. Confirm the previous-session items are cleared, are not sent, and Activity records the cleared count.
+8. On the Exclusive Mode tab choose Even distribution and a consecutive limit of 1. Confirm these choices apply only to Exclusive Mode and remain saved after restart.
+9. Send a torrent to RapidRU. Confirm its Added column contains the current time and it is running, not stopped. Activity must show a clear warning if the verified open/start/resume sequence still leaves it stopped after three attempts.
+10. Confirm the GitHub Windows workflow completes the `Run automated regression tests` step before package and release steps begin.
 
 ## Build 74 startup and rTorrent verification checks
 

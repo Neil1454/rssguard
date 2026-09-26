@@ -70,6 +70,8 @@ class GuiNotificationCoordinator : public QObject {
     QDateTime m_exclusiveNextWake;
     QHash<Feed*, QList<Message>> m_exclusiveArticles;
     QSet<QString> m_exclusiveArticleKeys;
+    QSet<QString> m_sessionTorrentBaselinedFeedIds;
+    QDateTime m_sessionStartedUtc;
     bool m_exclusiveDispatchStarted = false;
 };
 

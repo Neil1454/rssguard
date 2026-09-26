@@ -35,6 +35,17 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
     static void processDirectArticles(const TorrentClientConfig& client,
                                       const QList<Message>& articles,
                                       QObject* parent = nullptr);
+    static QList<int> fairBalancedCandidates(const QList<int>& eligible,
+                                             const QList<TorrentClientConfig>& clients,
+                                             const QString& lastSelectedClientId,
+                                             int consecutiveAssignments,
+                                             int maximumConsecutiveAssignments);
+    static bool isOldStartupTorrent(bool firstBatchThisSession,
+                                    bool torrentItem,
+                                    bool reliablePublishedTime,
+                                    const QDateTime& publishedUtc,
+                                    const QDateTime& sessionStartedUtc,
+                                    const QDateTime& nowUtc);
 
     bool busy() const;
     QStringList recentActivity() const;

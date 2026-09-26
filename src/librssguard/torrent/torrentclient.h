@@ -142,6 +142,7 @@ class RTorrentClient final : public TorrentClient {
     Q_OBJECT
   public:
     explicit RTorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
+    static QStringList startCompatibilityCommands(qint64 addedAt);
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
@@ -155,7 +156,10 @@ class RTorrentClient final : public TorrentClient {
     void addNext();
     void loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable);
     void fetchTorrentHashes(const std::function<void(bool, const QSet<QString>&)>& callback);
-    void verifyNewTorrentStarted(const QSet<QString>& previousHashes, int attempt);
+    void verifyNewTorrentStarted(const QSet<QString>& previousHashes,
+                                 const QString& expectedHash,
+                                 int attempt);
+    void forceStartLoadedTorrent(const QString& hash, int attempt = 0);
     void finishLoadedTorrent(const QString& warning = {});
     void fetchStatusRequest(bool enhancedTimestamps);
     QQueue<QString> m_pending;

@@ -71,7 +71,7 @@ void TorrentAutomationEngine::processNewArticles(const QHash<Feed*, QList<Messag
   TorrentAutomationEngine* engine = instance(parent);
   engine->m_lastArticles = articles;
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(qApp->settings());
-  if (config.exclusiveModeEnabled && config.exclusiveModeArmed) return;
+  if (config.exclusiveModeActive()) return;
   engine->enqueue(articles);
 }
 
@@ -79,6 +79,8 @@ void TorrentAutomationEngine::processExclusiveArticles(const QHash<Feed*, QList<
                                                         QObject* parent) {
   if (articles.isEmpty()) return;
   TorrentAutomationEngine* engine = instance(parent);
+  const TorrentAutomationConfig config = TorrentAutomationConfig::load(qApp->settings());
+  if (!config.exclusiveModeActive()) return;
   engine->m_lastArticles = articles;
   engine->enqueue(articles, false, false, true, true);
 }
@@ -245,7 +247,7 @@ TorrentAutomationEngine::TorrentAutomationEngine(QObject* parent) : QObject(pare
     if (m_busy) return;
     m_config = TorrentAutomationConfig::load(qApp->settings());
     if (!m_config.enabled) return;
-    if (m_config.exclusiveModeEnabled && m_config.exclusiveModeArmed) return;
+    if (m_config.exclusiveModeActive()) return;
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool reconciliationDue = !m_config.dryRun && m_config.reconciliationEnabled &&
       (!m_lastReconcile.isValid() || m_lastReconcile.secsTo(now) >= qMax(1, m_config.reconciliationMinutes) * 60);
@@ -386,7 +388,8 @@ void TorrentAutomationEngine::enqueue(const QHash<Feed*, QList<Message>>& articl
     // scheduling, retries, reconciliation, retention or cleanup.
     m_config.enabled = true;
     m_config.paused = false;
-    m_config.strategy = TorrentRoutingStrategy::Weighted;
+    m_config.strategy = m_config.exclusiveStrategy;
+    m_config.maximumConsecutiveAssignments = m_config.exclusiveMaximumConsecutiveAssignments;
     m_config.scheduleEnabled = false;
     m_config.retryEnabled = false;
     m_config.reconciliationEnabled = false;
@@ -481,7 +484,8 @@ void TorrentAutomationEngine::beginBatch() {
   if (m_exclusiveBatch) {
     m_config.enabled = true;
     m_config.paused = false;
-    m_config.strategy = TorrentRoutingStrategy::Weighted;
+    m_config.strategy = m_config.exclusiveStrategy;
+    m_config.maximumConsecutiveAssignments = m_config.exclusiveMaximumConsecutiveAssignments;
     m_config.scheduleEnabled = false;
     m_config.retryEnabled = false;
     m_config.reconciliationEnabled = false;
@@ -679,9 +683,15 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
     }
   }
 
-  int best = eligible.first();
+  const QList<int> scoredEligible = m_config.strategy == TorrentRoutingStrategy::Balanced
+                                      ? fairBalancedCandidates(eligible, m_clients,
+                                                               m_lastSelectedClientId,
+                                                               m_consecutiveAssignments,
+                                                               m_config.maximumConsecutiveAssignments)
+                                      : eligible;
+  int best = scoredEligible.first();
   double bestScore = -std::numeric_limits<double>::max();
-  for (int index : eligible) {
+  for (int index : scoredEligible) {
     const TorrentClientStatus& status = m_statuses.at(index);
     const TorrentAutomationClientPolicy policy = m_config.policyFor(m_clients.at(index).id);
     double score = 0.0;
@@ -692,13 +702,37 @@ int TorrentAutomationEngine::selectClient(const QList<int>& eligible) {
       const double downloadMiB = qMax<qint64>(0, status.downloadBytesPerSecond) / (1024.0 * 1024.0);
       score = freeRatio * 1000.0 - status.activeDownloads * 200.0 - status.queuedDownloads * 80.0 -
               downloadMiB * 3.0 - policy.priority * 25.0;
-      if (m_clients.at(index).id == m_lastSelectedClientId &&
-          m_consecutiveAssignments >= m_config.maximumConsecutiveAssignments && eligible.size() > 1)
-        score -= 1000.0;
     }
     if (score > bestScore) { bestScore = score; best = index; }
   }
   return best;
+}
+
+QList<int> TorrentAutomationEngine::fairBalancedCandidates(
+    const QList<int>& eligible,
+    const QList<TorrentClientConfig>& clients,
+    const QString& lastSelectedClientId,
+    int consecutiveAssignments,
+    int maximumConsecutiveAssignments) {
+  if (eligible.size() < 2 || lastSelectedClientId.isEmpty() ||
+      consecutiveAssignments < qMax(1, maximumConsecutiveAssignments)) return eligible;
+
+  QList<int> alternatives;
+  for (int index : eligible)
+    if (index >= 0 && index < clients.size() && clients.at(index).id != lastSelectedClientId)
+      alternatives.append(index);
+  return alternatives.isEmpty() ? eligible : alternatives;
+}
+
+bool TorrentAutomationEngine::isOldStartupTorrent(bool firstBatchThisSession,
+                                                   bool torrentItem,
+                                                   bool reliablePublishedTime,
+                                                   const QDateTime& publishedUtc,
+                                                   const QDateTime& sessionStartedUtc,
+                                                   const QDateTime& nowUtc) {
+  if (!firstBatchThisSession || !torrentItem) return false;
+  return !reliablePublishedTime || !publishedUtc.isValid() ||
+         publishedUtc < sessionStartedUtc.addSecs(-5) || publishedUtc > nowUtc.addSecs(300);
 }
 
 int TorrentAutomationEngine::confirmManualDestination(const Job& job,
@@ -761,6 +795,27 @@ void TorrentAutomationEngine::processNextJob() {
   while (!m_jobs.isEmpty() && !m_jobs.head().directOverride && !m_jobs.head().retentionCleanup &&
          wasProcessed(m_jobs.head().key)) m_jobs.dequeue();
   if (m_jobs.isEmpty()) { finishBatch(); return; }
+
+  // Re-read this switch between every action. If Exclusive Mode is enabled
+  // while a normal batch is already running, freeze the remaining sends and
+  // discard scheduled cleanup work before it can conflict with the exclusive
+  // send-only cycle.
+  const TorrentAutomationConfig liveConfig = TorrentAutomationConfig::load(qApp->settings());
+  if (liveConfig.exclusiveModeActive() && !m_exclusiveBatch) {
+    while (!m_jobs.isEmpty()) {
+      Job frozen = m_jobs.dequeue();
+      if (frozen.retentionCleanup) continue;
+      frozen.nextAttempt = QDateTime::currentDateTimeUtc().addSecs(60);
+      frozen.queueReason = tr("Frozen while Exclusive Batch Mode is active");
+      m_deferredJobs.append(frozen);
+      armDeferredJob(frozen);
+    }
+    record(QStringLiteral("exclusive-frozen"), Job{}, {},
+           tr("Normal sends, retries, retention and cleanup were frozen before the next action because Exclusive Batch Mode is active."));
+    saveRuntime();
+    finishBatch();
+    return;
+  }
   const Job job = m_jobs.dequeue();
   if (m_config.paused && !job.directOverride && !job.manualApproval && !m_forcedDryRun) {
     Job held = job;
@@ -1301,7 +1356,7 @@ void TorrentAutomationEngine::armDeferredJob(const Job& job) {
   QTimer::singleShot(int(qMin<qint64>(delayMs, std::numeric_limits<int>::max())), this,
                      [this, key = job.key, attempt = job.attempt]() {
     const TorrentAutomationConfig currentConfig = TorrentAutomationConfig::load(qApp->settings());
-    if (currentConfig.exclusiveModeEnabled && currentConfig.exclusiveModeArmed) {
+    if (currentConfig.exclusiveModeActive()) {
       for (int index = 0; index < m_deferredJobs.size(); ++index) {
         if (m_deferredJobs.at(index).key == key && m_deferredJobs.at(index).attempt == attempt) {
           Job frozen = m_deferredJobs.at(index);
@@ -2149,26 +2204,19 @@ void TorrentAutomationEngine::loadRuntime() {
   m_uploadActivity = root.value(QStringLiteral("uploadActivity")).toArray();
   m_clientHealth = root.value(QStringLiteral("clientHealth")).toArray();
   m_lastReconcile = QDateTime::fromString(root.value(QStringLiteral("lastReconcile")).toString(), Qt::ISODate);
-  for (const QJsonValue& value : root.value(QStringLiteral("pendingRetries")).toArray()) {
-    const QJsonObject object = value.toObject();
-    Job job;
-    job.key = object.value(QStringLiteral("key")).toString();
-    job.title = object.value(QStringLiteral("title")).toString();
-    job.url = object.value(QStringLiteral("url")).toString();
-    job.feedId = object.value(QStringLiteral("feedId")).toString();
-    job.ruleName = object.value(QStringLiteral("ruleName")).toString();
-    job.queueReason = object.value(QStringLiteral("queueReason")).toString();
-    job.messageId = object.value(QStringLiteral("messageId")).toInt();
-    for (const QJsonValue& id : object.value(QStringLiteral("allowedClientIds")).toArray()) job.allowedClientIds.append(id.toString());
-    job.sizeBytes = object.value(QStringLiteral("sizeBytes")).toVariant().toLongLong();
-    job.attempt = object.value(QStringLiteral("attempt")).toInt();
-    job.manualApproval = object.value(QStringLiteral("manualApproval")).toBool(false);
-    job.directOverride = object.value(QStringLiteral("directOverride")).toBool(false);
-    job.verificationClientId = object.value(QStringLiteral("verificationClientId")).toString();
-    job.nextAttempt = QDateTime::fromString(object.value(QStringLiteral("nextAttempt")).toString(), Qt::ISODate);
-    if (!job.key.isEmpty() && !job.url.isEmpty()) m_deferredJobs.append(job);
+  // Torrent RSS opportunities are time-sensitive. Pending work from a closed
+  // application session must not flood clients on the next launch. Retries are
+  // retained only while this RSS Guard process remains running.
+  const int discardedRetries = root.value(QStringLiteral("pendingRetries")).toArray().size();
+  if (discardedRetries > 0) {
+    m_history.append(QJsonObject{{QStringLiteral("time"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
+                                 {QStringLiteral("state"), QStringLiteral("startup-queue-cleared")},
+                                 {QStringLiteral("title"), tr("Previous-session torrent queue")},
+                                 {QStringLiteral("detail"),
+                                  tr("Discarded %1 pending torrent job(s) from the previous application session because RSS opportunities may no longer be current.")
+                                    .arg(discardedRetries)}});
+    saveRuntime();
   }
-  for (const Job& job : std::as_const(m_deferredJobs)) armDeferredJob(job);
 }
 
 void TorrentAutomationEngine::saveRuntime() {

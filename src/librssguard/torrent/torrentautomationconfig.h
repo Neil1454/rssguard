@@ -59,12 +59,15 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool markInitialFeedBatchRead = false;
   bool exclusiveModeEnabled = false;
   bool exclusiveModeArmed = false;
+  bool exclusiveModeActive() const { return exclusiveModeEnabled && exclusiveModeArmed; }
   int exclusiveSleepMinutes = 60;
   int exclusiveFreshnessMinutes = 3;
   int exclusiveMonitoringMinutes = 15;
   int exclusivePollMinutes = 1;
   int exclusiveBatchSize = 5;
   bool exclusiveSendPartialBatch = true;
+  TorrentRoutingStrategy exclusiveStrategy = TorrentRoutingStrategy::RoundRobin;
+  int exclusiveMaximumConsecutiveAssignments = 1;
   int notificationDurationSeconds = 0;
   int maximumConsecutiveAssignments = 1;
   QString speedDisplayUnit = QStringLiteral("MiB/s");

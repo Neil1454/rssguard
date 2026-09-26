@@ -45,7 +45,8 @@
 #endif
 
 GuiNotificationCoordinator::GuiNotificationCoordinator(Application* application)
-  : QObject(), m_application(application), m_trayIcon(nullptr) {
+  : QObject(), m_application(application), m_trayIcon(nullptr),
+    m_sessionStartedUtc(QDateTime::currentDateTimeUtc()) {
   // Start the lightweight maintenance timer even when no feed refresh has yet
   // produced new articles. This allows maximum-retention deadlines to be
   // checked while RSS Guard is simply left running.
@@ -152,7 +153,7 @@ void GuiNotificationCoordinator::beginExclusiveDispatch(const QString& reason) {
 
 void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadResults& results) {
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
-  if (!config.exclusiveModeEnabled || !config.exclusiveModeArmed) return;
+  if (!config.exclusiveModeActive()) return;
   if (m_exclusiveState == ExclusiveState::Baselining) {
     collectExclusiveArticles(results.updatedFeeds(), true);
     m_exclusiveState = ExclusiveState::Collecting;
@@ -175,7 +176,7 @@ void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadRe
 
 void GuiNotificationCoordinator::updateExclusiveMode() {
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
-  if (!config.exclusiveModeEnabled || !config.exclusiveModeArmed) {
+  if (!config.exclusiveModeActive()) {
     if (m_exclusiveState != ExclusiveState::Disabled) {
       m_exclusiveState = ExclusiveState::Disabled;
       m_exclusiveArticles.clear();
@@ -190,7 +191,10 @@ void GuiNotificationCoordinator::updateExclusiveMode() {
   }
   const QDateTime now = QDateTime::currentDateTimeUtc();
   if (m_exclusiveState == ExclusiveState::Disabled) {
-    enterExclusiveSleep(tr("Exclusive Batch Mode enabled. Normal unattended automation is frozen for the whole sleep/collect/send cycle."));
+    // The first cycle starts immediately after Apply/OK. Sleeping first made
+    // the mode look inactive and could miss the short-lived releases it is
+    // specifically intended to capture.
+    startExclusiveCycle();
     return;
   }
   if (m_exclusiveState == ExclusiveState::Sleeping && now >= m_exclusiveNextWake) {
@@ -546,31 +550,39 @@ void GuiNotificationCoordinator::onFeedUpdatesProgress(const Feed* feed, int cur
 }
 
 void GuiNotificationCoordinator::onFeedUpdatesFinished(const FeedDownloadResults& results) {
-  FeedDownloadResults visibleResults = results;
-  QHash<Feed*, QList<Message>> automationArticles = results.updatedFeeds();
   const TorrentAutomationConfig torrentConfig = TorrentAutomationConfig::load(m_application->settings());
-  if (torrentConfig.ignoreInitialFeedBatch) {
-    QStringList baselined = m_application->settings()->value(QStringLiteral("TorrentAutomation"),
-                                                             QStringLiteral("baselinedFeedIds")).toStringList();
-    visibleResults.clear();
-    visibleResults.setFeedRequestCount(results.feedRequestCount());
-    for (auto it = results.erroredFeeds().constBegin(); it != results.erroredFeeds().constEnd(); ++it)
-      visibleResults.appendErroredFeed(it.key(), it.value());
-    for (auto it = results.updatedFeeds().constBegin(); it != results.updatedFeeds().constEnd(); ++it) {
-      const QString id = it.key() == nullptr ? QString() : it.key()->customId();
-      if (!id.isEmpty() && !baselined.contains(id)) {
-        baselined.append(id);
-        automationArticles.remove(it.key());
-        continue;
-      }
-      visibleResults.appendUpdatedFeed(it.key(), it.value());
+  FeedDownloadResults visibleResults;
+  visibleResults.setFeedRequestCount(results.feedRequestCount());
+  for (auto it = results.erroredFeeds().constBegin(); it != results.erroredFeeds().constEnd(); ++it)
+    visibleResults.appendErroredFeed(it.key(), it.value());
+  QHash<Feed*, QList<Message>> automationArticles;
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  for (auto it = results.updatedFeeds().constBegin(); it != results.updatedFeeds().constEnd(); ++it) {
+    const QString feedId = it.key() == nullptr ? QString() : it.key()->customId();
+    const QString sessionKey = feedId.isEmpty()
+                                 ? QString::number(static_cast<qulonglong>(reinterpret_cast<quintptr>(it.key())))
+                                 : feedId;
+    const bool firstBatchThisSession = !m_sessionTorrentBaselinedFeedIds.contains(sessionKey);
+    if (firstBatchThisSession) m_sessionTorrentBaselinedFeedIds.insert(sessionKey);
+
+    QList<Message> automationMessages;
+    QList<Message> visibleMessages;
+    for (const Message& message : it.value()) {
+      const bool torrentItem = !TorrentExtractor::extract(message).isEmpty();
+      const QDateTime published = message.m_created.toUTC();
+      const bool oldStartupTorrent = TorrentAutomationEngine::isOldStartupTorrent(
+        firstBatchThisSession, torrentItem, message.m_createdFromFeed, published,
+        m_sessionStartedUtc, now);
+      if (!oldStartupTorrent) automationMessages.append(message);
+      if (!(oldStartupTorrent || (firstBatchThisSession && torrentConfig.ignoreInitialFeedBatch)))
+        visibleMessages.append(message);
     }
-    m_application->settings()->setValue(QStringLiteral("TorrentAutomation"),
-                                        QStringLiteral("baselinedFeedIds"), baselined);
+    if (!automationMessages.isEmpty()) automationArticles.insert(it.key(), automationMessages);
+    if (!visibleMessages.isEmpty()) visibleResults.appendUpdatedFeed(it.key(), visibleMessages);
   }
   // Exclusive mode owns unattended routing for its entire lifetime, including
   // sleep periods. Normal automation must never run alongside it.
-  if (torrentConfig.exclusiveModeEnabled && torrentConfig.exclusiveModeArmed)
+  if (torrentConfig.exclusiveModeActive())
     handleExclusiveFeedResults(results);
   else TorrentAutomationEngine::processNewArticles(automationArticles, m_application);
 

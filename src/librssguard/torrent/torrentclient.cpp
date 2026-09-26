@@ -91,6 +91,14 @@ namespace {
       QRegularExpression::DotMatchesEverythingOption);
     return expression.match(text).captured(1).trimmed();
   }
+
+  QString magnetHexHash(const QString& url) {
+    if (!url.startsWith(QStringLiteral("magnet:"), Qt::CaseInsensitive)) return {};
+    const QString xt = QUrlQuery(QUrl(url)).queryItemValue(QStringLiteral("xt"));
+    const QRegularExpression expression(QStringLiteral("^urn:btih:([0-9a-f]{40})$"),
+                                        QRegularExpression::CaseInsensitiveOption);
+    return expression.match(xt).captured(1).toLower();
+  }
 }
 
 TorrentClient::TorrentClient(TorrentClientConfig config, QObject* parent)
@@ -767,6 +775,11 @@ void RTorrentClient::addTorrents(const QStringList& urls) {
   addNext();
 }
 
+QStringList RTorrentClient::startCompatibilityCommands(qint64 addedAt) {
+  return {QStringLiteral("d.custom.set=addtime,%1").arg(addedAt),
+          QStringLiteral("d.start=")};
+}
+
 void RTorrentClient::addNext() {
   if (m_pending.isEmpty()) {
     QString message = tr("rTorrent accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed);
@@ -778,21 +791,28 @@ void RTorrentClient::addNext() {
 }
 
 void RTorrentClient::loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable) {
-  QStringList arguments{QString(), m_pending.dequeue()};
+  const QString url = m_pending.dequeue();
+  const QString expectedHash = magnetHexHash(url);
+  QStringList arguments{QString(), url};
+  const qint64 addedAt = QDateTime::currentSecsSinceEpoch();
   if (!m_config.savePath.isEmpty()) arguments.append(QStringLiteral("d.directory.set=%1").arg(m_config.savePath));
   if (!m_config.category.isEmpty()) arguments.append(QStringLiteral("d.custom1.set=%1").arg(m_config.category));
   else if (m_config.tags.contains(QStringLiteral("rssguard-auto")))
     arguments.append(QStringLiteral("d.custom1.set=RSS Guard"));
   if (m_config.tags.contains(QStringLiteral("rssguard-auto")))
     arguments.append(QStringLiteral("d.custom.set=rssguard.automation,rssguard-auto"));
+  // ruTorrent's Added column/history uses the conventional custom addtime
+  // value rather than the torrent metadata creation date.
+  arguments.append(startCompatibilityCommands(addedAt));
   // Some ruTorrent XML-RPC gateways accept load.start but leave the new
   // torrent stopped after applying additional load commands. Explicitly run
   // d.start on the newly loaded item as the final command as well.
-  arguments.append(QStringLiteral("d.start="));
-  call(QStringLiteral("load.start"), arguments, [this, previousHashes, snapshotAvailable](QNetworkReply* reply, const QByteArray& body) {
+  call(QStringLiteral("load.start"), arguments, [this, previousHashes, snapshotAvailable, expectedHash](QNetworkReply* reply, const QByteArray& body) {
     if (reply->error() == QNetworkReply::NoError && !body.contains("<fault>")) {
       if (snapshotAvailable) {
-        QTimer::singleShot(500, this, [this, previousHashes]() { verifyNewTorrentStarted(previousHashes, 0); });
+        QTimer::singleShot(500, this, [this, previousHashes, expectedHash]() {
+          verifyNewTorrentStarted(previousHashes, expectedHash, 0);
+        });
         return;
       }
       finishLoadedTorrent(tr("rTorrent accepted the torrent, but its XML-RPC endpoint did not allow the post-load start verification. The in-load start command was still sent."));
@@ -822,11 +842,13 @@ void RTorrentClient::fetchTorrentHashes(const std::function<void(bool, const QSe
   });
 }
 
-void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes, int attempt) {
+void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes,
+                                             const QString& expectedHash,
+                                             int attempt) {
   call(QStringLiteral("d.multicall2"),
        {QString(), QStringLiteral("main"), QStringLiteral("d.hash="),
         QStringLiteral("d.state=")},
-       [this, previousHashes, attempt](QNetworkReply* reply, const QByteArray& body) {
+       [this, previousHashes, expectedHash, attempt](QNetworkReply* reply, const QByteArray& body) {
     if (reply->error() != QNetworkReply::NoError || body.contains("<fault>")) {
       finishLoadedTorrent(tr("rTorrent accepted the torrent, but the follow-up status check failed. The start command was sent during loading."));
       return;
@@ -837,8 +859,8 @@ void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes
       if (row.size() >= 2 && !previousHashes.contains(row.at(0))) newRows.append(row);
 
     if (newRows.isEmpty() && attempt < 5) {
-      QTimer::singleShot(500, this, [this, previousHashes, attempt]() {
-        verifyNewTorrentStarted(previousHashes, attempt + 1);
+      QTimer::singleShot(500, this, [this, previousHashes, expectedHash, attempt]() {
+        verifyNewTorrentStarted(previousHashes, expectedHash, attempt + 1);
       });
       return;
     }
@@ -849,9 +871,18 @@ void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes
 
     QString hashToStart;
     bool alreadyStarted = false;
-    if (newRows.size() == 1) {
-      alreadyStarted = newRows.first().at(1).toInt() != 0;
-      if (!alreadyStarted) hashToStart = newRows.first().at(0);
+    QStringList identifiedRow;
+    if (!expectedHash.isEmpty()) {
+      for (const QStringList& row : std::as_const(newRows))
+        if (row.first().compare(expectedHash, Qt::CaseInsensitive) == 0) {
+          identifiedRow = row;
+          break;
+        }
+    }
+    if (identifiedRow.isEmpty() && newRows.size() == 1) identifiedRow = newRows.first();
+    if (!identifiedRow.isEmpty()) {
+      alreadyStarted = identifiedRow.at(1).toInt() != 0;
+      if (!alreadyStarted) hashToStart = identifiedRow.at(0);
     }
     if (alreadyStarted) {
       finishLoadedTorrent();
@@ -862,14 +893,46 @@ void RTorrentClient::verifyNewTorrentStarted(const QSet<QString>& previousHashes
       return;
     }
 
-    call(QStringLiteral("d.start"), {hashToStart}, [this](QNetworkReply* startReply, const QByteArray& startBody) {
-      if (startReply->error() == QNetworkReply::NoError && !startBody.contains("<fault>")) finishLoadedTorrent();
-      else {
+    forceStartLoadedTorrent(hashToStart);
+  });
+}
+
+void RTorrentClient::forceStartLoadedTorrent(const QString& hash, int attempt) {
+  // ruTorrent normally opens a newly loaded torrent before starting it. Some
+  // XML-RPC gateways accept d.start while the item is still closed, leaving it
+  // visibly stopped. Mirror that sequence and verify the resulting state.
+  call(QStringLiteral("d.open"), {hash}, [this, hash, attempt](QNetworkReply*, const QByteArray&) {
+    call(QStringLiteral("d.start"), {hash}, [this, hash, attempt](QNetworkReply* startReply,
+                                                                  const QByteArray& startBody) {
+      if (startReply->error() != QNetworkReply::NoError || startBody.contains("<fault>")) {
         QString detail = startReply->error() == QNetworkReply::NoError
                            ? xmlRpcFaultMessage(startBody) : networkFailure(startReply);
-        finishLoadedTorrent(tr("The torrent was added, but rTorrent rejected the explicit post-load start command: %1")
+        finishLoadedTorrent(tr("The torrent was added, but rTorrent rejected the explicit open/start command: %1")
                               .arg(detail.isEmpty() ? tr("unknown XML-RPC error") : detail));
+        return;
       }
+      call(QStringLiteral("d.resume"), {hash}, [this, hash, attempt](QNetworkReply*, const QByteArray&) {
+        QTimer::singleShot(500, this, [this, hash, attempt]() {
+          call(QStringLiteral("d.state"), {hash}, [this, hash, attempt](QNetworkReply* stateReply,
+                                                                        const QByteArray& stateBody) {
+            const QString text = QString::fromUtf8(stateBody);
+            static const QRegularExpression stateExpression(
+              QStringLiteral("<(?:i4|i8|int)>\\s*([01])\\s*</(?:i4|i8|int)>") );
+            const bool running = stateReply->error() == QNetworkReply::NoError &&
+                                 !stateBody.contains("<fault>") &&
+                                 stateExpression.match(text).captured(1) == QStringLiteral("1");
+            if (running) {
+              finishLoadedTorrent();
+            }
+            else if (attempt < 2) {
+              forceStartLoadedTorrent(hash, attempt + 1);
+            }
+            else {
+              finishLoadedTorrent(tr("The torrent was added, but remained stopped after three verified open/start/resume attempts."));
+            }
+          });
+        });
+      });
     });
   });
 }
@@ -890,12 +953,14 @@ void RTorrentClient::fetchStatusRequest(bool enhancedTimestamps) {
                   QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
                   QStringLiteral("d.ratio="), QStringLiteral("d.timestamp.started="),
                   QStringLiteral("d.timestamp.finished="), QStringLiteral("d.timestamp.last_xfer="),
+                  QStringLiteral("d.custom=addtime"),
                   QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
                   QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
                   QStringLiteral("d.custom=rssguard.automation")}
     : QStringList{QStringLiteral("d.hash="), QStringLiteral("d.name="),
                   QStringLiteral("d.size_bytes="), QStringLiteral("d.completed_bytes="),
                   QStringLiteral("d.ratio="), QStringLiteral("d.creation_date="),
+                  QStringLiteral("d.custom=addtime"),
                   QStringLiteral("d.state="), QStringLiteral("d.down.rate="),
                   QStringLiteral("d.up.rate="), QStringLiteral("d.complete="),
                   QStringLiteral("d.custom=rssguard.automation")};
@@ -926,7 +991,7 @@ void RTorrentClient::fetchStatusRequest(bool enhancedTimestamps) {
     }
     else {
       for (const QStringList& values : xmlRpcRows(body)) {
-        const int minimumValues = enhancedTimestamps ? 12 : 10;
+        const int minimumValues = enhancedTimestamps ? 14 : 12;
         if (values.size() < minimumValues) continue;
         TorrentRemoteItem item;
         item.hash = values.at(0);
@@ -938,17 +1003,21 @@ void RTorrentClient::fetchStatusRequest(bool enhancedTimestamps) {
         const qint64 startedAt = values.at(5).toLongLong();
         const qint64 finishedAt = enhancedTimestamps ? values.at(6).toLongLong() : 0;
         const qint64 activeAt = enhancedTimestamps ? values.at(7).toLongLong() : 0;
-        if (startedAt > 0) item.added = QDateTime::fromSecsSinceEpoch(startedAt, Qt::UTC);
+        const int addTimeIndex = enhancedTimestamps ? 8 : 6;
+        const qint64 addedAt = values.at(addTimeIndex).toLongLong();
+        if (addedAt > 0) item.added = QDateTime::fromSecsSinceEpoch(addedAt, Qt::UTC);
+        else if (startedAt > 0) item.added = QDateTime::fromSecsSinceEpoch(startedAt, Qt::UTC);
         if (finishedAt > 0) item.completed = QDateTime::fromSecsSinceEpoch(finishedAt, Qt::UTC);
         if (activeAt > 0) item.lastActivity = QDateTime::fromSecsSinceEpoch(activeAt, Qt::UTC);
-        item.ageSource = enhancedTimestamps
-                           ? (finishedAt > 0 ? tr("rTorrent finished timestamp") : tr("rTorrent started timestamp"))
-                           : tr("rTorrent creation timestamp (compatibility mode)");
-        const int stateIndex = enhancedTimestamps ? 8 : 6;
-        const int downloadIndex = enhancedTimestamps ? 9 : 7;
-        const int uploadIndex = enhancedTimestamps ? 10 : 8;
-        const int completeIndex = enhancedTimestamps ? 11 : 9;
-        const int managedIndex = enhancedTimestamps ? 12 : 10;
+        item.ageSource = finishedAt > 0 ? tr("rTorrent finished timestamp")
+                         : addedAt > 0 ? tr("ruTorrent added timestamp")
+                         : enhancedTimestamps ? tr("rTorrent started timestamp")
+                                              : tr("rTorrent creation timestamp (compatibility mode)");
+        const int stateIndex = enhancedTimestamps ? 9 : 7;
+        const int downloadIndex = enhancedTimestamps ? 10 : 8;
+        const int uploadIndex = enhancedTimestamps ? 11 : 9;
+        const int completeIndex = enhancedTimestamps ? 12 : 10;
+        const int managedIndex = enhancedTimestamps ? 13 : 11;
         item.downloadBytesPerSecond = values.at(downloadIndex).toLongLong();
         item.uploadBytesPerSecond = values.at(uploadIndex).toLongLong();
         status.downloadBytesPerSecond = qMax<qint64>(0, status.downloadBytesPerSecond) + item.downloadBytesPerSecond;

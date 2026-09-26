@@ -43,6 +43,11 @@ jobs:
           FEEDLY_CLIENT_ID: ${{ secrets.FEEDLY_CLIENT_ID }}
           FEEDLY_CLIENT_SECRET: ${{ secrets.FEEDLY_CLIENT_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RSSGUARD_ENABLE_TESTING: "ON"
+
+      - name: Run automated regression tests
+        shell: pwsh
+        run: ctest --test-dir .\rssguard-build --output-on-failure --timeout 120
 
       - name: Package portable archive
         shell: pwsh

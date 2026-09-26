@@ -58,6 +58,11 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
   config.exclusivePollMinutes = qBound(1, root.value(QStringLiteral("exclusivePollMinutes")).toInt(1), 60);
   config.exclusiveBatchSize = qBound(1, root.value(QStringLiteral("exclusiveBatchSize")).toInt(5), 1000);
   config.exclusiveSendPartialBatch = root.value(QStringLiteral("exclusiveSendPartialBatch")).toBool(true);
+  config.exclusiveStrategy = static_cast<TorrentRoutingStrategy>(
+    qBound(0, root.value(QStringLiteral("exclusiveStrategy")).toInt(static_cast<int>(TorrentRoutingStrategy::RoundRobin)),
+           static_cast<int>(TorrentRoutingStrategy::Balanced)));
+  config.exclusiveMaximumConsecutiveAssignments = qBound(
+    1, root.value(QStringLiteral("exclusiveMaximumConsecutiveAssignments")).toInt(1), 20);
   config.notificationDurationSeconds = qMax(0, root.value(QStringLiteral("notificationDurationSeconds")).toInt(0));
   config.maximumConsecutiveAssignments = qMax(1, root.value(QStringLiteral("maximumConsecutiveAssignments")).toInt(1));
   config.speedDisplayUnit = root.value(QStringLiteral("speedDisplayUnit")).toString(QStringLiteral("MiB/s"));
@@ -185,6 +190,8 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("exclusivePollMinutes"), exclusivePollMinutes);
   root.insert(QStringLiteral("exclusiveBatchSize"), exclusiveBatchSize);
   root.insert(QStringLiteral("exclusiveSendPartialBatch"), exclusiveSendPartialBatch);
+  root.insert(QStringLiteral("exclusiveStrategy"), static_cast<int>(exclusiveStrategy));
+  root.insert(QStringLiteral("exclusiveMaximumConsecutiveAssignments"), exclusiveMaximumConsecutiveAssignments);
   root.insert(QStringLiteral("notificationDurationSeconds"), notificationDurationSeconds);
   root.insert(QStringLiteral("maximumConsecutiveAssignments"), maximumConsecutiveAssignments);
   root.insert(QStringLiteral("speedDisplayUnit"), speedDisplayUnit);
