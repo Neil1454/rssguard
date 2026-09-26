@@ -63,6 +63,12 @@ TorrentAutomationConfig TorrentAutomationConfig::load(Settings* settings) {
            static_cast<int>(TorrentRoutingStrategy::Balanced)));
   config.exclusiveMaximumConsecutiveAssignments = qBound(
     1, root.value(QStringLiteral("exclusiveMaximumConsecutiveAssignments")).toInt(1), 20);
+  config.exclusiveRequestTimeoutSeconds = qBound(
+    1, root.value(QStringLiteral("exclusiveRequestTimeoutSeconds")).toInt(2), 30);
+  config.exclusiveRapidRetryAttempts = qBound(
+    1, root.value(QStringLiteral("exclusiveRapidRetryAttempts")).toInt(3), 10);
+  config.exclusiveRapidRetryDelayMs = qBound(
+    0, root.value(QStringLiteral("exclusiveRapidRetryDelayMs")).toInt(0), 5000);
   config.notificationDurationSeconds = qMax(0, root.value(QStringLiteral("notificationDurationSeconds")).toInt(0));
   config.maximumConsecutiveAssignments = qMax(1, root.value(QStringLiteral("maximumConsecutiveAssignments")).toInt(1));
   config.speedDisplayUnit = root.value(QStringLiteral("speedDisplayUnit")).toString(QStringLiteral("MiB/s"));
@@ -192,6 +198,9 @@ void TorrentAutomationConfig::save(Settings* settings) const {
   root.insert(QStringLiteral("exclusiveSendPartialBatch"), exclusiveSendPartialBatch);
   root.insert(QStringLiteral("exclusiveStrategy"), static_cast<int>(exclusiveStrategy));
   root.insert(QStringLiteral("exclusiveMaximumConsecutiveAssignments"), exclusiveMaximumConsecutiveAssignments);
+  root.insert(QStringLiteral("exclusiveRequestTimeoutSeconds"), exclusiveRequestTimeoutSeconds);
+  root.insert(QStringLiteral("exclusiveRapidRetryAttempts"), exclusiveRapidRetryAttempts);
+  root.insert(QStringLiteral("exclusiveRapidRetryDelayMs"), exclusiveRapidRetryDelayMs);
   root.insert(QStringLiteral("notificationDurationSeconds"), notificationDurationSeconds);
   root.insert(QStringLiteral("maximumConsecutiveAssignments"), maximumConsecutiveAssignments);
   root.insert(QStringLiteral("speedDisplayUnit"), speedDisplayUnit);

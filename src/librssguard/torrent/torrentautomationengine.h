@@ -79,6 +79,8 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
       int attempt = 0;
       QStringList attemptedClientIds;
       QString verificationClientId;
+      QString rapidRetryClientId;
+      int rapidRetryCount = 0;
       QDateTime nextAttempt;
       QString queueReason;
       bool manualApproval = false;

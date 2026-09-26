@@ -21,6 +21,9 @@ void TestTorrentAutomation::exclusiveModeRequiresEnabledAndArmed() {
   QVERIFY(!config.exclusiveModeActive());
   QCOMPARE(config.exclusiveStrategy, TorrentRoutingStrategy::RoundRobin);
   QCOMPARE(config.exclusiveMaximumConsecutiveAssignments, 1);
+  QCOMPARE(config.exclusiveRequestTimeoutSeconds, 2);
+  QCOMPARE(config.exclusiveRapidRetryAttempts, 3);
+  QCOMPARE(config.exclusiveRapidRetryDelayMs, 0);
   config.exclusiveModeEnabled = true;
   QVERIFY(!config.exclusiveModeActive());
   config.exclusiveModeArmed = true;

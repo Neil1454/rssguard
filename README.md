@@ -161,7 +161,7 @@ The full record is maintained in [Torrent integration changelog](CHANGELOG-TORRE
 
 | Milestone | Main changes |
 |---|---|
-| **Build 75 — current candidate** | Adds strict Exclusive Mode isolation and immediate monitoring, per-session stale-feed/queue protection, ruTorrent Added timestamps plus verified open/start/resume handling, dedicated batch balancing controls, and automated Windows regression tests. |
+| **Build 75 — current candidate** | Adds strict Exclusive Mode isolation and immediate monitoring, rapid same-client attempts with prompt failover, per-session stale-feed/queue protection, ruTorrent Added timestamps plus verified open/start/resume handling, dedicated batch balancing controls, and automated Windows regression tests. |
 | **Build 74** | Verifies newly uploaded rTorrent/ruTorrent items and explicitly starts them after registration; requires a deliberate saved arming action before Exclusive Batch Mode can run. |
 | **Build 73** | Adds Exclusive Batch Mode with strict fresh-release filtering and a full unattended-automation lock, plus initial start-immediately handling for rTorrent/ruTorrent submissions. |
 | **Build 72** | Retains Build 71's safer cleanup controls, repairs rTorrent/ruTorrent sending and status compatibility, reports exact XML-RPC failures, and fixes Apply-button signalling for every torrent-automation General control. |

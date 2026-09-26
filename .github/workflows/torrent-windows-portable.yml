@@ -47,7 +47,12 @@ jobs:
 
       - name: Run automated regression tests
         shell: pwsh
-        run: ctest --test-dir .\rssguard-build --output-on-failure --timeout 120
+        run: |
+          $qtBin = (Resolve-Path ".\qt\*\msvc2022_64\bin").Path
+          $appBin = (Resolve-Path ".\rssguard-build\app").Path
+          $libraryBin = (Resolve-Path ".\rssguard-build\src\librssguard").Path
+          $env:PATH = "$appBin;$libraryBin;$qtBin;$env:PATH"
+          ctest --test-dir .\rssguard-build --output-on-failure --timeout 120
 
       - name: Package portable archive
         shell: pwsh

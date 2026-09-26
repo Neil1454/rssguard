@@ -503,6 +503,9 @@ void TorrentAutomationEngine::beginBatch() {
       client.requestTimeoutSeconds = policy.requestTimeoutSeconds > 0
                                        ? policy.requestTimeoutSeconds
                                        : m_config.requestTimeoutSeconds;
+      if (m_exclusiveBatch)
+        client.requestTimeoutSeconds = qMin(client.requestTimeoutSeconds,
+                                            m_config.exclusiveRequestTimeoutSeconds);
       m_clients.append(client);
     }
   }
@@ -620,12 +623,18 @@ QString TorrentAutomationEngine::clientRestriction(int index,
   const TorrentAutomationClientPolicy policy = m_config.policyFor(client.id);
   if (!job.allowedClientIds.isEmpty() && !job.allowedClientIds.contains(client.id))
     return tr("Not allowed by the matching RSS rule");
+  if (!job.rapidRetryClientId.isEmpty() && job.rapidRetryClientId != client.id)
+    return tr("A rapid retry is currently pinned to another client");
   if (job.attemptedClientIds.contains(client.id)) return tr("This destination already failed during this attempt");
   // An explicit client button is an instruction to attempt that destination.
   // A failed workload/listing probe must not silently suppress the actual add
   // request; the add API will return its own useful success or error result.
   if (job.directOverride) return {};
-  if (!status.reachable) return status.detail.isEmpty() ? tr("Client is unavailable") : status.detail;
+  // Exclusive mode is latency-sensitive. A failed status probe must not stop
+  // the actual add request: the short add timeout and rapid retry/failover path
+  // below determine whether the destination can really accept the release.
+  if (!status.reachable && !m_exclusiveBatch)
+    return status.detail.isEmpty() ? tr("Client is unavailable") : status.detail;
   if (status.freeBytes >= 0 && status.freeBytes < job.sizeBytes)
     return tr("Only %1 GB is free; the torrent needs approximately %2 GB")
       .arg(status.freeBytes / 1000000000.0, 0, 'f', 1).arg(job.sizeBytes / 1000000000.0, 0, 'f', 1);
@@ -1269,6 +1278,26 @@ void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
           processNextJob();
           return;
         }
+        if (m_exclusiveBatch &&
+            failover.rapidRetryCount + 1 < m_config.exclusiveRapidRetryAttempts) {
+          failover.rapidRetryClientId = config.id;
+          ++failover.rapidRetryCount;
+          record(QStringLiteral("exclusive-rapid-retry"), job, config.id,
+                 tr("%1 did not accept the release; rapid retry %2 of %3 will run in %4 ms. %5")
+                   .arg(config.name)
+                   .arg(failover.rapidRetryCount + 1)
+                   .arg(m_config.exclusiveRapidRetryAttempts)
+                   .arg(m_config.exclusiveRapidRetryDelayMs)
+                   .arg(message));
+          client->deleteLater();
+          QTimer::singleShot(m_config.exclusiveRapidRetryDelayMs, this, [this, failover]() {
+            m_jobs.prepend(failover);
+            processNextJob();
+          });
+          return;
+        }
+        failover.rapidRetryClientId.clear();
+        failover.rapidRetryCount = 0;
         failover.attemptedClientIds.append(config.id);
         m_statuses[clientIndex].reachable = false;
         m_statuses[clientIndex].detail = message;

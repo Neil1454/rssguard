@@ -68,6 +68,9 @@ struct RSSGUARD_DLLSPEC TorrentAutomationConfig {
   bool exclusiveSendPartialBatch = true;
   TorrentRoutingStrategy exclusiveStrategy = TorrentRoutingStrategy::RoundRobin;
   int exclusiveMaximumConsecutiveAssignments = 1;
+  int exclusiveRequestTimeoutSeconds = 2;
+  int exclusiveRapidRetryAttempts = 3;
+  int exclusiveRapidRetryDelayMs = 0;
   int notificationDurationSeconds = 0;
   int maximumConsecutiveAssignments = 1;
   QString speedDisplayUnit = QStringLiteral("MiB/s");

@@ -2,6 +2,8 @@
 
 ## Build 75
 
+- Exclusive sends now use a configurable short request timeout (2 seconds by default), three immediate attempts on the selected client for definite temporary failures, and prompt failover to another eligible client. A failed status probe no longer suppresses the real add request.
+- The Exclusive Mode tab and guided wizard now expose and explain the request timeout, rapid-attempt count and retry delay. The default delay is zero for back-to-back attempts; ambiguous timeouts still follow duplicate-safety handling.
 - Balanced routing now enforces the configured consecutive-send limit whenever another healthy, eligible client exists. A large free-space advantage can no longer cause one client to receive every closely spaced release.
 - Exclusive Batch Mode is rechecked before every normal automation action. Enabling it during an existing batch freezes remaining normal sends and retries and prevents retention or space cleanup from running alongside the exclusive cycle.
 - Exclusive dispatch itself now requires the saved enabled-and-armed state, closing a second entry path that could otherwise be called without the mode being fully active.
@@ -9,7 +11,7 @@
 - Exclusive Mode begins its first monitoring cycle immediately after Apply/OK instead of sleeping first. Its own tab now contains separate routing and maximum-consecutive-send controls, with Even distribution as the safe default.
 - The first torrent-bearing batch from every feed is baselined separately on every RSS Guard launch. Old or undated startup torrents are excluded from both unattended routing and torrent pop-ups, while reliably dated releases published after launch remain eligible.
 - Pending torrent jobs from a previous application session are discarded on startup so expired RSS opportunities cannot flood clients after restarting RSS Guard. The event is recorded in Activity.
-- The Windows release workflow now builds and runs the automated test suite before packaging or publishing. Regression tests cover exclusive-mode arming, forced balanced-routing alternation, startup-feed age filtering, and the ruTorrent add/start command set.
+- The Windows release workflow now builds and runs the automated test suite before packaging or publishing, with the Windows Qt and RSS Guard DLL directories supplied to CTest. Regression tests cover exclusive-mode arming, forced balanced-routing alternation, startup-feed age filtering, and the ruTorrent add/start command set.
 
 ## Build 74
 

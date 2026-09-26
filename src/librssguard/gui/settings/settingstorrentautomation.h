@@ -82,7 +82,8 @@ class SettingsTorrentAutomation final : public SettingsPanel {
              *m_maxConsecutive = nullptr, *m_exclusiveSleepMinutes = nullptr,
              *m_exclusiveFreshnessMinutes = nullptr, *m_exclusiveMonitoringMinutes = nullptr,
              *m_exclusivePollMinutes = nullptr, *m_exclusiveBatchSize = nullptr,
-             *m_exclusiveMaxConsecutive = nullptr;
+             *m_exclusiveMaxConsecutive = nullptr, *m_exclusiveRequestTimeout = nullptr,
+             *m_exclusiveRapidRetries = nullptr, *m_exclusiveRapidRetryDelay = nullptr;
     QLabel* m_exclusiveStatus = nullptr;
     QDoubleSpinBox* m_unknownSizeGb = nullptr;
     QCheckBox *m_retryEnabled = nullptr, *m_retryBackoff = nullptr;

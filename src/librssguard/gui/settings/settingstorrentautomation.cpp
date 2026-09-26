@@ -419,6 +419,12 @@ void SettingsTorrentAutomation::loadUi() {
     m_exclusiveStrategy->addItem(TorrentAutomationConfig::strategyName(static_cast<TorrentRoutingStrategy>(i)), i);
   m_exclusiveMaxConsecutive = new QSpinBox(exclusivePage);
   m_exclusiveMaxConsecutive->setRange(1, 20);
+  m_exclusiveRequestTimeout = new QSpinBox(exclusivePage);
+  m_exclusiveRequestTimeout->setRange(1, 30); m_exclusiveRequestTimeout->setSuffix(tr(" seconds"));
+  m_exclusiveRapidRetries = new QSpinBox(exclusivePage);
+  m_exclusiveRapidRetries->setRange(1, 10); m_exclusiveRapidRetries->setSuffix(tr(" attempts"));
+  m_exclusiveRapidRetryDelay = new QSpinBox(exclusivePage);
+  m_exclusiveRapidRetryDelay->setRange(0, 5000); m_exclusiveRapidRetryDelay->setSuffix(tr(" ms"));
   m_exclusiveSendPartial = new QCheckBox(tr("Send a partial batch when monitoring time expires"), exclusivePage);
   m_exclusiveMode->setToolTip(tr("Makes this the only unattended torrent-automation mode. Normal automation settings are preserved but cannot run until this mode is disabled."));
   m_exclusiveSleepMinutes->setToolTip(tr("How long the mode sleeps after each batch before beginning another fresh RSS cycle. Example: 60 minutes."));
@@ -428,6 +434,9 @@ void SettingsTorrentAutomation::loadUi() {
   m_exclusiveBatchSize->setToolTip(tr("Send as soon as this many fresh releases have been collected. They are spread using the enabled clients' configured automation priorities."));
   m_exclusiveStrategy->setToolTip(tr("Controls only this mode. Even distribution rotates equally between every healthy eligible client; Balanced also considers space and workload."));
   m_exclusiveMaxConsecutive->setToolTip(tr("When another healthy client is eligible, do not give one client more than this many releases in a row."));
+  m_exclusiveRequestTimeout->setToolTip(tr("Exclusive mode caps each client request at this short timeout so an offline client cannot hold up a fresh release. Two seconds is the fast default."));
+  m_exclusiveRapidRetries->setToolTip(tr("How many immediate attempts are made on the selected client for definite temporary connection failures before moving to another eligible client."));
+  m_exclusiveRapidRetryDelay->setToolTip(tr("Small pause between rapid attempts. The default 0 runs them back-to-back; a small value such as 150 ms is gentler on a client that is just becoming available."));
   m_exclusiveSendPartial->setToolTip(tr("Recommended. If only 3 of a target 5 releases arrive before time expires, send those 3 instead of discarding them."));
   exclusiveForm->addRow(m_exclusiveMode);
   exclusiveForm->addRow(tr("Sleep between cycles:"), m_exclusiveSleepMinutes);
@@ -437,6 +446,9 @@ void SettingsTorrentAutomation::loadUi() {
   exclusiveForm->addRow(tr("Send when batch reaches:"), m_exclusiveBatchSize);
   exclusiveForm->addRow(tr("Batch routing strategy:"), m_exclusiveStrategy);
   exclusiveForm->addRow(tr("Maximum consecutive sends per client:"), m_exclusiveMaxConsecutive);
+  exclusiveForm->addRow(tr("Per-request timeout:"), m_exclusiveRequestTimeout);
+  exclusiveForm->addRow(tr("Rapid attempts before failover:"), m_exclusiveRapidRetries);
+  exclusiveForm->addRow(tr("Delay between rapid attempts:"), m_exclusiveRapidRetryDelay);
   exclusiveForm->addRow(m_exclusiveSendPartial);
   exclusiveLayout->addLayout(exclusiveForm);
   m_exclusiveStatus = new QLabel(exclusivePage);
@@ -844,7 +856,9 @@ void SettingsTorrentAutomation::loadUi() {
                                      m_exclusiveMode, m_exclusiveSleepMinutes,
                                      m_exclusiveFreshnessMinutes, m_exclusiveMonitoringMinutes,
                                      m_exclusivePollMinutes, m_exclusiveBatchSize, m_exclusiveStrategy,
-                                     m_exclusiveMaxConsecutive, m_exclusiveSendPartial,
+                                     m_exclusiveMaxConsecutive, m_exclusiveRequestTimeout,
+                                     m_exclusiveRapidRetries, m_exclusiveRapidRetryDelay,
+                                     m_exclusiveSendPartial,
                                      m_notificationDuration, m_maxConsecutive,
                                      m_strategy, m_historyLimit, m_unknownSizeGb,
                                      m_retryEnabled, m_retryAttempts, m_retryInitialSeconds, m_retryMaximumSeconds,
@@ -1011,6 +1025,9 @@ void SettingsTorrentAutomation::loadSettings() {
   m_exclusiveSendPartial->setChecked(m_config.exclusiveSendPartialBatch);
   m_exclusiveStrategy->setCurrentIndex(m_exclusiveStrategy->findData(static_cast<int>(m_config.exclusiveStrategy)));
   m_exclusiveMaxConsecutive->setValue(m_config.exclusiveMaximumConsecutiveAssignments);
+  m_exclusiveRequestTimeout->setValue(m_config.exclusiveRequestTimeoutSeconds);
+  m_exclusiveRapidRetries->setValue(m_config.exclusiveRapidRetryAttempts);
+  m_exclusiveRapidRetryDelay->setValue(m_config.exclusiveRapidRetryDelayMs);
   m_notificationDuration->setValue(m_config.notificationDurationSeconds);
   m_maxConsecutive->setValue(m_config.maximumConsecutiveAssignments);
   m_strategy->setCurrentIndex(m_strategy->findData(static_cast<int>(m_config.strategy)));
@@ -1103,6 +1120,9 @@ void SettingsTorrentAutomation::saveSettings() {
   m_config.exclusiveSendPartialBatch = m_exclusiveSendPartial->isChecked();
   m_config.exclusiveStrategy = static_cast<TorrentRoutingStrategy>(m_exclusiveStrategy->currentData().toInt());
   m_config.exclusiveMaximumConsecutiveAssignments = m_exclusiveMaxConsecutive->value();
+  m_config.exclusiveRequestTimeoutSeconds = m_exclusiveRequestTimeout->value();
+  m_config.exclusiveRapidRetryAttempts = m_exclusiveRapidRetries->value();
+  m_config.exclusiveRapidRetryDelayMs = m_exclusiveRapidRetryDelay->value();
   m_config.notificationDurationSeconds = m_notificationDuration->value();
   m_config.maximumConsecutiveAssignments = m_maxConsecutive->value();
   m_config.strategy = static_cast<TorrentRoutingStrategy>(m_strategy->currentData().toInt());
@@ -1857,6 +1877,12 @@ void SettingsTorrentAutomation::runSetupWizard() {
   exclusiveRouting->setToolTip(tr("Even distribution is the simplest choice when every enabled client should receive a similar number of releases."));
   auto* exclusiveConsecutive = integer(exclusive, m_exclusiveMaxConsecutive->value(), 1, 20, QString(),
     tr("Use 1 to alternate clients whenever another healthy destination is eligible."));
+  auto* exclusiveTimeout = integer(exclusive, m_exclusiveRequestTimeout->value(), 1, 30, tr(" seconds"),
+    tr("A short cap prevents an offline client from delaying a time-sensitive release."));
+  auto* exclusiveRapidRetries = integer(exclusive, m_exclusiveRapidRetries->value(), 1, 10, tr(" attempts"),
+    tr("Definite temporary failures are retried rapidly on the chosen client, then the release fails over."));
+  auto* exclusiveRapidDelay = integer(exclusive, m_exclusiveRapidRetryDelay->value(), 0, 5000, tr(" ms"),
+    tr("Use 0 for back-to-back attempts or a very small value such as 150 ms."));
   auto* exclusivePartial = check(exclusive, tr("Send what arrived when monitoring time expires"),
     m_exclusiveSendPartial->isChecked(), tr("Recommended: send 3 releases when a target of 5 was not reached in time."));
   exclusiveForm->addRow(exclusiveEnabled);
@@ -1867,10 +1893,13 @@ void SettingsTorrentAutomation::runSetupWizard() {
   exclusiveForm->addRow(tr("Target batch size:"), exclusiveTarget);
   exclusiveForm->addRow(tr("Batch routing strategy:"), exclusiveRouting);
   exclusiveForm->addRow(tr("Maximum consecutive sends per client:"), exclusiveConsecutive);
+  exclusiveForm->addRow(tr("Per-request timeout:"), exclusiveTimeout);
+  exclusiveForm->addRow(tr("Rapid attempts before failover:"), exclusiveRapidRetries);
+  exclusiveForm->addRow(tr("Delay between rapid attempts:"), exclusiveRapidDelay);
   exclusiveForm->addRow(exclusivePartial);
   warning(exclusive, tr("OLD-FEED SAFETY — on wake-up, undated baseline items and anything older than the freshness allowance are rejected. This mode never performs deletion or cleanup."));
   note(exclusive, tr("<b>Example:</b> start monitoring immediately, then sleep 60 minutes after each completed batch; monitor every minute for up to 15 minutes and send 5 fresh releases using Even distribution with a consecutive limit of 1."));
-  detailedHelp.insert(wizard.pageIds().constLast(), tr("Exclusive Batch Mode owns unattended torrent automation for its full enabled lifetime. Its first monitoring cycle begins immediately after Apply or OK. Only releases carrying a trustworthy feed publication time inside the freshness allowance may qualify. Older or undated entries are rejected because retrieval time cannot prove that a release is new. Fresh items are collected until the count or time limit is reached. Old pending work from a previous RSS Guard session is discarded. Manual client buttons remain usable."));
+  detailedHelp.insert(wizard.pageIds().constLast(), tr("Exclusive Batch Mode owns unattended torrent automation for its full enabled lifetime. Its first monitoring cycle begins immediately after Apply or OK. Only releases carrying a trustworthy feed publication time inside the freshness allowance may qualify. Older or undated entries are rejected because retrieval time cannot prove that a release is new. Fresh items are collected until the count or time limit is reached. Old pending work from a previous RSS Guard session is discarded. A selected client receives a short burst of rapid attempts for definite connection failures, followed by prompt failover to another eligible client. Ambiguous timeouts are verified where possible to avoid duplicate submissions. Manual client buttons remain usable."));
   exclusive->layout()->addItem(new QSpacerItem(1, 1, QSizePolicy::Minimum, QSizePolicy::Expanding));
 
   QWizardPage* routing = page(tr("2. Routing and size estimates"),
@@ -2272,6 +2301,9 @@ void SettingsTorrentAutomation::runSetupWizard() {
   m_exclusiveSendPartial->setChecked(exclusivePartial->isChecked());
   m_exclusiveStrategy->setCurrentIndex(m_exclusiveStrategy->findData(exclusiveRouting->currentData()));
   m_exclusiveMaxConsecutive->setValue(exclusiveConsecutive->value());
+  m_exclusiveRequestTimeout->setValue(exclusiveTimeout->value());
+  m_exclusiveRapidRetries->setValue(exclusiveRapidRetries->value());
+  m_exclusiveRapidRetryDelay->setValue(exclusiveRapidDelay->value());
   m_strategy->setCurrentIndex(m_strategy->findData(strategy->currentData()));
   m_unknownSizeGb->setValue(unknownSize->value());
   m_storageUnit->setCurrentIndex(m_storageUnit->findData(storageUnit->currentData()));

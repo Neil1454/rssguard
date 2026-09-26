@@ -23,6 +23,8 @@ The dedicated GitHub Actions workflow builds Build 75 with Qt 6, MSVC, and WebEn
 6. Restart with five old unread torrent entries in a feed. Confirm none is routed or shown as a torrent notification. Add a reliably dated new entry after launch and confirm it is collected.
 7. Leave retry items queued, close RSS Guard and reopen it. Confirm the previous-session items are cleared, are not sent, and Activity records the cleared count.
 8. On the Exclusive Mode tab choose Even distribution and a consecutive limit of 1. Confirm these choices apply only to Exclusive Mode and remain saved after restart.
+9. Set the Exclusive request timeout to 2 seconds, rapid attempts to 3 and retry delay to 0 ms. Make the selected client refuse connections and confirm RSS Guard makes three closely spaced attempts, then promptly tries another eligible client without blocking a second queued release.
+10. Restore the first client and confirm a newly arriving release is submitted immediately rather than waiting for the normal retry/backoff settings.
 9. Send a torrent to RapidRU. Confirm its Added column contains the current time and it is running, not stopped. Activity must show a clear warning if the verified open/start/resume sequence still leaves it stopped after three attempts.
 10. Confirm the GitHub Windows workflow completes the `Run automated regression tests` step before package and release steps begin.
 
