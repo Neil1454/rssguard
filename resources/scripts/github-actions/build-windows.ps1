@@ -122,6 +122,17 @@ $qt_path = "$old_pwd\qt"
 python -m pip install -U pip
 python -m pip install -I git+https://github.com/miurahr/aqtinstall@076e1659807d0b362a3ed684d54c2e9c775eb9c7
 
+# External 7-Zip processes extracting several Qt archives into the same root
+# can race while creating that root on Windows. Serial extraction is slower but
+# deterministic and avoids intermittent "Cannot create a file when that file
+# already exists" failures.
+$aqt_config = Join-Path $old_pwd "aqt-ci.ini"
+@"
+[aqt]
+concurrency: 1
+"@ | Set-Content -Path $aqt_config -Encoding ascii
+$env:AQT_CONFIG = $aqt_config
+
 function Invoke-AqtWithRetry {
   param(
     [Parameter(Mandatory = $true)][scriptblock]$Action,
@@ -132,10 +143,21 @@ function Invoke-AqtWithRetry {
   for ($attempt = 1; $attempt -le 3; $attempt++) {
     & $Cleanup
     Write-Host "$Description (attempt $attempt of 3)"
-    & $Action
-    if ($LASTEXITCODE -eq 0) { return }
+    $exit_code = 0
+    try {
+      & $Action
+      $exit_code = $LASTEXITCODE
+    }
+    catch {
+      # PowerShell 7 turns a non-zero native exit into a terminating exception
+      # when PSNativeCommandUseErrorActionPreference is enabled. Convert it back
+      # into an exit code so all three clean retry attempts can actually run.
+      $exit_code = if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 }
+      Write-Warning "$Description failed: $($_.Exception.Message)"
+    }
+    if ($exit_code -eq 0) { return }
     if ($attempt -lt 3) {
-      Write-Warning "$Description failed with exit code $LASTEXITCODE. Clearing partial files and retrying."
+      Write-Warning "$Description failed with exit code $exit_code. Clearing partial files and retrying."
       Start-Sleep -Seconds (5 * $attempt)
     }
   }
@@ -296,4 +318,3 @@ if ($use_libmpv -eq "ON") {
 
 # Remove unneeded files.
 Remove-Item -Verbose ".\app\sqldrivers\qsqlodbc.dll" -ErrorAction SilentlyContinue
-Remove-Item -Verbose ".\app\sqldrivers\qsqlpsql.dll" -ErrorAction SilentlyContinue
