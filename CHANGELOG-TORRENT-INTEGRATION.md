@@ -1,5 +1,11 @@
 # Torrent integration changelog
 
+## Build 79 — quiet exclusive RSS polling
+
+- Fixed Exclusive Mode trying to refresh RSS while another feed edit, fetch or critical database operation owned RSS Guard's feed-operation lock.
+- Automatic exclusive polling now waits quietly and retries on the next short runtime tick instead of displaying “Cannot fetch articles at this point”.
+- Includes the Build 78 manual-send correction and redacted daily diagnostic logs.
+
 ## Build 78 — manual-send correction and durable diagnostics
 
 - Fixed Exclusive Mode incorrectly freezing explicit client-button sends and user-approved “Process automatically” sends; only competing unattended work is now frozen.

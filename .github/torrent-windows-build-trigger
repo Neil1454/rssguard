@@ -1,1 +1,1 @@
-Build 78 - allow manual sends in exclusive mode and add diagnostic log
+Build 79 - defer exclusive RSS polling while critical feed work is locked

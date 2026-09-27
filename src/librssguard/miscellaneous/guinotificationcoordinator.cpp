@@ -17,6 +17,7 @@
 #include "miscellaneous/feedreader.h"
 #include "miscellaneous/iconfactory.h"
 #include "miscellaneous/notificationfactory.h"
+#include "miscellaneous/mutex.h"
 #include "miscellaneous/settings.h"
 #include "miscellaneous/settingskeys.h"
 #include "qtlinq/qtlinq.h"
@@ -86,7 +87,8 @@ void GuiNotificationCoordinator::enterExclusiveSleep(const QString& detail) {
 }
 
 void GuiNotificationCoordinator::startExclusiveCycle() {
-  if (m_application->feedReader() == nullptr || m_application->feedReader()->isFeedUpdateRunning()) return;
+  if (m_application->feedReader() == nullptr || m_application->feedReader()->isFeedUpdateRunning() ||
+      m_application->feedUpdateLock()->isLocked()) return;
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
   m_exclusiveState = ExclusiveState::Baselining;
   m_exclusiveCycleStart = QDateTime::currentDateTimeUtc();
@@ -203,7 +205,8 @@ void GuiNotificationCoordinator::updateExclusiveMode() {
       return;
     }
     if (now >= m_exclusiveNextPoll && m_application->feedReader() != nullptr &&
-        !m_application->feedReader()->isFeedUpdateRunning()) {
+        !m_application->feedReader()->isFeedUpdateRunning() &&
+        !m_application->feedUpdateLock()->isLocked()) {
       m_exclusiveNextPoll = now.addSecs(qMax(1, config.exclusivePollMinutes) * 60);
       m_application->feedReader()->updateAllFeeds();
     }

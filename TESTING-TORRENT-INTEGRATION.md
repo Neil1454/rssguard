@@ -11,9 +11,11 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 78 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 79 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
-## Build 78 manual-send, diagnostics, exclusive-mode and ruTorrent checks
+## Build 79 feed-lock, manual-send, diagnostics and ruTorrent checks
+
+- Hold a feed edit/critical operation open when the exclusive poll becomes due: confirm it defers silently and fetches after the lock clears, without a “Cannot fetch articles” warning.
 
 - With Exclusive Mode active, click a named Transmission or ruTorrent client button and confirm the explicit send is not frozen.
 - Use **Torrent Automation → Activity → Open diagnostic logs** and confirm the daily JSONL file contains queued, submitting and result entries with redacted URLs.
