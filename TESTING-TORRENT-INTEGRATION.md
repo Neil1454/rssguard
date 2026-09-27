@@ -11,9 +11,9 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 80 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 81 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
-## Build 80 immediate-send, feed-lock and diagnostics checks
+## Build 81 immediate-send, feed-lock and diagnostics checks
 
 - Click a named client button and confirm the add request begins without waiting for status checks from unrelated clients.
 - With Exclusive Round Robin selected, confirm a new release begins submission immediately and temporary failure enters rapid retry/failover.

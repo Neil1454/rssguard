@@ -1,5 +1,11 @@
 # Torrent integration changelog
 
+## Build 81 — strict ruTorrent form encoding
+
+- Replaced generic URL-query serialization with strict percent encoding for ruTorrent's native `application/x-www-form-urlencoded` add request.
+- Correctly encodes torrent URLs, save-path slashes, spaces and labels on hosted ruTorrent installations.
+- Includes Build 80's immediate named-client and exclusive fast-path submission changes.
+
 ## Build 80 — immediate submission fast paths
 
 - Named-client notification buttons now submit directly without waiting for status checks from every configured client.

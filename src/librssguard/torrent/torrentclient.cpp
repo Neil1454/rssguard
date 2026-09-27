@@ -803,14 +803,20 @@ QUrl RTorrentClient::ruTorrentAddUrl(const QString& httpRpcUrl) {
 QByteArray RTorrentClient::ruTorrentAddForm(const QString& torrentUrl,
                                             const QString& savePath,
                                             const QString& label) {
-  QUrlQuery form;
-  form.addQueryItem(QStringLiteral("url"), torrentUrl);
-  form.addQueryItem(QStringLiteral("json"), QStringLiteral("1"));
-  if (!savePath.trimmed().isEmpty()) form.addQueryItem(QStringLiteral("dir_edit"), savePath.trimmed());
-  if (!label.trimmed().isEmpty()) form.addQueryItem(QStringLiteral("label"), label.trimmed());
+  QList<QPair<QString, QString>> fields{{QStringLiteral("url"), torrentUrl},
+                                        {QStringLiteral("json"), QStringLiteral("1")}};
+  if (!savePath.trimmed().isEmpty()) fields.append({QStringLiteral("dir_edit"), savePath.trimmed()});
+  if (!label.trimmed().isEmpty()) fields.append({QStringLiteral("label"), label.trimmed()});
   // Deliberately omit torrents_start_stopped: ruTorrent interprets its absence
   // as "start now" and also records its native addtime metadata.
-  return form.toString(QUrl::FullyEncoded).toUtf8();
+  QByteArray form;
+  for (const auto& field : std::as_const(fields)) {
+    if (!form.isEmpty()) form.append('&');
+    form.append(QUrl::toPercentEncoding(field.first));
+    form.append('=');
+    form.append(QUrl::toPercentEncoding(field.second));
+  }
+  return form;
 }
 
 void RTorrentClient::addNext() {
