@@ -18,6 +18,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -154,6 +156,11 @@ void TorrentAutomationEngine::processDirectArticles(const TorrentClientConfig& c
   if (articles.isEmpty() || client.id.isEmpty()) return;
   TorrentAutomationEngine* engine = instance(parent);
   if (engine->m_busy) {
+    Job waiting;
+    waiting.title = articles.first().m_title;
+    waiting.directOverride = true;
+    engine->record(QStringLiteral("direct-waiting"), waiting, client.id,
+                   tr("The user-requested send is waiting for the current in-flight request to finish."));
     connect(engine, &TorrentAutomationEngine::busyChanged, engine,
             [client, articles, parent](bool busy) {
               if (!busy) TorrentAutomationEngine::processDirectArticles(client, articles, parent);
@@ -174,9 +181,18 @@ void TorrentAutomationEngine::processDirectArticles(const TorrentClientConfig& c
       job.sizeBytes = torrentSizeHint(url, engine->m_config.unknownTorrentSizeBytes);
       job.directOverride = true;
       engine->m_jobs.enqueue(job);
+      engine->record(QStringLiteral("direct-queued"), job, client.id,
+                     tr("User-requested send queued for %1.").arg(client.name));
     }
   }
   if (!engine->m_jobs.isEmpty() && !engine->m_busy) engine->beginBatch();
+}
+
+bool TorrentAutomationEngine::exclusiveModeMustFreezeJob(bool exclusiveModeActive,
+                                                          bool exclusiveBatch,
+                                                          bool directOverride,
+                                                          bool manualApproval) {
+  return exclusiveModeActive && !exclusiveBatch && !directOverride && !manualApproval;
 }
 
 void TorrentAutomationEngine::runDryTest() {
@@ -810,7 +826,8 @@ void TorrentAutomationEngine::processNextJob() {
   // discard scheduled cleanup work before it can conflict with the exclusive
   // send-only cycle.
   const TorrentAutomationConfig liveConfig = TorrentAutomationConfig::load(qApp->settings());
-  if (liveConfig.exclusiveModeActive() && !m_exclusiveBatch) {
+  if (exclusiveModeMustFreezeJob(liveConfig.exclusiveModeActive(), m_exclusiveBatch,
+                                 m_jobs.head().directOverride, m_jobs.head().manualApproval)) {
     while (!m_jobs.isEmpty()) {
       Job frozen = m_jobs.dequeue();
       if (frozen.retentionCleanup) continue;
@@ -1237,6 +1254,8 @@ void TorrentAutomationEngine::sendJob(const Job& job, int clientIndex) {
   }
 
   TorrentClient* client = TorrentClient::create(config, this);
+  record(QStringLiteral("submitting"), job, config.id,
+         tr("Submitting to %1 using the configured client adapter and proxy policy.").arg(config.name));
   connect(client, &TorrentClient::addFinished, this, [this, client, job, config, clientIndex, decision](int added, int failed, const QString& message) {
     if (added > 0 && failed == 0) {
       markProcessed(job.key);
@@ -2215,11 +2234,35 @@ void TorrentAutomationEngine::record(const QString& state,
                                      const Job& job,
                                      const QString& clientId,
                                      const QString& detail) {
-  m_history.append(QJsonObject{{QStringLiteral("time"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)},
-                               {QStringLiteral("state"), state}, {QStringLiteral("title"), job.title},
-                               {QStringLiteral("url"), job.url}, {QStringLiteral("feedId"), job.feedId},
-                               {QStringLiteral("clientId"), clientId}, {QStringLiteral("detail"), detail}});
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  const QJsonObject event{{QStringLiteral("time"), now.toString(Qt::ISODate)},
+                          {QStringLiteral("state"), state}, {QStringLiteral("title"), job.title},
+                          {QStringLiteral("url"), job.url}, {QStringLiteral("feedId"), job.feedId},
+                          {QStringLiteral("clientId"), clientId}, {QStringLiteral("detail"), detail},
+                          {QStringLiteral("directOverride"), job.directOverride},
+                          {QStringLiteral("manualApproval"), job.manualApproval},
+                          {QStringLiteral("exclusiveBatch"), m_exclusiveBatch}};
+  m_history.append(event);
   while (m_history.size() > m_config.historyLimit) m_history.removeFirst();
+
+  // Keep a durable, line-oriented diagnostic trail. Credentials are never
+  // written: the potentially sensitive torrent URL is replaced by its scheme
+  // and one-way job key. Daily files keep individual reports manageable.
+  QJsonObject safeEvent = event;
+  if (!job.url.isEmpty()) {
+    safeEvent.insert(QStringLiteral("url"),
+                     QStringLiteral("%1:[redacted]#%2")
+                       .arg(QUrl(job.url).scheme(), job.key.left(12)));
+  }
+  const QString logFolder = qApp->userDataFolder() + QDir::separator() + QStringLiteral("logs");
+  if (QDir().mkpath(logFolder)) {
+    QFile logFile(logFolder + QDir::separator() +
+                  QStringLiteral("torrent-automation-%1.jsonl").arg(now.date().toString(Qt::ISODate)));
+    if (logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+      logFile.write(QJsonDocument(safeEvent).toJson(QJsonDocument::Compact));
+      logFile.write("\n");
+    }
+  }
   emit activityAdded(detail);
   saveRuntime();
 }

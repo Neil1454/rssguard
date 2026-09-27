@@ -19,6 +19,8 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDesktopServices>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileDialog>
@@ -833,6 +835,7 @@ void SettingsTorrentAutomation::loadUi() {
   auto* cancelQueued = new QPushButton(tr("Cancel selected"), activityPage);
   auto* cancelAllQueued = new QPushButton(tr("Cancel all"), activityPage);
   auto* exportActivityButton = new QPushButton(tr("Export activity"), activityPage);
+  auto* openDiagnosticLogs = new QPushButton(tr("Open diagnostic logs"), activityPage);
   auto* clearActivityButton = new QPushButton(tr("Clear activity"), activityPage);
   m_activity->setToolTip(tr("Newest recorded routing, retry, failure, dry-run and cleanup decisions appear at the top."));
   refresh->setToolTip(tr("Reload the latest automation events from the in-memory activity history."));
@@ -843,7 +846,8 @@ void SettingsTorrentAutomation::loadUi() {
   activityLayout->addLayout(queueButtons);
   activityLayout->addWidget(new QLabel(tr("Decision history:"), activityPage));
   activityLayout->addWidget(m_activity, 2);
-  auto* activityButtons = new QHBoxLayout(); activityButtons->addStretch(); activityButtons->addWidget(exportActivityButton);
+  auto* activityButtons = new QHBoxLayout(); activityButtons->addStretch(); activityButtons->addWidget(openDiagnosticLogs);
+  activityButtons->addWidget(exportActivityButton);
   activityButtons->addWidget(clearActivityButton); activityButtons->addWidget(refresh); activityLayout->addLayout(activityButtons);
   const int activityTab = tabs->addTab(activityPage, tr("Activity"));
   tabs->setTabToolTip(activityTab, tr("Review what automation decided and why. Dry-run decisions are recorded here too."));
@@ -950,6 +954,11 @@ void SettingsTorrentAutomation::loadUi() {
   connect(cancelQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::cancelQueuedItem);
   connect(cancelAllQueued, &QPushButton::clicked, this, &SettingsTorrentAutomation::cancelAllQueuedItems);
   connect(exportActivityButton, &QPushButton::clicked, this, &SettingsTorrentAutomation::exportActivity);
+  connect(openDiagnosticLogs, &QPushButton::clicked, this, []() {
+    const QString folder = qApp->userDataFolder() + QDir::separator() + QStringLiteral("logs");
+    QDir().mkpath(folder);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+  });
   connect(clearActivityButton, &QPushButton::clicked, this, &SettingsTorrentAutomation::clearActivity);
   connect(TorrentAutomationEngine::instance(qApp), &TorrentAutomationEngine::activityAdded,
           this, [this]() { refreshActivity(); });

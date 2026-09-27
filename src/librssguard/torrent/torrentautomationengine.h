@@ -46,6 +46,10 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
                                     const QDateTime& publishedUtc,
                                     const QDateTime& sessionStartedUtc,
                                     const QDateTime& nowUtc);
+    static bool exclusiveModeMustFreezeJob(bool exclusiveModeActive,
+                                           bool exclusiveBatch,
+                                           bool directOverride,
+                                           bool manualApproval);
 
     bool busy() const;
     QStringList recentActivity() const;

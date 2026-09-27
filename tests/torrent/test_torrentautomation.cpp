@@ -15,6 +15,7 @@ class TestTorrentAutomation : public QObject {
     void rtorrentLoadCommandsSetAddedTimeAndResume();
     void ruTorrentHttpRpcUsesNativeStartAndAddedTimePath();
     void startupTorrentBaselineRejectsOldAndUndatedItems();
+    void exclusiveModeAllowsUserInitiatedSends();
 };
 
 void TestTorrentAutomation::exclusiveModeRequiresEnabledAndArmed() {
@@ -91,6 +92,14 @@ void TestTorrentAutomation::startupTorrentBaselineRejectsOldAndUndatedItems() {
                                                          launch.addSecs(20), launch, now));
   QVERIFY(!TorrentAutomationEngine::isOldStartupTorrent(false, true, false, {}, launch, now));
   QVERIFY(!TorrentAutomationEngine::isOldStartupTorrent(true, false, false, {}, launch, now));
+}
+
+void TestTorrentAutomation::exclusiveModeAllowsUserInitiatedSends() {
+  QVERIFY(TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, false, false, false));
+  QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, false, true, false));
+  QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, false, false, true));
+  QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, true, false, false));
+  QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(false, false, false, false));
 }
 
 QTEST_APPLESS_MAIN(TestTorrentAutomation)

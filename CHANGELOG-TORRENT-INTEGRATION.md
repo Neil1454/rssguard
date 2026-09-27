@@ -1,5 +1,12 @@
 # Torrent integration changelog
 
+## Build 78 — manual-send correction and durable diagnostics
+
+- Fixed Exclusive Mode incorrectly freezing explicit client-button sends and user-approved “Process automatically” sends; only competing unattended work is now frozen.
+- Added a daily `torrent-automation-YYYY-MM-DD.jsonl` diagnostic log under the RSS Guard user-data `logs` folder.
+- Added **Open diagnostic logs** to Torrent Automation → Activity.
+- Diagnostic entries cover queueing, client submission, results, retries and decisions while redacting torrent URLs and never storing client/proxy passwords.
+
 ## Build 77 — immediate exclusive routing and notification ownership
 
 - Exclusive mode now treats the first wake-up fetch strictly as a baseline and never submits entries already present in that response.
