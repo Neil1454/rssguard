@@ -1,5 +1,11 @@
 # Torrent integration changelog
 
+## Build 82 — `/RPC2` native ruTorrent add auto-detection
+
+- `/RPC2` configurations now automatically try ruTorrent's native `php/addtorrent.php` handler on the same host, matching the successful HTTPRPC behaviour that starts torrents immediately and records the Added date.
+- If an `/RPC2` server does not expose that native handler, RSS Guard safely falls back to direct XML-RPC rather than failing the send.
+- Added regression coverage for `/RPC2` detection and conversion to the native ruTorrent add URL.
+
 ## Build 81 — strict ruTorrent form encoding
 
 - Replaced generic URL-query serialization with strict percent encoding for ruTorrent's native `application/x-www-form-urlencoded` add request.

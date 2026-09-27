@@ -11,9 +11,15 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 81 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 82 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
-## Build 81 immediate-send, feed-lock and diagnostics checks
+## Build 82 `/RPC2` native-add compatibility check
+
+- Configure one rTorrent/ruTorrent client with an address ending in `/RPC2`.
+- Send a fresh torrent and confirm it starts immediately and shows the current Added date/time in ruTorrent.
+- Confirm Activity does not report a native-add failure. If the provider exposes only pure XML-RPC, confirm the automatic fallback still adds the torrent.
+
+## Build 80 immediate-send, feed-lock and diagnostics checks
 
 - Click a named client button and confirm the add request begins without waiting for status checks from unrelated clients.
 - With Exclusive Round Robin selected, confirm a new release begins submission immediately and temporary failure enters rapid retry/failover.

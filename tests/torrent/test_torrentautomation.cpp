@@ -14,6 +14,7 @@ class TestTorrentAutomation : public QObject {
     void balancedRoutingKeepsOnlyAvailableClient();
     void rtorrentLoadCommandsSetAddedTimeAndResume();
     void ruTorrentHttpRpcUsesNativeStartAndAddedTimePath();
+    void ruTorrentRpc2PrefersNativeStartAndAddedTimePath();
     void startupTorrentBaselineRejectsOldAndUndatedItems();
     void exclusiveModeAllowsUserInitiatedSends();
     void latencySensitiveSendsSkipStatusPreflight();
@@ -81,6 +82,16 @@ void TestTorrentAutomation::ruTorrentHttpRpcUsesNativeStartAndAddedTimePath() {
   QVERIFY(form.contains("dir_edit=%2Fdownloads%2Frss"));
   QVERIFY(form.contains("label=RSS%20Guard"));
   QVERIFY(!form.contains("torrents_start_stopped"));
+}
+
+void TestTorrentAutomation::ruTorrentRpc2PrefersNativeStartAndAddedTimePath() {
+  const QString endpoint = QStringLiteral("https://rutorrent.example/RPC2");
+  QVERIFY(RTorrentClient::isRpc2Endpoint(endpoint));
+  QVERIFY(RTorrentClient::supportsNativeRuTorrentAdd(endpoint));
+  QCOMPARE(RTorrentClient::ruTorrentAddUrl(endpoint),
+           QUrl(QStringLiteral("https://rutorrent.example/php/addtorrent.php")));
+  QVERIFY(!RTorrentClient::isRpc2Endpoint(
+    QStringLiteral("https://rutorrent.example/plugins/rpc/rpc.php")));
 }
 
 void TestTorrentAutomation::startupTorrentBaselineRejectsOldAndUndatedItems() {

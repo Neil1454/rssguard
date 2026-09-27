@@ -788,12 +788,29 @@ bool RTorrentClient::isHttpRpcEndpoint(const QString& url) {
                                    Qt::CaseInsensitive);
 }
 
+bool RTorrentClient::isRpc2Endpoint(const QString& url) {
+  QString path = QUrl(url).path();
+  while (path.size() > 1 && path.endsWith(QLatin1Char('/'))) path.chop(1);
+  return path.endsWith(QStringLiteral("/RPC2"), Qt::CaseInsensitive);
+}
+
+bool RTorrentClient::supportsNativeRuTorrentAdd(const QString& url) {
+  return isHttpRpcEndpoint(url) || isRpc2Endpoint(url);
+}
+
 QUrl RTorrentClient::ruTorrentAddUrl(const QString& httpRpcUrl) {
   QUrl url(httpRpcUrl);
   QString path = url.path();
-  path.replace(QRegularExpression(QStringLiteral("/plugins/httprpc/action\\.php$"),
-                                  QRegularExpression::CaseInsensitiveOption),
-               QStringLiteral("/php/addtorrent.php"));
+  if (isRpc2Endpoint(httpRpcUrl)) {
+    path.replace(QRegularExpression(QStringLiteral("/RPC2/?$"),
+                                    QRegularExpression::CaseInsensitiveOption),
+                 QStringLiteral("/php/addtorrent.php"));
+  }
+  else {
+    path.replace(QRegularExpression(QStringLiteral("/plugins/httprpc/action\\.php$"),
+                                    QRegularExpression::CaseInsensitiveOption),
+                 QStringLiteral("/php/addtorrent.php"));
+  }
   url.setPath(path);
   url.setQuery(QString());
   url.setFragment(QString());
@@ -826,7 +843,7 @@ void RTorrentClient::addNext() {
     emit addFinished(m_added, m_failed, message);
     return;
   }
-  if (isHttpRpcEndpoint(m_config.baseUrl)) {
+  if (supportsNativeRuTorrentAdd(m_config.baseUrl)) {
     addNextViaRuTorrent();
     return;
   }
@@ -843,7 +860,7 @@ void RTorrentClient::addNextViaRuTorrent() {
   applyBasicAuthentication(request);
   QNetworkReply* reply = m_network->post(request,
     ruTorrentAddForm(torrentUrl, m_config.savePath, m_config.category));
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, torrentUrl]() {
     const QByteArray body = reply->readAll();
     const QByteArray location = reply->rawHeader("Location");
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -853,6 +870,16 @@ void RTorrentClient::addNextViaRuTorrent() {
                     acceptedResult && !result.contains("Failed");
     if (ok) {
       ++m_added;
+    }
+    else if (isRpc2Endpoint(m_config.baseUrl)) {
+      // /RPC2 installations vary: many expose the ruTorrent Web UI's native
+      // add handler on the same host, while pure SCGI/XML-RPC installations
+      // do not. Prefer the native handler because it reliably records
+      // ruTorrent's Added time and starts immediately, then fall back to the
+      // compatible direct XML-RPC path when that handler is unavailable.
+      reply->deleteLater();
+      loadUrlViaXmlRpc(torrentUrl);
+      return;
     }
     else {
       ++m_failed;
@@ -866,8 +893,20 @@ void RTorrentClient::addNextViaRuTorrent() {
   });
 }
 
+void RTorrentClient::loadUrlViaXmlRpc(const QString& url) {
+  fetchTorrentHashes([this, url](bool ok, const QSet<QString>& hashes) {
+    loadTorrentUrl(url, hashes, ok);
+  });
+}
+
 void RTorrentClient::loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable) {
   const QString url = m_pending.dequeue();
+  loadTorrentUrl(url, previousHashes, snapshotAvailable);
+}
+
+void RTorrentClient::loadTorrentUrl(const QString& url,
+                                    const QSet<QString>& previousHashes,
+                                    bool snapshotAvailable) {
   const QString expectedHash = magnetHexHash(url);
   QStringList arguments{QString(), url};
   const qint64 addedAt = QDateTime::currentSecsSinceEpoch();

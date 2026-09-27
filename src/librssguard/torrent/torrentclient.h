@@ -145,6 +145,8 @@ class RSSGUARD_DLLSPEC RTorrentClient final : public TorrentClient {
     explicit RTorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     static QStringList startCompatibilityCommands(qint64 addedAt);
     static bool isHttpRpcEndpoint(const QString& url);
+    static bool isRpc2Endpoint(const QString& url);
+    static bool supportsNativeRuTorrentAdd(const QString& url);
     static QUrl ruTorrentAddUrl(const QString& httpRpcUrl);
     static QByteArray ruTorrentAddForm(const QString& torrentUrl,
                                        const QString& savePath = {},
@@ -161,7 +163,11 @@ class RSSGUARD_DLLSPEC RTorrentClient final : public TorrentClient {
     void call(const QString& method, const QStringList& values, const std::function<void(QNetworkReply*, const QByteArray&)>& callback);
     void addNext();
     void addNextViaRuTorrent();
+    void loadUrlViaXmlRpc(const QString& url);
     void loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable);
+    void loadTorrentUrl(const QString& url,
+                        const QSet<QString>& previousHashes,
+                        bool snapshotAvailable);
     void fetchTorrentHashes(const std::function<void(bool, const QSet<QString>&)>& callback);
     void verifyNewTorrentStarted(const QSet<QString>& previousHashes,
                                  const QString& expectedHash,
