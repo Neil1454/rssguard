@@ -783,6 +783,36 @@ QStringList RTorrentClient::startCompatibilityCommands(qint64 addedAt) {
           QStringLiteral("d.start=")};
 }
 
+bool RTorrentClient::isHttpRpcEndpoint(const QString& url) {
+  return QUrl(url).path().endsWith(QStringLiteral("/plugins/httprpc/action.php"),
+                                   Qt::CaseInsensitive);
+}
+
+QUrl RTorrentClient::ruTorrentAddUrl(const QString& httpRpcUrl) {
+  QUrl url(httpRpcUrl);
+  QString path = url.path();
+  path.replace(QRegularExpression(QStringLiteral("/plugins/httprpc/action\\.php$"),
+                                  QRegularExpression::CaseInsensitiveOption),
+               QStringLiteral("/php/addtorrent.php"));
+  url.setPath(path);
+  url.setQuery(QString());
+  url.setFragment(QString());
+  return url;
+}
+
+QByteArray RTorrentClient::ruTorrentAddForm(const QString& torrentUrl,
+                                            const QString& savePath,
+                                            const QString& label) {
+  QUrlQuery form;
+  form.addQueryItem(QStringLiteral("url"), torrentUrl);
+  form.addQueryItem(QStringLiteral("json"), QStringLiteral("1"));
+  if (!savePath.trimmed().isEmpty()) form.addQueryItem(QStringLiteral("dir_edit"), savePath.trimmed());
+  if (!label.trimmed().isEmpty()) form.addQueryItem(QStringLiteral("label"), label.trimmed());
+  // Deliberately omit torrents_start_stopped: ruTorrent interprets its absence
+  // as "start now" and also records its native addtime metadata.
+  return form.toString(QUrl::FullyEncoded).toUtf8();
+}
+
 void RTorrentClient::addNext() {
   if (m_pending.isEmpty()) {
     QString message = tr("rTorrent accepted %1 torrent(s); %2 failed.").arg(m_added).arg(m_failed);
@@ -790,7 +820,44 @@ void RTorrentClient::addNext() {
     emit addFinished(m_added, m_failed, message);
     return;
   }
+  if (isHttpRpcEndpoint(m_config.baseUrl)) {
+    addNextViaRuTorrent();
+    return;
+  }
   fetchTorrentHashes([this](bool ok, const QSet<QString>& hashes) { loadNext(hashes, ok); });
+}
+
+void RTorrentClient::addNextViaRuTorrent() {
+  const QString torrentUrl = m_pending.dequeue();
+  QNetworkRequest request(ruTorrentAddUrl(m_config.baseUrl));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    QStringLiteral("application/x-www-form-urlencoded; charset=UTF-8"));
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                       QNetworkRequest::ManualRedirectPolicy);
+  applyBasicAuthentication(request);
+  QNetworkReply* reply = m_network->post(request,
+    ruTorrentAddForm(torrentUrl, m_config.savePath, m_config.category));
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    const QByteArray body = reply->readAll();
+    const QByteArray location = reply->rawHeader("Location");
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QByteArray result = body + '\n' + QByteArray::fromPercentEncoding(location);
+    const bool acceptedResult = result.contains("Success") || result.contains("Duplicate");
+    const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 400 &&
+                    acceptedResult && !result.contains("Failed");
+    if (ok) {
+      ++m_added;
+    }
+    else {
+      ++m_failed;
+      QString detail = QString::fromUtf8(result).simplified();
+      if (detail.size() > 240) detail = detail.left(240) + QStringLiteral("…");
+      if (detail.isEmpty()) detail = networkFailure(reply);
+      m_failureDetails.append(tr("ruTorrent native add failed: %1").arg(detail));
+    }
+    reply->deleteLater();
+    addNext();
+  });
 }
 
 void RTorrentClient::loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable) {

@@ -104,6 +104,13 @@ bool BaseToastNotification::eventFilter(QObject* watched, QEvent* event) {
   }
 
   if (event->type() == QEvent::Type::MouseButtonPress || event->type() == QEvent::Type::MouseButtonRelease) {
+    if (event->type() == QEvent::Type::MouseButtonPress) {
+      // A toast must remain operable while modeless settings or another RSS
+      // Guard tool window is open. Bring only the clicked toast forward; do
+      // not force focus when it first appears.
+      raise();
+      activateWindow();
+    }
     if (!staysOpenUntilDismissed() &&
         dynamic_cast<QMouseEvent*>(event)->button() == Qt::MouseButton::RightButton) {
       event->accept();

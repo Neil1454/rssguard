@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QQueue>
 #include <QSet>
+#include <QUrl>
 
 #include <functional>
 
@@ -143,6 +144,11 @@ class RSSGUARD_DLLSPEC RTorrentClient final : public TorrentClient {
   public:
     explicit RTorrentClient(const TorrentClientConfig& config, QObject* parent = nullptr);
     static QStringList startCompatibilityCommands(qint64 addedAt);
+    static bool isHttpRpcEndpoint(const QString& url);
+    static QUrl ruTorrentAddUrl(const QString& httpRpcUrl);
+    static QByteArray ruTorrentAddForm(const QString& torrentUrl,
+                                       const QString& savePath = {},
+                                       const QString& label = {});
     void testConnection() override;
     void addTorrents(const QStringList& urls) override;
     void fetchStatus() override;
@@ -154,6 +160,7 @@ class RSSGUARD_DLLSPEC RTorrentClient final : public TorrentClient {
     QByteArray methodCall(const QString& method, const QStringList& values = {}) const;
     void call(const QString& method, const QStringList& values, const std::function<void(QNetworkReply*, const QByteArray&)>& callback);
     void addNext();
+    void addNextViaRuTorrent();
     void loadNext(const QSet<QString>& previousHashes, bool snapshotAvailable);
     void fetchTorrentHashes(const std::function<void(bool, const QSet<QString>&)>& callback);
     void verifyNewTorrentStarted(const QSet<QString>& previousHashes,

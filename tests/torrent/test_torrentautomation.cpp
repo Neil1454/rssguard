@@ -13,6 +13,7 @@ class TestTorrentAutomation : public QObject {
     void balancedRoutingForcesAnEligibleAlternative();
     void balancedRoutingKeepsOnlyAvailableClient();
     void rtorrentLoadCommandsSetAddedTimeAndResume();
+    void ruTorrentHttpRpcUsesNativeStartAndAddedTimePath();
     void startupTorrentBaselineRejectsOldAndUndatedItems();
 };
 
@@ -63,6 +64,21 @@ void TestTorrentAutomation::rtorrentLoadCommandsSetAddedTimeAndResume() {
   QCOMPARE(RTorrentClient::startCompatibilityCommands(1234567890),
            (QStringList{QStringLiteral("d.custom.set=addtime,1234567890"),
                         QStringLiteral("d.start=")}));
+}
+
+void TestTorrentAutomation::ruTorrentHttpRpcUsesNativeStartAndAddedTimePath() {
+  const QString endpoint = QStringLiteral("https://seed.example/plugins/httprpc/action.php");
+  QVERIFY(RTorrentClient::isHttpRpcEndpoint(endpoint));
+  QCOMPARE(RTorrentClient::ruTorrentAddUrl(endpoint),
+           QUrl(QStringLiteral("https://seed.example/php/addtorrent.php")));
+  const QByteArray form = RTorrentClient::ruTorrentAddForm(
+    QStringLiteral("magnet:?xt=urn:btih:ABC&dn=Example"),
+    QStringLiteral("/downloads/rss"), QStringLiteral("RSS Guard"));
+  QVERIFY(form.contains("url=magnet%3A%3Fxt%3Durn%3Abtih%3AABC%26dn%3DExample"));
+  QVERIFY(form.contains("json=1"));
+  QVERIFY(form.contains("dir_edit=%2Fdownloads%2Frss"));
+  QVERIFY(form.contains("label=RSS%20Guard"));
+  QVERIFY(!form.contains("torrents_start_stopped"));
 }
 
 void TestTorrentAutomation::startupTorrentBaselineRejectsOldAndUndatedItems() {

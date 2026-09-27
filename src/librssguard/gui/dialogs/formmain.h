@@ -8,7 +8,9 @@
 #include "ui_formmain.h"
 
 #include <QMainWindow>
+#include <QPointer>
 
+class FormSettings;
 class StatusBar;
 class TrayIconMenu;
 class QWidgetAction;
@@ -104,6 +106,7 @@ class RSSGUARD_DLLSPEC FormMain : public QMainWindow {
     QScopedPointer<Ui::FormMain> m_ui;
     QWidgetAction* m_actionToolbarMainMenu;
     QToolButton* m_themeToggle = nullptr;
+    QPointer<FormSettings> m_settingsWindow;
     StatusBar* m_statusBar;
     bool m_feedUpdatesStopRequested = false;
 };

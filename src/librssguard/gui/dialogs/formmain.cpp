@@ -902,7 +902,18 @@ void FormMain::createConnections() {
 
   // Menu "Tools" connections.
   connect(m_ui->m_actionSettings, &QAction::triggered, this, [this]() {
-    FormSettings(*this).exec();
+    if (m_settingsWindow != nullptr) {
+      m_settingsWindow->showNormal();
+      m_settingsWindow->raise();
+      m_settingsWindow->activateWindow();
+      return;
+    }
+
+    m_settingsWindow = new FormSettings(*this);
+    m_settingsWindow->setAttribute(Qt::WidgetAttribute::WA_DeleteOnClose);
+    m_settingsWindow->setWindowModality(Qt::WindowModality::NonModal);
+    m_settingsWindow->setModal(false);
+    m_settingsWindow->show();
   });
   connect(m_ui->m_actionCleanupDatabase, &QAction::triggered, this, &FormMain::showDbCleanupAssistant);
   connect(m_ui->m_actionDeleteStoredCookies, &QAction::triggered, this, []() {

@@ -1,5 +1,13 @@
 # Torrent integration changelog
 
+## Build 76
+
+- Fixed RapidSeedbox and other ruTorrent installations that expose only `/plugins/httprpc/action.php`: torrent URLs and magnets now go through ruTorrent's native `php/addtorrent.php` route instead of its restricted raw XML-RPC pass-through.
+- Native ruTorrent submission deliberately requests immediate start and lets ruTorrent record its own `addtime`, fixing uploads that appeared stopped with a blank Added column in Build 75.
+- Direct XML-RPC installations continue to use the existing verified `load.start` plus `open → start → resume` path. The adapter selects the correct path from the configured endpoint without requiring a new setting.
+- Added regression coverage for HTTPRPC endpoint detection, native add-URL conversion, URL-safe magnet submission, save path/label handling, and ensuring the start-stopped flag is never sent.
+- The main Settings window is now modeless and reuses its existing instance. RSS/torrent notification controls remain clickable while settings is open, and clicking a notification brings that notification forward instead of leaving it blocked behind the settings modal loop.
+
 ## Build 75
 
 - Exclusive sends now use a configurable short request timeout (2 seconds by default), three immediate attempts on the selected client for definite temporary failures, and prompt failover to another eligible client. A failed status probe no longer suppresses the real add request, and the former hidden five-second network-timeout floor no longer overrides the Exclusive setting.

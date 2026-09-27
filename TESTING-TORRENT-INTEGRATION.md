@@ -11,7 +11,15 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 75 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 76 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+
+## Build 76 ruTorrent HTTPRPC checks
+
+1. Configure RapidRU with its working `/plugins/httprpc/action.php` endpoint. Do not substitute `/plugins/rpc/rpc.php` when the host reports that path is missing.
+2. Send one magnet and one direct `.torrent` URL. Confirm both appear promptly, start without manual intervention and show the current Added date/time.
+3. Repeat with a configured save path and label. Confirm both are applied without causing the torrents to start stopped.
+4. Confirm a direct XML-RPC client still uses the existing verified start sequence and that Transmission/qBittorrent routing is unchanged.
+5. Leave Tools > Settings open while an RSS torrent notification appears. Confirm its client, pause, silent and close controls remain clickable, then return to Settings and confirm Apply/OK/Cancel still work. Selecting Tools > Settings again must focus the existing settings window rather than opening a duplicate.
 
 ## Build 75 isolation, start and balancing checks
 
