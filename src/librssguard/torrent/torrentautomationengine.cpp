@@ -195,6 +195,16 @@ bool TorrentAutomationEngine::exclusiveModeMustFreezeJob(bool exclusiveModeActiv
   return exclusiveModeActive && !exclusiveBatch && !directOverride && !manualApproval;
 }
 
+bool TorrentAutomationEngine::canSkipPreflightStatus(bool allJobsAreDirect,
+                                                      bool exclusiveBatch,
+                                                      TorrentRoutingStrategy strategy) {
+  if (allJobsAreDirect) return true;
+  if (!exclusiveBatch) return false;
+  return strategy == TorrentRoutingStrategy::Priority ||
+         strategy == TorrentRoutingStrategy::RoundRobin ||
+         strategy == TorrentRoutingStrategy::Weighted;
+}
+
 void TorrentAutomationEngine::runDryTest() {
   if (m_busy) {
     notify(tr("Torrent automation dry run"), tr("Automation is already processing another batch."), true);
@@ -532,6 +542,22 @@ void TorrentAutomationEngine::beginBatch() {
   if (m_clients.isEmpty()) {
     notify(tr("Torrent automation"), tr("No enabled torrent clients participate in automation."), true);
     finishBatch();
+    return;
+  }
+  const bool allJobsAreDirect = !m_jobs.isEmpty() &&
+    std::all_of(m_jobs.cbegin(), m_jobs.cend(), [](const Job& job) { return job.directOverride; });
+  if (canSkipPreflightStatus(allJobsAreDirect, m_exclusiveBatch, m_config.strategy)) {
+    // Explicit destinations and non-metric exclusive strategies do not need a
+    // full client inventory before submitting. The add request itself is the
+    // authoritative availability check; exclusive failures use rapid retry
+    // and failover immediately.
+    m_pendingStatusQueries = 0;
+    Job fastPath;
+    fastPath.title = allJobsAreDirect ? tr("User-requested torrent send")
+                                      : tr("Exclusive fast dispatch");
+    record(QStringLiteral("fast-dispatch"), fastPath, {},
+           tr("Skipped client status preflight so submission can begin immediately."));
+    processNextJob();
     return;
   }
   for (int index = 0; index < m_clients.size(); ++index) queryClientStatus(index, 0);

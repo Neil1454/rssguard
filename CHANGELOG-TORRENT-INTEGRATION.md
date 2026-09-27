@@ -1,5 +1,12 @@
 # Torrent integration changelog
 
+## Build 80 — immediate submission fast paths
+
+- Named-client notification buttons now submit directly without waiting for status checks from every configured client.
+- Exclusive Priority, Round Robin and Weighted routing skip the client-inventory preflight and immediately attempt the selected destination.
+- The actual add request remains authoritative; exclusive temporary failures still retry rapidly and fail over to the next client.
+- Balanced, Least Busy and Most Free Space retain status preflight because those strategies require live measurements.
+
 ## Build 79 — quiet exclusive RSS polling
 
 - Fixed Exclusive Mode trying to refresh RSS while another feed edit, fetch or critical database operation owned RSS Guard's feed-operation lock.

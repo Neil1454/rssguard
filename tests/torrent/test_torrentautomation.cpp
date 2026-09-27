@@ -16,6 +16,7 @@ class TestTorrentAutomation : public QObject {
     void ruTorrentHttpRpcUsesNativeStartAndAddedTimePath();
     void startupTorrentBaselineRejectsOldAndUndatedItems();
     void exclusiveModeAllowsUserInitiatedSends();
+    void latencySensitiveSendsSkipStatusPreflight();
 };
 
 void TestTorrentAutomation::exclusiveModeRequiresEnabledAndArmed() {
@@ -100,6 +101,14 @@ void TestTorrentAutomation::exclusiveModeAllowsUserInitiatedSends() {
   QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, false, false, true));
   QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(true, true, false, false));
   QVERIFY(!TorrentAutomationEngine::exclusiveModeMustFreezeJob(false, false, false, false));
+}
+
+void TestTorrentAutomation::latencySensitiveSendsSkipStatusPreflight() {
+  QVERIFY(TorrentAutomationEngine::canSkipPreflightStatus(true, false, TorrentRoutingStrategy::Balanced));
+  QVERIFY(TorrentAutomationEngine::canSkipPreflightStatus(false, true, TorrentRoutingStrategy::RoundRobin));
+  QVERIFY(TorrentAutomationEngine::canSkipPreflightStatus(false, true, TorrentRoutingStrategy::Priority));
+  QVERIFY(!TorrentAutomationEngine::canSkipPreflightStatus(false, true, TorrentRoutingStrategy::Balanced));
+  QVERIFY(!TorrentAutomationEngine::canSkipPreflightStatus(false, false, TorrentRoutingStrategy::RoundRobin));
 }
 
 QTEST_APPLESS_MAIN(TestTorrentAutomation)

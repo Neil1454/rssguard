@@ -1,1 +1,1 @@
-Build 79 - defer exclusive RSS polling while critical feed work is locked
+Build 80 - immediate named-client and exclusive fast-path submission

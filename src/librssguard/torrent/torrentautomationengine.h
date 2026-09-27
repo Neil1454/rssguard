@@ -50,6 +50,9 @@ class RSSGUARD_DLLSPEC TorrentAutomationEngine final : public QObject {
                                            bool exclusiveBatch,
                                            bool directOverride,
                                            bool manualApproval);
+    static bool canSkipPreflightStatus(bool allJobsAreDirect,
+                                       bool exclusiveBatch,
+                                       TorrentRoutingStrategy strategy);
 
     bool busy() const;
     QStringList recentActivity() const;
