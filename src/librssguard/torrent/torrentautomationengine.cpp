@@ -2275,7 +2275,10 @@ void TorrentAutomationEngine::saveRuntime() {
 }
 
 void TorrentAutomationEngine::notify(const QString& title, const QString& detail, bool warning) {
-  if (!m_config.showNotifications || m_config.silentNotifications ||
+  // The RSS article notification already represents an exclusive-mode send.
+  // A second automation toast can become trapped behind it, so exclusive
+  // progress stays in Activity instead of creating a competing window.
+  if (m_exclusiveBatch || !m_config.showNotifications || m_config.silentNotifications ||
       qApp->property("torrentSessionSilent").toBool()) return;
   qApp->showGuiMessage(Notification::Event::GeneralEvent,
                        GuiMessage(title, detail, warning ? QSystemTrayIcon::Warning : QSystemTrayIcon::Information));

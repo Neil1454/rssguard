@@ -11,9 +11,13 @@
 
 ## Build verification
 
-The dedicated GitHub Actions workflow builds Build 76 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
+The dedicated GitHub Actions workflow builds Build 77 with Qt 6, MSVC, and WebEngine on Windows, then runs the automated regression suite before packaging. A change to the build-trigger file on `feature/torrent-automation` starts the authoritative portable workflow; it can also be started manually. Live client behaviour still requires the matrix below because server versions, reverse proxies, paths, and authentication policies differ.
 
-## Build 76 ruTorrent HTTPRPC checks
+## Build 77 exclusive-mode and ruTorrent HTTPRPC checks
+
+- Enable exclusive mode and refresh once: confirm the initial feed entries are baseline-only and none are sent.
+- Publish/fetch one genuinely new torrent entry: confirm routing begins immediately, without waiting for the batch target or five-second runtime timer.
+- Confirm only the RSS article notification is visible; exclusive send progress belongs in Activity and must not create a second inaccessible toast behind it.
 
 1. Configure RapidRU with its working `/plugins/httprpc/action.php` endpoint. Do not substitute `/plugins/rpc/rpc.php` when the host reports that path is missing.
 2. Send one magnet and one direct `.torrent` URL. Confirm both appear promptly, start without manual intervention and show the current Added date/time.

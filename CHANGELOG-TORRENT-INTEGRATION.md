@@ -1,5 +1,12 @@
 # Torrent integration changelog
 
+## Build 77 — immediate exclusive routing and notification ownership
+
+- Exclusive mode now treats the first wake-up fetch strictly as a baseline and never submits entries already present in that response.
+- Every genuinely new qualifying torrent begins dispatch immediately instead of waiting for the batch target, monitoring-window expiry, or the five-second state timer.
+- Exclusive automation progress remains available in Activity but no longer opens a second general-event toast behind the RSS article notification.
+- Includes Build 76's native ruTorrent HTTPRPC add route, immediate start, native Added timestamp, and modeless Settings/notification focus corrections.
+
 ## Build 76
 
 - Fixed RapidSeedbox and other ruTorrent installations that expose only `/plugins/httprpc/action.php`: torrent URLs and magnets now go through ruTorrent's native `php/addtorrent.php` route instead of its restricted raw XML-RPC pass-through.

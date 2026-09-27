@@ -133,14 +133,8 @@ void GuiNotificationCoordinator::collectExclusiveArticles(const QHash<Feed*, QLi
 }
 
 void GuiNotificationCoordinator::beginExclusiveDispatch(const QString& reason) {
-  const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
   if (m_exclusiveArticleKeys.isEmpty()) {
     enterExclusiveSleep(tr("The monitoring window ended without a fresh torrent release, so nothing was sent."));
-    return;
-  }
-  if (m_exclusiveArticleKeys.size() < config.exclusiveBatchSize && !config.exclusiveSendPartialBatch) {
-    enterExclusiveSleep(tr("The monitoring window ended with %1 of %2 releases. Partial-batch sending is disabled, so the batch was discarded.")
-                          .arg(m_exclusiveArticleKeys.size()).arg(config.exclusiveBatchSize));
     return;
   }
   m_exclusiveState = ExclusiveState::Sending;
@@ -149,29 +143,31 @@ void GuiNotificationCoordinator::beginExclusiveDispatch(const QString& reason) {
   TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-sending"),
     tr("%1 Sending %2 fresh release(s) using the enabled clients' configured routing priorities. No deletion or cleanup can run.")
       .arg(reason).arg(m_exclusiveArticleKeys.size()), m_application);
+  // Fresh releases in this mode are latency-sensitive. Start on the same
+  // event-loop turn instead of waiting for the five-second state timer.
+  updateExclusiveMode();
 }
 
 void GuiNotificationCoordinator::handleExclusiveFeedResults(const FeedDownloadResults& results) {
   const TorrentAutomationConfig config = TorrentAutomationConfig::load(m_application->settings());
   if (!config.exclusiveModeActive()) return;
   if (m_exclusiveState == ExclusiveState::Baselining) {
-    collectExclusiveArticles(results.updatedFeeds(), true);
+    // This response establishes the RSS high-water mark. Never route entries
+    // already present in it: a recent timestamp does not prove they arrived
+    // after exclusive monitoring began.
     m_exclusiveState = ExclusiveState::Collecting;
     m_exclusiveMonitorEnd = QDateTime::currentDateTimeUtc().addSecs(qMax(1, config.exclusiveMonitoringMinutes) * 60);
     m_exclusiveNextPoll = QDateTime::currentDateTimeUtc().addSecs(qMax(1, config.exclusivePollMinutes) * 60);
     storeExclusiveStatus(tr("Collecting"));
     TorrentAutomationEngine::recordExclusiveState(QStringLiteral("exclusive-collecting"),
-      tr("Baseline complete. %1 fresh release(s) qualified. Monitoring until %2 or until %3 release(s) are collected.")
-        .arg(m_exclusiveArticleKeys.size())
-        .arg(m_exclusiveMonitorEnd.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss")))
-        .arg(config.exclusiveBatchSize), m_application);
+      tr("Baseline complete. Existing feed entries were ignored. Monitoring genuinely new arrivals until %1.")
+        .arg(m_exclusiveMonitorEnd.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm:ss"))), m_application);
   }
   else if (m_exclusiveState == ExclusiveState::Collecting) {
     collectExclusiveArticles(results.updatedFeeds(), false);
   }
-  if (m_exclusiveState == ExclusiveState::Collecting &&
-      m_exclusiveArticleKeys.size() >= config.exclusiveBatchSize)
-    beginExclusiveDispatch(tr("The target batch size was reached."));
+  if (m_exclusiveState == ExclusiveState::Collecting && !m_exclusiveArticleKeys.isEmpty())
+    beginExclusiveDispatch(tr("A genuinely new release arrived; dispatching immediately."));
 }
 
 void GuiNotificationCoordinator::updateExclusiveMode() {
